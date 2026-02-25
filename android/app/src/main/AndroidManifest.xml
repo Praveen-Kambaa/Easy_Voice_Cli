@@ -1,6 +1,31 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    
+    <!-- Core permissions for voice functionality -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
+    
+    <!-- Storage permissions for audio files -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    
+    <!-- Foreground service permissions -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    
+    <!-- Additional permissions for Android 10+ -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- Battery optimization exemption query -->
+  <queries>
+    <intent>
+      <action android:name="android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    </intent>
+  </queries>
 
     <application
       android:name=".MainApplication"
@@ -23,5 +48,41 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
       </activity>
+      
+      <!-- Accessibility Service for Text Injection -->
+      <service
+        android:name=".services.MyAccessibilityService"
+        android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+        android:exported="true"
+        android:label="@string/accessibility_service_description">
+        <intent-filter>
+          <action android:name="android.accessibilityservice.AccessibilityService" />
+        </intent-filter>
+        <meta-data
+          android:name="android.accessibilityservice"
+          android:resource="@xml/accessibility_service_config" />
+      </service>
+      
+      <!-- Floating Mic Service -->
+      <service
+        android:name=".FloatingMicService"
+        android:enabled="true"
+        android:exported="false"
+        android:foregroundServiceType="microphone|specialUse"
+        android:stopWithTask="false" />
+      
+      <!-- Voice Keyboard Service -->
+      <service
+        android:name=".services.VoiceKeyboardService"
+        android:permission="android.permission.BIND_INPUT_METHOD"
+        android:label="@string/voice_keyboard_label"
+        android:exported="true">
+        <intent-filter>
+          <action android:name="android.view.InputMethod" />
+        </intent-filter>
+        <meta-data
+          android:name="android.view.im"
+          android:resource="@xml/voice_keyboard_method" />
+      </service>
     </application>
 </manifest>
