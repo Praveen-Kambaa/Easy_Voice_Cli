@@ -1,0 +1,44 @@
+<resources>
+    <string name="app_name">Easy Voice</string>
+    
+    <!-- Accessibility Service Descriptions -->
+    <string name="accessibility_service_description">Easy Voice Assistant - Injects transcribed voice text into any app\'s text fields</string>
+    <string name="text_insertion_service_description">Easy Voice Text Insertion - Automatically inserts recognized text into text fields</string>
+    
+    <!-- Floating Mic Service -->
+    <string name="floating_mic_channel_name">Voice Assistant</string>
+    <string name="floating_mic_channel_description">Floating microphone for voice input</string>
+    <string name="floating_mic_notification_title">Voice Assistant Active</string>
+    <string name="floating_mic_notification_text">Tap the microphone to start voice input</string>
+    <string name="floating_mic_notification_stop">Stop Service</string>
+    
+    <!-- User Feedback Messages -->
+    <string name="voice_listening">Listening...</string>
+    <string name="voice_processing">Processing...</string>
+    <string name="voice_injected">Text injected successfully</string>
+    <string name="voice_error">Error: %s</string>
+    <string name="voice_no_field">No text field found</string>
+    <string name="voice_service_ready">Voice text injection service ready</string>
+    <string name="voice_transcribed">Voice transcribed: %s</string>
+    
+    <!-- Permission Messages -->
+    <string name="permission_overlay_required">Overlay permission required for floating microphone</string>
+    <string name="permission_audio_required">Microphone permission required for voice input</string>
+    <string name="permission_accessibility_required">Accessibility service required for text injection</string>
+    
+    <!-- Error Messages -->
+    <string name="error_speech_unavailable">Speech recognition not available on this device</string>
+    <string name="error_service_not_initialized">Voice service not initialized</string>
+    <string name="error_failed_to_start">Failed to start transcription</string>
+    <string name="error_no_active_window">No active window found</string>
+    <string name="error_injection_failed">Failed to inject text</string>
+    <string name="error_empty_result">Empty transcription result</string>
+    
+    <!-- Voice Keyboard -->
+    <string name="voice_keyboard_label">Voice Keyboard</string>
+    <string name="voice_keyboard_subtype_label">Voice Text Input</string>
+    <string name="voice_keyboard_enabled">Voice Keyboard enabled</string>
+    <string name="voice_keyboard_disabled">Voice Keyboard disabled</string>
+    <string name="voice_keyboard_not_selected">Select Voice Keyboard to enable paste</string>
+    <string name="voice_keyboard_settings">Open Keyboard Settings</string>
+</resources>
