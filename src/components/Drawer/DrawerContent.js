@@ -1,97 +1,85 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
+import { Colors } from '../../theme/Colors';
+import { APP_NAME, APP_TAGLINE, APP_VERSION } from '../../constants';
+
+const MENU_ITEMS = [
+  { title: 'Home', description: 'Dashboard & overview', emoji: '🏠', screen: 'Home' },
+  { title: 'Voice Recorder', description: 'Record your voice', emoji: '🎙️', screen: 'VoiceRecorder' },
+  { title: 'My Recordings', description: 'View saved audio', emoji: '🎵', screen: 'RecordedAudio' },
+  { title: 'Floating Mic', description: 'Background recording', emoji: '🎤', screen: 'FloatingMic' },
+  { title: 'Settings', description: 'Permissions & preferences', emoji: '⚙️', screen: 'Settings' },
+];
 
 export const DrawerContent = (props) => {
   const insets = useSafeAreaInsets();
 
-  const handleCloseDrawer = () => {
-    props.navigation.closeDrawer();
-  };
+  const currentRouteName = props.state?.routes?.[props.state?.index]?.name;
 
-  const menuItems = [
-    {
-      title: '🎙️ Voice Recorder',
-      description: 'Record your voice',
-      icon: 'record-voice-over',
-      color: '#3B82F6',
-      screen: 'VoiceRecorder',
-    },
-    {
-      title: '🎵 My Recordings',
-      description: 'View saved audio',
-      icon: 'library-music',
-      color: '#10B981',
-      screen: 'RecordedAudio',
-    },
-    {
-      title: '📊 Dashboard',
-      description: 'App overview',
-      icon: 'dashboard',
-      color: '#8B5CF6',
-      screen: 'Dashboard',
-    },
-    {
-      title: '🔐 Permissions',
-      description: 'Manage permissions',
-      icon: 'security',
-      color: '#F59E0B',
-      screen: 'AndroidPermissions',
-    },
-    {
-      title: '🎤 Floating Mic',
-      description: 'Background recording',
-      icon: 'mic',
-      color: '#EF4444',
-      screen: 'FloatingMic',
-    },
-  ];
-
-  const handleMenuPress = (screen) => {
+  const handleNav = (screen) => {
     props.navigation.navigate(screen);
-    handleCloseDrawer();
+    props.navigation.closeDrawer();
   };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header Section */}
+      {/* Brand header */}
       <View style={styles.header}>
-        <View style={styles.logoContainer}>
+        <View style={styles.logoWrap}>
           <Text style={styles.logoEmoji}>🎤</Text>
         </View>
-        <Text style={styles.appTitle}>Easy Voice</Text>
-        <Text style={styles.appDescription}>Professional Voice Assistant</Text>
-        
-        <TouchableOpacity style={styles.closeButton} onPress={handleCloseDrawer}>
+        <View style={styles.brandText}>
+          <Text style={styles.appName}>{APP_NAME}</Text>
+          <Text style={styles.appTagline}>{APP_TAGLINE}</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.closeBtn}
+          onPress={() => props.navigation.closeDrawer()}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <Text style={styles.closeIcon}>✕</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Custom Menu Items */}
-      <ScrollView style={styles.menuContainer} showsVerticalScrollIndicator={false}>
-        {menuItems.map((item, index) => (
-          <TouchableOpacity
-            key={index}
-            style={styles.menuItem}
-            onPress={() => handleMenuPress(item.screen)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.emojiContainer}>
-              <Text style={styles.emojiText}>{item.title.split(' ')[0]}</Text>
-            </View>
-            <View style={styles.menuItemContent}>
-              <Text style={styles.menuItemTitle}>{item.title.split(' ').slice(1).join(' ')}</Text>
-              <Text style={styles.menuItemDescription}>{item.description}</Text>
-            </View>
-            <Text style={styles.chevronIcon}>›</Text>
-          </TouchableOpacity>
-        ))}
+      {/* Navigation items */}
+      <ScrollView
+        style={styles.menuScroll}
+        contentContainerStyle={styles.menuContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.navLabel}>NAVIGATION</Text>
+
+        {MENU_ITEMS.map((item) => {
+          const isActive = currentRouteName === item.screen;
+
+          return (
+            <TouchableOpacity
+              key={item.screen}
+              style={[styles.menuItem, isActive && styles.menuItemActive]}
+              onPress={() => handleNav(item.screen)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.emojiWrap, isActive && styles.emojiWrapActive]}>
+                <Text style={styles.emoji}>{item.emoji}</Text>
+              </View>
+              <View style={styles.menuItemText}>
+                <Text style={[styles.menuTitle, isActive && styles.menuTitleActive]}>
+                  {item.title}
+                </Text>
+                <Text style={styles.menuDesc}>{item.description}</Text>
+              </View>
+              {isActive && <View style={styles.activeDot} />}
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
 
       {/* Footer */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom }]}>
-        <Text style={styles.footerText}>Easy Voice v1.0</Text>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <View style={styles.divider} />
+        <Text style={styles.footerText}>{APP_NAME} v{APP_VERSION}</Text>
+        <Text style={styles.footerSubText}>Voice Assistant Platform</Text>
       </View>
     </View>
   );
@@ -100,151 +88,144 @@ export const DrawerContent = (props) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: Colors.drawer.background,
   },
+
   header: {
-    padding: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    alignItems: 'center',
-    position: 'relative',
+    borderBottomColor: Colors.drawer.border,
+    gap: 12,
   },
-  closeButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
+  logoWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  closeIcon: {
-    fontSize: 18,
-    color: '#6B7280',
-    fontWeight: '600',
-  },
-  logoContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: '#EBF5FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
+    flexShrink: 0,
   },
   logoEmoji: {
-    fontSize: 32,
+    fontSize: 22,
   },
-  appTitle: {
-    fontSize: 24,
+  brandText: {
+    flex: 1,
+  },
+  appName: {
+    fontSize: 17,
     fontWeight: '800',
-    color: '#111827',
-    marginBottom: 4,
-    letterSpacing: -0.5,
+    color: Colors.text.primary,
+    letterSpacing: -0.3,
   },
-  appDescription: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    fontWeight: '500',
+  appTagline: {
+    fontSize: 11,
+    color: Colors.text.secondary,
+    marginTop: 1,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  statItem: {
-    flex: 1,
+  closeBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: Colors.backgroundAlt,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
-  statNumber: {
-    fontSize: 18,
+  closeIcon: {
+    fontSize: 14,
+    color: Colors.text.secondary,
     fontWeight: '700',
-    color: '#1F2937',
-    marginTop: 4,
   },
-  statLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  menuContainer: {
+
+  menuScroll: {
     flex: 1,
-    padding: 16,
+  },
+  menuContent: {
+    paddingHorizontal: 12,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  navLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.text.secondary,
+    letterSpacing: 1.2,
+    marginLeft: 8,
+    marginBottom: 8,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 10,
+    marginBottom: 4,
+    gap: 12,
   },
-  iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+  menuItemActive: {
+    backgroundColor: Colors.primary,
+  },
+  emojiWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 9,
+    backgroundColor: Colors.backgroundAlt,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
+    flexShrink: 0,
   },
-  menuItemContent: {
+  emojiWrapActive: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  emoji: {
+    fontSize: 18,
+  },
+  menuItemText: {
     flex: 1,
-    marginLeft: 16,
   },
-  menuItemTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 2,
-  },
-  menuItemDescription: {
+  menuTitle: {
     fontSize: 14,
-    color: '#6B7280',
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginBottom: 1,
   },
+  menuTitleActive: {
+    color: '#FFFFFF',
+  },
+  menuDesc: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+  },
+  activeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FFFFFF',
+    flexShrink: 0,
+  },
+
   footer: {
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 4,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.drawer.border,
+    marginBottom: 14,
   },
   footerText: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.text.secondary,
+    marginBottom: 2,
   },
-  emojiContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emojiText: {
-    fontSize: 24,
-  },
-  chevronIcon: {
-    fontSize: 20,
-    color: '#9CA3AF',
-    fontWeight: '300',
+  footerSubText: {
+    fontSize: 11,
+    color: Colors.text.light,
   },
 });
 

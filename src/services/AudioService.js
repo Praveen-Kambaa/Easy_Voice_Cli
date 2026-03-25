@@ -1,5 +1,5 @@
 import { Platform, PermissionsAndroid } from 'react-native';
-import RNFS from 'react-native-fs';
+import { FileSystem, Dirs } from 'react-native-file-access';
 import VoiceRecorder from 'react-native-voice-recorder';
 
 // In-memory storage - declared BEFORE class so it's available from the start
@@ -55,7 +55,7 @@ class AudioService {
       // Use CachesDirectoryPath – always writable, no extra permissions needed on Android
       const timestamp = Date.now();
       const fileName = `recording_${timestamp}.mp4`;
-      const filePath = `${RNFS.CachesDirectoryPath}/${fileName}`;
+      const filePath = `${Dirs.CacheDir}/${fileName}`;
 
       console.log('[AudioService] startRecording → path:', filePath);
 
@@ -95,11 +95,11 @@ class AudioService {
       const savedPath = this.recordingFilePath;
 
       // Verify file was created
-      const exists = await RNFS.exists(savedPath);
+      const exists = await FileSystem.exists(savedPath);
       if (!exists) {
         throw new Error('Recording file not found after stop');
       }
-      const stat = await RNFS.stat(savedPath);
+      const stat = await FileSystem.stat(savedPath);
       console.log('[AudioService] file saved at:', savedPath, '– size:', stat.size, 'bytes');
 
       this.isRecording = false;
@@ -145,7 +145,7 @@ class AudioService {
 
       console.log('[AudioService] playRecording:', filePath);
 
-      const exists = await RNFS.exists(filePath);
+      const exists = await FileSystem.exists(filePath);
       if (!exists) {
         throw new Error('Audio file does not exist: ' + filePath);
       }

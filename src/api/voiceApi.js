@@ -5,7 +5,7 @@
  * Works on Android physical device with React Native Community CLI.
  *
  * Key points:
- *  - Read file as binary data using RNFS.readFile
+ *  - Read file as binary data using FileSystem.readFile
  *  - Send as raw binary in FormData
  *  - Use proper headers for binary upload
  *  - Handle network connectivity issues
@@ -13,7 +13,7 @@
 
 import axios from 'axios';
 import { Platform } from 'react-native';
-import RNFS from 'react-native-fs';
+import { FileSystem } from 'react-native-file-access';
 import { apiUtils } from './apiClient';
 import apiClient from './apiClient';
 import { VOICE_ENDPOINTS } from './endpoints';
@@ -114,19 +114,19 @@ const uploadAudio = async (filePath, options = {}) => {
   }
 
   // 2. Verify file exists and get file info
-  const exists = await RNFS.exists(filePath);
+  const exists = await FileSystem.exists(filePath);
   if (!exists) {
     return createResponse(false, null, `Audio file not found: ${filePath}`);
   }
 
-  const stat = await RNFS.stat(filePath);
+  const stat = await FileSystem.stat(filePath);
   if (stat.size === 0) {
     return createResponse(false, null, 'Audio file is empty (0 bytes). Recording may have failed.');
   }
 
   // 3. Read file as binary data
   try {
-    const fileData = await RNFS.readFile(filePath, 'base64');
+    const fileData = await FileSystem.readFile(filePath, 'base64');
     
     // 4. Build FormData with binary data
     const mimeType = getMimeType(filePath);

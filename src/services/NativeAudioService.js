@@ -1,5 +1,5 @@
 import { NativeModules, Platform } from 'react-native';
-import RNFS from 'react-native-fs';
+import { FileSystem, Dirs } from 'react-native-file-access';
 
 const { AudioRecorderModule } = NativeModules;
 
@@ -161,8 +161,8 @@ class NativeAudioService {
     try {
       const recordings = await this.getAllRecordings();
       recordings.push(recording);
-      const recordingsPath = `${RNFS.DocumentDirectoryPath}/recordings.json`;
-      await RNFS.writeFile(recordingsPath, JSON.stringify(recordings), 'utf8');
+      const recordingsPath = `${Dirs.DocumentDir}/recordings.json`;
+      await FileSystem.writeFile(recordingsPath, JSON.stringify(recordings));
       return { success: true };
     } catch (error) {
       console.error('[NativeAudioService] saveRecording error:', error);
@@ -172,12 +172,12 @@ class NativeAudioService {
 
   async getAllRecordings() {
     try {
-      const recordingsPath = `${RNFS.DocumentDirectoryPath}/recordings.json`;
-      const exists = await RNFS.exists(recordingsPath);
+      const recordingsPath = `${Dirs.DocumentDir}/recordings.json`;
+      const exists = await FileSystem.exists(recordingsPath);
       if (!exists) {
         return [];
       }
-      const recordings = await RNFS.readFile(recordingsPath, 'utf8');
+      const recordings = await FileSystem.readFile(recordingsPath);
       return JSON.parse(recordings);
     } catch (error) {
       console.error('[NativeAudioService] getAllRecordings error:', error);
@@ -189,8 +189,8 @@ class NativeAudioService {
     try {
       const recordings = await this.getAllRecordings();
       const filteredRecordings = recordings.filter(r => r.id !== recordingId);
-      const recordingsPath = `${RNFS.DocumentDirectoryPath}/recordings.json`;
-      await RNFS.writeFile(recordingsPath, JSON.stringify(filteredRecordings), 'utf8');
+      const recordingsPath = `${Dirs.DocumentDir}/recordings.json`;
+      await FileSystem.writeFile(recordingsPath, JSON.stringify(filteredRecordings));
       return { success: true };
     } catch (error) {
       console.error('[NativeAudioService] deleteRecording error:', error);
@@ -206,8 +206,8 @@ class NativeAudioService {
         return { success: false, error: 'Recording not found' };
       }
       recordings[idx] = { ...recordings[idx], ...transcriptData, updatedAt: new Date().toISOString() };
-      const recordingsPath = `${RNFS.DocumentDirectoryPath}/recordings.json`;
-      await RNFS.writeFile(recordingsPath, JSON.stringify(recordings), 'utf8');
+      const recordingsPath = `${Dirs.DocumentDir}/recordings.json`;
+      await FileSystem.writeFile(recordingsPath, JSON.stringify(recordings));
       return { success: true };
     } catch (error) {
       console.error('[NativeAudioService] updateRecordingTranscript error:', error);
