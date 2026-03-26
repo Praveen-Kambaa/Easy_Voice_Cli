@@ -17,14 +17,11 @@ import { FileSystem } from 'react-native-file-access';
 import { apiUtils } from './apiClient';
 import apiClient from './apiClient';
 import { VOICE_ENDPOINTS } from './endpoints';
-
-// ─── API base URL ─────────────────────────────────────────────────────────────
-// Use the devtunnels URL that works in Postman
-const BACKEND_BASE_URL = 'https://st0x556n-4000.inc1.devtunnels.ms/api';
+import { buildEasyVoiceUrl } from '../config/api';
 
 // Dedicated axios instance for multipart audio upload with better error handling
 const uploadClient = axios.create({
-  baseURL: BACKEND_BASE_URL,
+  baseURL: buildEasyVoiceUrl(''),  // Use Easy Voice server for voice operations
   timeout: 120000, // 2 minutes – audio upload can be slow on LAN
   headers: {
     'Content-Type': 'application/json',
@@ -127,13 +124,13 @@ const uploadAudio = async (filePath, options = {}) => {
   // 3. Read file as binary data
   try {
     const fileData = await FileSystem.readFile(filePath, 'base64');
-    
+
     // 4. Build FormData with binary data
     const mimeType = getMimeType(filePath);
     const fileName = filePath.split('/').pop() || `recording_${Date.now()}.m4a`;
 
     const formData = new FormData();
-    
+
     // Convert base64 to blob for proper binary upload
     const blob = `data:${mimeType};base64,${fileData}`;
     formData.append('file', {
@@ -146,7 +143,7 @@ const uploadAudio = async (filePath, options = {}) => {
     const language = options.language || 'en-US';
     const enablePunctuation = String(options.enablePunctuation !== false);
     const enableTimestamps = String(options.enableTimestamps === true);
-    
+
     formData.append('language', language);
     formData.append('enablePunctuation', enablePunctuation);
     formData.append('enableTimestamps', enableTimestamps);
@@ -202,14 +199,14 @@ export const transcribeAudio = async (fileUri, options = {}) => {
 
   // Normalise response – handle different backend shapes
   const data = result.data || {};
-  
+
   const normalizedData = {
     rawTranscript: data.rawTranscript || data.transcript || data.text || '',
     refinedTranscript: data.refinedTranscript || data.rawTranscript || data.transcript || data.text || '',
     voiceAssetId: data.voiceAssetId || data.id || null,
     timestamp: new Date().toISOString(),
   };
-  
+
   return createResponse(true, normalizedData);
 };
 
@@ -226,7 +223,7 @@ export const updateTranscript = async (voiceAssetId, finalTranscript) => {
 
     const response = await apiClient.put(
       VOICE_ENDPOINTS.TRANSCRIPT,
-      { 
+      {
         finalTranscript: finalTranscript.trim(),
         voiceAssetId: voiceAssetId
       },
@@ -337,7 +334,7 @@ const testAPI = async () => {
   try {
     const response = await fetch('https://slender-loris.kambaaincorporation.in/api/home-screen');
     const data = await response.json();
-    
+
     return createResponse(true, data);
   } catch (error) {
     return createResponse(false, null, error.message || 'Failed to test API');
@@ -349,7 +346,7 @@ export const testBackendConnectivity = async () => {
     const response = await uploadClient.get('/health', {
       timeout: 10000,
     });
-    
+
     return createResponse(true, response.data);
   } catch (error) {
     let errorMessage = 'Backend connectivity test failed';
@@ -358,7 +355,7 @@ export const testBackendConnectivity = async () => {
     } else if (error.request) {
       errorMessage = `Cannot reach backend: ${error.message}`;
     }
-    
+
     return createResponse(false, null, errorMessage);
   }
 };

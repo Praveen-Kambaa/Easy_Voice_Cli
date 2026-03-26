@@ -11,6 +11,9 @@ import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.Arguments;
+import com.facebook.react.modules.core.DeviceEventManagerModule;
+
+import androidx.annotation.Nullable;
 
 import java.io.File;
 import java.io.IOException;
@@ -31,6 +34,16 @@ public class AudioRecorderModule extends ReactContextBaseJavaModule {
     @Override
     public String getName() {
         return "AudioRecorderModule";
+    }
+
+    private void sendEvent(String eventName, @Nullable WritableMap params) {
+        try {
+            getReactApplicationContext()
+                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                .emit(eventName, params);
+        } catch (Exception e) {
+            Log.e(TAG, "Error sending event: " + eventName, e);
+        }
     }
 
     @ReactMethod
@@ -247,6 +260,7 @@ public class AudioRecorderModule extends ReactContextBaseJavaModule {
                     mp.release();
                     mediaPlayer = null;
                     Log.d(TAG, "Playback completed");
+                    sendEvent("onPlaybackComplete", null);
                 }
             });
 

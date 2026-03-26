@@ -8,6 +8,7 @@ import VoiceRecorderScreen from '../screens/VoiceRecorder/VoiceRecorderScreen';
 import RecordedAudioScreen from '../screens/Recordings/RecordedAudioScreen';
 import SettingsScreen from '../screens/Settings/SettingsScreen';
 import FloatingMicScreen from '../screens/FloatingMic/FloatingMicScreen';
+import FloatingMicHistoryScreen from '../screens/FloatingMic/FloatingMicHistoryScreen';
 
 const Drawer = createDrawerNavigator();
 
@@ -66,6 +67,11 @@ export const AppNavigator = () => {
         name="FloatingMic"
         component={FloatingMicScreen}
         options={{ drawerLabel: 'Floating Mic' }}
+      />
+      <Drawer.Screen
+        name="FloatingMicHistory"
+        component={FloatingMicHistoryScreen}
+        options={{ drawerLabel: 'Speech History' }}
       />
       <Drawer.Screen
         name="Settings"

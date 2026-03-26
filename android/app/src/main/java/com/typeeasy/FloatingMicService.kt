@@ -22,14 +22,19 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.ImageView
+import android.widget.TextView
 import androidx.core.app.NotificationCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.content.ContextCompat
 import com.facebook.react.ReactApplication
 import com.facebook.react.bridge.ReactContext
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.util.ArrayList
+import kotlin.math.roundToInt
 
 class FloatingMicService : Service() {
 
@@ -60,6 +65,9 @@ class FloatingMicService : Service() {
     // ─── BUTTON REFERENCES ─────────────────────────────────────────────
     private var btnMic: ImageView? = null
     private var btnStop: ImageView? = null
+    private var dragHandle: View? = null
+    private var listeningLabel: TextView? = null
+    private var lastImeInsetBottom = 0
     
     // ─── SMART FLOATING MIC CONTROL ────────────────────────────────────────
     private var micControlReceiver: BroadcastReceiver? = null
@@ -172,6 +180,8 @@ class FloatingMicService : Service() {
             // Get button references
             btnMic = floatingView?.findViewById(R.id.btn_mic)
             btnStop = floatingView?.findViewById(R.id.btn_stop)
+            dragHandle = floatingView?.findViewById(R.id.floating_root)
+            listeningLabel = floatingView?.findViewById(R.id.listening_label)
             
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -184,7 +194,8 @@ class FloatingMicService : Service() {
                 },
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT
             ).apply {
                 gravity = Gravity.TOP or Gravity.START
@@ -198,14 +209,27 @@ class FloatingMicService : Service() {
             }
 
             windowManager.addView(floatingView, params)
-            
+
+            floatingView?.let { root ->
+                ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+                    lastImeInsetBottom =
+                        insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+                    insets
+                }
+                ViewCompat.requestApplyInsets(root)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    root.elevation = 24f * resources.displayMetrics.density
+                }
+            }
+
             // IMPORTANT: Start with HIDDEN overlay
             floatingView?.visibility = View.GONE
             isMicVisible = false
             isOverlayCreated = true
             
             Log.d(TAG, "✅ Floating view created and hidden successfully")
-            setupTouchListener(floatingView!!)
+            val root = floatingView!!
+            setupTouchListener(root)
             setupButtonListeners()
             
             // Initialize UI state
@@ -233,52 +257,108 @@ class FloatingMicService : Service() {
         }
     }
 
-    private fun setupTouchListener(view: View) {
-        view.setOnTouchListener(object : View.OnTouchListener {
-            override fun onTouch(v: View?, event: MotionEvent?): Boolean {
-                when (event?.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        initialX = (view.layoutParams as WindowManager.LayoutParams).x
-                        initialY = (view.layoutParams as WindowManager.LayoutParams).y
-                        initialTouchX = event.rawX
-                        initialTouchY = event.rawY
-                        return true
-                    }
+    /**
+     * Drag via [dragSource] (wide handle) so mic/stop taps are never eaten by the mover.
+     * Positions [overlayRoot] in window coordinates; clamps above the IME when possible.
+     */
+private fun setupTouchListener(rootView: View) {
+    val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+    val longPressTimeout = 500L // 0.5 seconds to trigger drag mode
+    var longPressHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    
+    rootView.setOnTouchListener(object : View.OnTouchListener {
+        private var isLongPressActive = false
+        private var dragStarted = false
+        
+        // Long press runnable to enable dragging
+        private val longPressRunnable = Runnable {
+            isLongPressActive = true
+            showToast("Move mode active")
+            // Optional: Add a small scale-up animation or haptic feedback here
+            rootView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        }
+
+        override fun onTouch(v: View, event: MotionEvent): Boolean {
+            val params = rootView.layoutParams as WindowManager.LayoutParams
+
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialX = params.x
+                    initialY = params.y
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    isLongPressActive = false
+                    dragStarted = false
                     
-                    MotionEvent.ACTION_MOVE -> {
-                        val params = view.layoutParams as WindowManager.LayoutParams
-                        val deltaX = event.rawX - initialTouchX
-                        val deltaY = event.rawY - initialTouchY
-                        
-                        params.x = initialX + deltaX.toInt()
-                        params.y = initialY + deltaY.toInt()
-                        
-                        windowManager.updateViewLayout(view, params)
-                        return true
-                    }
-                    
-                    MotionEvent.ACTION_UP -> {
-                        val params = view.layoutParams as WindowManager.LayoutParams
-                        val screenWidth = resources.displayMetrics.widthPixels
-                        val screenHeight = resources.displayMetrics.heightPixels
-                        
-                        // Snap to edges
-                        if (params.x < screenWidth / 2) {
-                            params.x = 0
-                        } else {
-                            params.x = screenWidth - view.width
-                        }
-                        
-                        // Keep within vertical bounds
-                        params.y = params.y.coerceIn(0, screenHeight - view.height)
-                        
-                        windowManager.updateViewLayout(view, params)
-                        return true
-                    }
+                    // Start the timer for long press
+                    longPressHandler.postDelayed(longPressRunnable, longPressTimeout)
+                    return true
                 }
-                return false
+
+                MotionEvent.ACTION_MOVE -> {
+                    val deltaX = event.rawX - initialTouchX
+                    val deltaY = event.rawY - initialTouchY
+
+                    // If user moves too much before the long press, cancel it
+                    if (!isLongPressActive && (deltaX * deltaX + deltaY * deltaY > touchSlop * touchSlop)) {
+                        longPressHandler.removeCallbacks(longPressRunnable)
+                    }
+
+                    // Only move if long press was triggered
+                    if (isLongPressActive) {
+                        dragStarted = true
+                        params.x = initialX + deltaX.roundToInt()
+                        params.y = initialY + deltaY.roundToInt()
+                        clampOverlayPosition(rootView, params)
+                        windowManager.updateViewLayout(rootView, params)
+                    }
+                    return true
+                }
+
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    longPressHandler.removeCallbacks(longPressRunnable)
+                    
+                    if (!isLongPressActive && !dragStarted) {
+                        // It was a simple TAP - Toggle Recording
+                        handleMicTap()
+                    } else if (dragStarted) {
+                        // Snap to edges after dragging
+                        snapToEdges(params, rootView)
+                    }
+                    
+                    isLongPressActive = false
+                    return true
+                }
             }
-        })
+            return false
+        }
+    })
+}
+
+private fun handleMicTap() {
+    if (recordingState == RecordingState.IDLE) {
+        startSpeechRecognition()
+    } else if (recordingState == RecordingState.RECORDING) {
+        stopSpeechRecognition()
+    }
+}
+
+private fun snapToEdges(params: WindowManager.LayoutParams, view: View) {
+    val screenWidth = resources.displayMetrics.widthPixels
+    val vw = view.width.coerceAtLeast(1)
+    params.x = if (params.x + vw / 2 < screenWidth / 2) 0 else screenWidth - vw
+    clampOverlayPosition(view, params)
+    windowManager.updateViewLayout(view, params)
+}
+    private fun clampOverlayPosition(overlay: View, params: WindowManager.LayoutParams) {
+        val dm = resources.displayMetrics
+        val vw = overlay.width.coerceAtLeast(overlay.measuredWidth).coerceAtLeast(120)
+        val vh = overlay.height.coerceAtLeast(overlay.measuredHeight).coerceAtLeast(56)
+        val screenWidth = dm.widthPixels
+        val screenHeight = dm.heightPixels
+        val maxY = (screenHeight - vh - lastImeInsetBottom).coerceAtLeast(0)
+        params.x = params.x.coerceIn(0, (screenWidth - vw).coerceAtLeast(0))
+        params.y = params.y.coerceIn(0, maxY)
     }
 
     // ─── SPEECH RECOGNITION METHODS ───────────────────────────────────────
@@ -530,14 +610,17 @@ class FloatingMicService : Service() {
             RecordingState.IDLE -> {
                 btnMic?.visibility = View.VISIBLE
                 btnStop?.visibility = View.GONE
+                listeningLabel?.visibility = View.GONE
             }
             RecordingState.RECORDING -> {
                 btnMic?.visibility = View.GONE
                 btnStop?.visibility = View.VISIBLE
+                listeningLabel?.visibility = View.VISIBLE
             }
             RecordingState.STOPPED -> {
                 btnMic?.visibility = View.VISIBLE
                 btnStop?.visibility = View.GONE
+                listeningLabel?.visibility = View.GONE
             }
         }
     }

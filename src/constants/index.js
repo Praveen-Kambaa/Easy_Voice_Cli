@@ -1,11 +1,13 @@
-export const APP_NAME = 'Easy Voice';
-export const APP_VERSION = '1.0.0';
+export const APP_NAME = 'Type Easy';
+/** Used when native BuildConfig is unavailable (e.g. iOS). Keep aligned with android/app/build.gradle versionName. */
+export const APP_VERSION_FALLBACK = '1.0';
 export const APP_TAGLINE = 'Professional Voice Assistant';
 
 export const SCREEN_NAMES = {
   HOME: 'Home',
   VOICE_RECORDER: 'VoiceRecorder',
   RECORDINGS: 'RecordedAudio',
+  FLOATING_MIC_HISTORY: 'FloatingMicHistory',
   SETTINGS: 'Settings',
   FLOATING_MIC: 'FloatingMic',
 };

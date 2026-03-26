@@ -2,19 +2,22 @@ import React from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   Platform,
 } from 'react-native';
+import { AppHeader } from '../components/Header/AppHeader';
+import { ScreenContainer } from '../components/common/ScreenContainer';
+import { AppCard } from '../components/common/AppCard';
+import { PrimaryButton } from '../components/common/PrimaryButton';
+import { StatusBadge } from '../components/common/StatusBadge';
 import { useVoiceAssistant } from '../hooks/useVoiceAssistant';
+import { useAlert } from '../context/AlertContext';
+import { Colors } from '../theme/Colors';
 
-/**
- * Voice Assistant Screen
- * Controls floating voice assistant overlay and manages permissions
- */
 const VoiceAssistantScreen = () => {
+  const showAlert = useAlert();
+
   const {
     permissions,
     isOverlayActive,
@@ -30,38 +33,30 @@ const VoiceAssistantScreen = () => {
     requestRecordAudioPermission,
   } = useVoiceAssistant();
 
-  /**
-   * Handle start overlay button press
-   */
   const handleStartOverlay = async () => {
     if (!areAllPermissionsGranted()) {
       const missing = await getMissingPermissions();
       showPermissionAlert(missing);
       return;
     }
-
     startOverlay();
   };
 
-  /**
-   * Show permission alert with options
-   */
   const showPermissionAlert = (missingPermissions) => {
     const permissionList = missingPermissions.join(', ');
-    
-    Alert.alert(
+    showAlert(
       'Permissions Required',
-      `The following permissions are required for voice assistant:\n\n${permissionList}\n\nPlease enable them to continue.`,
+      `The following permissions are required:\n\n${permissionList}\n\nPlease enable them to continue.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Open Settings', onPress: () => openSettingsForMissing(missingPermissions) },
+        {
+          text: 'Open Settings',
+          onPress: () => openSettingsForMissing(missingPermissions),
+        },
       ]
     );
   };
 
-  /**
-   * Open appropriate settings based on missing permissions
-   */
   const openSettingsForMissing = (missingPermissions) => {
     if (missingPermissions.includes('Overlay')) {
       openOverlaySettings();
@@ -72,339 +67,254 @@ const VoiceAssistantScreen = () => {
     }
   };
 
-  /**
-   * Render permission status card
-   */
-  const renderPermissionCard = (title, key, granted, description) => (
-    <View key={key} style={styles.permissionCard}>
-      <View style={styles.permissionHeader}>
-        <Text style={styles.permissionTitle}>{title}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: granted ? '#4CAF50' : '#FF9800' }]}>
-          <Text style={[styles.statusText, { color: '#FFFFFF' }]}>
-            {granted ? 'Granted' : 'Not Granted'}
-          </Text>
-        </View>
-      </View>
-      <Text style={styles.permissionDescription}>{description}</Text>
-    </View>
-  );
+  const permissionRows = [
+    {
+      label: 'Overlay Permission',
+      granted: permissions.overlay,
+      description: 'Display floating icon over other apps',
+    },
+    {
+      label: 'Accessibility Service',
+      granted: permissions.accessibility,
+      description: 'Insert text into other apps',
+      labels: ['Enabled', 'Disabled'],
+    },
+    {
+      label: 'Microphone',
+      granted: permissions.recordAudio,
+      description: 'Record voice input',
+    },
+    {
+      label: 'Speech Recognition',
+      granted: permissions.speechRecognition,
+      description: 'Offline speech recognition support',
+    },
+  ];
 
   if (Platform.OS !== 'android') {
     return (
-      <View style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>
+      <ScreenContainer>
+        <AppHeader title="Voice Assistant" />
+        <View style={styles.unsupportedWrap}>
+          <Text style={styles.unsupportedText}>
             Voice Assistant is only available on Android devices.
           </Text>
         </View>
-      </View>
+      </ScreenContainer>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Voice Assistant</Text>
-        <Text style={styles.subtitle}>
-          Control floating voice assistant with speech-to-text functionality
-        </Text>
-      </View>
+    <ScreenContainer>
+      <AppHeader title="Voice Assistant" />
 
-      {/* Status */}
-      <View style={styles.statusContainer}>
-        <View style={styles.statusCard}>
-          <Text style={styles.statusTitle}>Service Status</Text>
-          <View style={[styles.statusIndicator, { backgroundColor: isOverlayActive ? '#4CAF50' : '#9E9E9E' }]}>
-            <Text style={[styles.statusText, { color: '#FFFFFF' }]}>
-              {isOverlayActive ? 'Active' : 'Inactive'}
-            </Text>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Permissions */}
+        <AppCard>
+          <Text style={styles.sectionTitle}>Permissions Status</Text>
+          {permissionRows.map((row, idx) => (
+            <View
+              key={idx}
+              style={[
+                styles.statusRow,
+                idx < permissionRows.length - 1 && styles.rowDivider,
+              ]}
+            >
+              <Text style={styles.rowLabel}>{row.label}</Text>
+              <StatusBadge
+                status={row.granted ? 'granted' : 'blocked'}
+                label={
+                  row.granted
+                    ? (row.labels?.[0] ?? 'Granted')
+                    : (row.labels?.[1] ?? 'Denied')
+                }
+              />
+            </View>
+          ))}
+        </AppCard>
+
+        {/* Service Status */}
+        <AppCard>
+          <Text style={styles.sectionTitle}>Service Status</Text>
+          <View style={[styles.statusRow, styles.rowDivider]}>
+            <Text style={styles.rowLabel}>Voice Assistant Service</Text>
+            <StatusBadge
+              status={isOverlayActive ? 'granted' : 'denied'}
+              label={isOverlayActive ? 'Active' : 'Inactive'}
+            />
           </View>
-        </View>
-      </View>
+          <View style={styles.statusRow}>
+            <Text style={styles.rowLabel}>All Permissions</Text>
+            <StatusBadge
+              status={areAllPermissionsGranted() ? 'granted' : 'denied'}
+              label={areAllPermissionsGranted() ? 'Ready' : 'Setup Required'}
+            />
+          </View>
+        </AppCard>
 
-      {/* Permissions */}
-      <View style={styles.permissionsContainer}>
-        <Text style={styles.sectionTitle}>Permissions</Text>
-        
-        {renderPermissionCard(
-          'Overlay Permission',
-          'overlay',
-          permissions.overlay,
-          'Allows app to display floating icon over other apps'
-        )}
-        
-        {renderPermissionCard(
-          'Accessibility Service',
-          'accessibility',
-          permissions.accessibility,
-          'Allows app to insert text into other apps'
-        )}
-        
-        {renderPermissionCard(
-          'Microphone',
-          'recordAudio',
-          permissions.recordAudio,
-          'Allows app to record voice input'
-        )}
-        
-        {renderPermissionCard(
-          'Speech Recognition',
-          'speechRecognition',
-          permissions.speechRecognition,
-          'Device supports offline speech recognition'
-        )}
-      </View>
+        {/* Controls */}
+        <AppCard>
+          <Text style={styles.sectionTitle}>Controls</Text>
 
-      {/* Actions */}
-      <View style={styles.actionsContainer}>
-        <TouchableOpacity
-          style={[
-            styles.primaryButton,
-            isOverlayActive && styles.activeButton,
-            loading.overlay && styles.disabledButton,
-          ]}
-          onPress={handleStartOverlay}
-          disabled={loading.overlay || isOverlayActive}
-        >
-          <Text style={styles.primaryButtonText}>
-            {loading.overlay ? 'Loading...' : isOverlayActive ? 'Stop Assistant' : 'Start Assistant'}
-          </Text>
-        </TouchableOpacity>
+          <PrimaryButton
+            title={
+              loading.overlay
+                ? 'Loading...'
+                : isOverlayActive
+                ? 'Stop Assistant'
+                : 'Start Assistant'
+            }
+            onPress={isOverlayActive ? stopOverlay : handleStartOverlay}
+            disabled={loading.overlay}
+            loading={loading.overlay}
+            variant={isOverlayActive ? 'danger' : 'primary'}
+            style={styles.mainBtn}
+          />
 
-        <TouchableOpacity
-          style={[styles.secondaryButton, loading.permissions && styles.disabledButton]}
-          onPress={checkPermissions}
-          disabled={loading.permissions}
-        >
-          <Text style={styles.secondaryButtonText}>
-            {loading.permissions ? 'Checking...' : 'Refresh Permissions'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+          <PrimaryButton
+            title={loading.permissions ? 'Checking...' : 'Refresh Permissions'}
+            onPress={checkPermissions}
+            disabled={loading.permissions}
+            loading={loading.permissions}
+            variant="ghost"
+          />
+        </AppCard>
 
-      {/* Instructions */}
-      <View style={styles.instructionsContainer}>
-        <Text style={styles.instructionsTitle}>How to Use</Text>
-        <View style={styles.instructionList}>
-          <Text style={styles.instructionItem}>
-            1. Enable all required permissions
-          </Text>
-          <Text style={styles.instructionItem}>
-            2. Tap "Start Assistant" to show floating icon
-          </Text>
-          <Text style={styles.instructionItem}>
-            3. Tap floating icon to start voice recording
-          </Text>
-          <Text style={styles.instructionItem}>
-            4. Speak your message
-          </Text>
-          <Text style={styles.instructionItem}>
-            5. Text will be inserted into focused field automatically
-          </Text>
-        </View>
-      </View>
+        {/* Instructions */}
+        <AppCard>
+          <Text style={styles.sectionTitle}>How to Use</Text>
+          {[
+            'Ensure all permissions are granted (green status)',
+            'Tap "Start Assistant" to show floating icon',
+            'Tap floating icon to start voice recording',
+            'Speak your message clearly',
+            'Text will be inserted into focused field automatically',
+          ].map((text, idx) => (
+            <View key={idx} style={styles.instructionRow}>
+              <Text style={styles.instructionNumber}>{idx + 1}</Text>
+              <Text style={styles.instructionText}>{text}</Text>
+            </View>
+          ))}
+        </AppCard>
 
-      {/* Warning */}
-      <View style={styles.warningContainer}>
-        <Text style={styles.warningTitle}>Important Notes</Text>
-        <Text style={styles.warningText}>
-          • Voice assistant works with Android SpeechRecognizer (offline)
-        </Text>
-        <Text style={styles.warningText}>
-          • Accessibility service must be enabled for text insertion
-        </Text>
-        <Text style={styles.warningText}>
-          • Overlay permission required for floating icon
-        </Text>
-        <Text style={styles.warningText}>
-          • Works with WhatsApp, Instagram, Messages and other apps
-        </Text>
-      </View>
-    </ScrollView>
+        {/* Notes */}
+        <AppCard>
+          <Text style={styles.sectionTitle}>Important Notes</Text>
+          {[
+            'Uses Android SpeechRecognizer (offline capable)',
+            'Accessibility service required for text insertion',
+            'Overlay permission required for floating icon',
+            'Works with WhatsApp, Instagram, Messages and more',
+          ].map((note, idx) => (
+            <View key={idx} style={styles.noteRow}>
+              <View style={styles.noteDot} />
+              <Text style={styles.noteText}>{note}</Text>
+            </View>
+          ))}
+        </AppCard>
+      </ScrollView>
+    </ScreenContainer>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  scroll: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
   },
-  contentContainer: {
+  scrollContent: {
     padding: 20,
+    paddingBottom: 40,
   },
-  header: {
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#2C3E50',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#7F8C8D',
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  statusContainer: {
-    marginBottom: 24,
-  },
-  statusCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statusTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#2C3E50',
-    marginBottom: 12,
-  },
-  statusIndicator: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-  },
-  permissionsContainer: {
-    marginBottom: 24,
-  },
+
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#2C3E50',
-    marginBottom: 16,
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    marginBottom: 14,
   },
-  permissionCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  permissionHeader: {
+
+  statusRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    paddingVertical: 8,
   },
-  permissionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2C3E50',
+  rowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  permissionDescription: {
+  rowLabel: {
     fontSize: 14,
-    color: '#7F8C8D',
-    lineHeight: 20,
+    color: Colors.text.secondary,
+    flex: 1,
+    marginRight: 12,
   },
-  actionsContainer: {
-    marginBottom: 24,
-    gap: 12,
+
+  mainBtn: {
+    marginBottom: 10,
   },
-  primaryButton: {
-    backgroundColor: '#2196F3',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: 'center',
+
+  instructionRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+    gap: 10,
   },
-  activeButton: {
-    backgroundColor: '#F44336',
-  },
-  disabledButton: {
-    backgroundColor: '#BDC3C7',
-  },
-  primaryButtonText: {
+  instructionNumber: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.primary,
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 22,
+    flexShrink: 0,
   },
-  secondaryButton: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#2196F3',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  secondaryButtonText: {
-    color: '#2196F3',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  instructionsContainer: {
-    backgroundColor: '#E3F2FD',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 24,
-  },
-  instructionsTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1565C0',
-    marginBottom: 12,
-  },
-  instructionList: {
-    gap: 8,
-  },
-  instructionItem: {
-    fontSize: 14,
-    color: '#1976D2',
+  instructionText: {
+    fontSize: 13,
+    color: Colors.text.secondary,
     lineHeight: 20,
+    flex: 1,
   },
-  warningContainer: {
-    backgroundColor: '#FFF3E0',
-    borderRadius: 12,
-    padding: 20,
-    borderLeftWidth: 3,
-    borderLeftColor: '#FF9800',
+
+  noteRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    gap: 10,
   },
-  warningTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#E65100',
-    marginBottom: 12,
+  noteDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.border,
+    marginTop: 7,
+    flexShrink: 0,
   },
-  warningText: {
-    fontSize: 14,
-    color: '#7F6000',
+  noteText: {
+    fontSize: 13,
+    color: Colors.text.secondary,
     lineHeight: 20,
-    marginBottom: 4,
+    flex: 1,
   },
-  errorContainer: {
+
+  unsupportedWrap: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
   },
-  errorText: {
-    fontSize: 16,
-    color: '#D32F2F',
+  unsupportedText: {
+    fontSize: 15,
+    color: Colors.text.secondary,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 22,
   },
 });
 

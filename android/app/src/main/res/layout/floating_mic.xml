@@ -1,50 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/floating_root"
     android:layout_width="wrap_content"
-    android:layout_height="56dp"
-    android:orientation="horizontal"
-    android:background="@drawable/floating_mic_background"
-    android:padding="8dp">
+    android:layout_height="wrap_content"
+    android:background="@drawable/floating_mic_bar_bg"
+    android:elevation="18dp"
+    android:padding="10dp">
 
-    <!-- Mic Button (IDLE state) -->
-    <ImageView
-        android:id="@+id/btn_mic"
+    <RelativeLayout
         android:layout_width="40dp"
         android:layout_height="40dp"
-        android:src="@drawable/ic_mic_normal"
-        android:scaleType="centerInside"
-        android:background="?android:attr/selectableItemBackgroundBorderless"
-        android:visibility="visible" />
+        android:background="@drawable/floating_mic_bar_bg"
+        android:elevation="8dp">
 
-    <!-- Stop Button (RECORDING/PAUSED states) -->
-    <ImageView
-        android:id="@+id/btn_stop"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:src="@drawable/ic_stop"
-        android:scaleType="centerInside"
-        android:background="?android:attr/selectableItemBackgroundBorderless"
-        android:layout_marginEnd="8dp"
-        android:visibility="gone" />
+        <ImageView
+            android:id="@+id/btn_mic"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_centerInParent="true"
+            android:src="@drawable/ic_mic_normal"
+            android:contentDescription="Mic" />
 
-    <!-- Pause Button (RECORDING state) -->
-    <ImageView
-        android:id="@+id/btn_pause"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:src="@drawable/ic_pause"
-        android:scaleType="centerInside"
-        android:background="?android:attr/selectableItemBackgroundBorderless"
-        android:visibility="gone" />
-
-    <!-- Resume Button (PAUSED state) -->
-    <ImageView
-        android:id="@+id/btn_resume"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:src="@drawable/ic_resume"
-        android:scaleType="centerInside"
-        android:background="?android:attr/selectableItemBackgroundBorderless"
-        android:visibility="gone" />
-
-</LinearLayout>
+        <ImageView
+            android:id="@+id/btn_stop"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_centerInParent="true"
+            android:src="@drawable/ic_stop_inner"
+            android:visibility="gone"
+            android:contentDescription="Stop" />
+            
+        <TextView
+            android:id="@+id/listening_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:layout_centerHorizontal="true"
+            android:layout_marginBottom="4dp"
+            android:text="REC"
+            android:textColor="#FF0000"
+            android:textSize="8sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+    </RelativeLayout>
+</FrameLayout>

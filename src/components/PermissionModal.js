@@ -7,16 +7,13 @@ import {
   ScrollView,
   StyleSheet,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { PERMISSION_NAMES } from '../utils/AndroidPermissions';
+import { Colors } from '../theme/Colors';
 
 const { width, height } = Dimensions.get('window');
 
-/**
- * Reusable Permission Modal Component
- * Provides clear user explanation before redirecting to settings
- * Google Play compliant with proper user consent flow
- */
 const PermissionModal = ({
   visible,
   permissionType,
@@ -24,7 +21,6 @@ const PermissionModal = ({
   onCancel,
   loading = false,
 }) => {
-  // Get permission-specific content
   const getPermissionContent = () => {
     switch (permissionType) {
       case PERMISSION_NAMES.OVERLAY:
@@ -35,16 +31,16 @@ const PermissionModal = ({
           benefits: [
             'Show important information when you need it',
             'Provide quick access to app controls',
-            'Enhance user experience with floating widgets',
+            'Enhance experience with floating widgets',
           ],
           instructions: [
             'Tap "Open Settings" below',
-            'Find "Display over other apps" or "Draw over other apps"',
+            'Find "Display over other apps"',
             'Enable the toggle for this app',
             'Return to continue',
           ],
         };
-      
+
       case PERMISSION_NAMES.ACCESSIBILITY:
         return {
           title: 'Accessibility Service Required',
@@ -52,19 +48,19 @@ const PermissionModal = ({
           description: 'This app needs accessibility service permission to provide enhanced functionality.',
           benefits: [
             'Interact with system elements seamlessly',
-            'Provide automated assistance',
+            'Provide automated text insertion',
             'Enhance accessibility features',
           ],
           instructions: [
             'Tap "Open Settings" below',
             'Find "Accessibility" or "Accessibility Services"',
-            'Locate this app in the services list',
+            'Locate this app in the list',
             'Enable the toggle for this app',
             'Grant the requested permissions',
             'Return to continue',
           ],
         };
-      
+
       default:
         return {
           title: 'Permission Required',
@@ -78,29 +74,13 @@ const PermissionModal = ({
 
   const content = getPermissionContent();
 
-  const renderInstructionStep = (step, index) => (
-    <View key={index} style={styles.instructionStep}>
-      <View style={styles.stepNumber}>
-        <Text style={styles.stepNumberText}>{index + 1}</Text>
-      </View>
-      <Text style={styles.stepText}>{step}</Text>
-    </View>
-  );
-
-  const renderBenefit = (benefit, index) => (
-    <View key={index} style={styles.benefitItem}>
-      <Text style={styles.bullet}>•</Text>
-      <Text style={styles.benefitText}>{benefit}</Text>
-    </View>
-  );
-
   return (
     <Modal
       visible={visible}
-      transparent={true}
+      transparent
       animationType="fade"
       onRequestClose={onCancel}
-      statusBarTranslucent={true}
+      statusBarTranslucent
     >
       <View style={styles.overlay}>
         <View style={styles.modalContainer}>
@@ -110,36 +90,44 @@ const PermissionModal = ({
             <Text style={styles.title}>{content.title}</Text>
           </View>
 
-          {/* Content */}
-          <ScrollView 
+          {/* Scrollable content */}
+          <ScrollView
             style={styles.content}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.contentContainer}
           >
-            {/* Description */}
             <Text style={styles.description}>{content.description}</Text>
 
-            {/* Benefits Section */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Why we need this permission:</Text>
+              <Text style={styles.sectionTitle}>Why we need this:</Text>
               <View style={styles.benefitsList}>
-                {content.benefits.map(renderBenefit)}
+                {content.benefits.map((benefit, index) => (
+                  <View key={index} style={styles.benefitItem}>
+                    <View style={styles.bullet} />
+                    <Text style={styles.benefitText}>{benefit}</Text>
+                  </View>
+                ))}
               </View>
             </View>
 
-            {/* Instructions Section */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>How to enable:</Text>
               <View style={styles.instructionsList}>
-                {content.instructions.map(renderInstructionStep)}
+                {content.instructions.map((step, index) => (
+                  <View key={index} style={styles.instructionStep}>
+                    <View style={styles.stepNumber}>
+                      <Text style={styles.stepNumberText}>{index + 1}</Text>
+                    </View>
+                    <Text style={styles.stepText}>{step}</Text>
+                  </View>
+                ))}
               </View>
             </View>
 
-            {/* Privacy Note */}
             <View style={styles.privacyNote}>
               <Text style={styles.privacyText}>
                 We respect your privacy and only use these permissions to enhance your experience.
-                You can disable these permissions at any time in your device settings.
+                You can disable these permissions at any time in device settings.
               </Text>
             </View>
           </ScrollView>
@@ -150,20 +138,22 @@ const PermissionModal = ({
               style={[styles.button, styles.cancelButton]}
               onPress={onCancel}
               disabled={loading}
+              activeOpacity={0.8}
             >
-              <Text style={[styles.buttonText, styles.cancelButtonText]}>
-                Cancel
-              </Text>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity
               style={[styles.button, styles.confirmButton, loading && styles.disabledButton]}
               onPress={onConfirm}
               disabled={loading}
+              activeOpacity={0.8}
             >
-              <Text style={[styles.buttonText, styles.confirmButtonText]}>
-                {loading ? 'Opening...' : 'Open Settings'}
-              </Text>
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.confirmButtonText}>Open Settings</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -175,38 +165,41 @@ const PermissionModal = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 24,
   },
   modalContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     borderRadius: 16,
-    width: width * 0.9,
-    maxHeight: height * 0.85,
-    elevation: 10,
+    width: width - 48,
+    maxHeight: height * 0.82,
+    overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 12,
   },
   header: {
     alignItems: 'center',
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: Colors.borderLight,
   },
   icon: {
-    fontSize: 48,
+    fontSize: 44,
     marginBottom: 12,
   },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#2C3E50',
+    color: Colors.text.primary,
     textAlign: 'center',
-    lineHeight: 28,
+    lineHeight: 26,
   },
   content: {
     flex: 1,
@@ -215,20 +208,20 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   description: {
-    fontSize: 16,
-    color: '#5A6C7D',
-    lineHeight: 24,
+    fontSize: 14,
+    color: Colors.text.secondary,
+    lineHeight: 22,
     textAlign: 'center',
     marginBottom: 24,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#2C3E50',
-    marginBottom: 12,
+    color: Colors.text.primary,
+    marginBottom: 10,
   },
   benefitsList: {
     gap: 8,
@@ -236,22 +229,24 @@ const styles = StyleSheet.create({
   benefitItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
+    gap: 10,
   },
   bullet: {
-    fontSize: 16,
-    color: '#3498DB',
-    fontWeight: '600',
-    marginTop: 2,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.primary,
+    marginTop: 7,
+    flexShrink: 0,
   },
   benefitText: {
     flex: 1,
-    fontSize: 15,
-    color: '#5A6C7D',
-    lineHeight: 22,
+    fontSize: 14,
+    color: Colors.text.secondary,
+    lineHeight: 20,
   },
   instructionsList: {
-    gap: 12,
+    gap: 10,
   },
   instructionStep: {
     flexDirection: 'row',
@@ -259,73 +254,75 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   stepNumber: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#3498DB',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 2,
+    marginTop: 1,
+    flexShrink: 0,
   },
   stepNumberText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     color: '#FFFFFF',
   },
   stepText: {
     flex: 1,
-    fontSize: 15,
-    color: '#5A6C7D',
-    lineHeight: 22,
+    fontSize: 14,
+    color: Colors.text.secondary,
+    lineHeight: 20,
   },
   privacyNote: {
-    backgroundColor: '#F8F9FA',
-    padding: 16,
+    backgroundColor: Colors.backgroundAlt,
+    padding: 14,
     borderRadius: 8,
     borderLeftWidth: 3,
-    borderLeftColor: '#3498DB',
+    borderLeftColor: Colors.border,
+    marginTop: 4,
   },
   privacyText: {
-    fontSize: 13,
-    color: '#6C757D',
-    lineHeight: 20,
+    fontSize: 12,
+    color: Colors.text.secondary,
+    lineHeight: 18,
     fontStyle: 'italic',
   },
   actions: {
     flexDirection: 'row',
+    gap: 10,
     padding: 20,
-    gap: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    borderTopColor: Colors.borderLight,
   },
   button: {
     flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
+    minHeight: 46,
   },
   cancelButton: {
-    backgroundColor: '#F8F9FA',
+    backgroundColor: Colors.backgroundAlt,
     borderWidth: 1,
-    borderColor: '#DEE2E6',
+    borderColor: Colors.border,
   },
   confirmButton: {
-    backgroundColor: '#3498DB',
+    backgroundColor: Colors.primary,
   },
   disabledButton: {
-    backgroundColor: '#BDC3C7',
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '600',
+    opacity: 0.5,
   },
   cancelButtonText: {
-    color: '#495057',
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text.primary,
   },
   confirmButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
     color: '#FFFFFF',
   },
 });

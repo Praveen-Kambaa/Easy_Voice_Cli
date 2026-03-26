@@ -1,7 +1,43 @@
-import { NativeModules, Platform } from 'react-native';
+import { NativeModules, DeviceEventEmitter } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FileSystem, Dirs } from 'react-native-file-access';
 
 const { AudioRecorderModule } = NativeModules;
+
+const RECORDINGS_STORAGE_KEY = '@typeeasy_voice_recordings';
+const LEGACY_RECORDINGS_PATH = `${Dirs.DocumentDir}/recordings.json`;
+
+export const VOICE_RECORDINGS_UPDATED_EVENT = 'VoiceRecordingsUpdated';
+
+async function migrateLegacyRecordingsIfNeeded() {
+  try {
+    const exists = await FileSystem.exists(LEGACY_RECORDINGS_PATH);
+    if (!exists) return [];
+    const raw = await FileSystem.readFile(LEGACY_RECORDINGS_PATH);
+    const parsed = JSON.parse(raw);
+    const arr = Array.isArray(parsed) ? parsed : [];
+    await AsyncStorage.setItem(RECORDINGS_STORAGE_KEY, JSON.stringify(arr));
+    await FileSystem.unlink(LEGACY_RECORDINGS_PATH).catch(() => {});
+    return arr;
+  } catch (e) {
+    console.warn('[NativeAudioService] legacy recordings migrate:', e);
+    return [];
+  }
+}
+
+async function readAllRecordingsFromStorage() {
+  const fromStorage = await AsyncStorage.getItem(RECORDINGS_STORAGE_KEY);
+  if (fromStorage != null) {
+    const parsed = JSON.parse(fromStorage);
+    return Array.isArray(parsed) ? parsed : [];
+  }
+  return migrateLegacyRecordingsIfNeeded();
+}
+
+async function writeAllRecordings(recordings) {
+  await AsyncStorage.setItem(RECORDINGS_STORAGE_KEY, JSON.stringify(recordings));
+  DeviceEventEmitter.emit(VOICE_RECORDINGS_UPDATED_EVENT);
+}
 
 class NativeAudioService {
   constructor() {
@@ -10,6 +46,18 @@ class NativeAudioService {
     this.recordingStartTime = null;
     this.isPlaying = false;
     this.currentPlaybackFile = '';
+    this._playbackCompleteCallback = null;
+
+    // Listen for native playback completion event
+    DeviceEventEmitter.addListener('onPlaybackComplete', () => {
+      this.isPlaying = false;
+      this.currentPlaybackFile = '';
+      if (this._playbackCompleteCallback) {
+        const cb = this._playbackCompleteCallback;
+        this._playbackCompleteCallback = null;
+        cb();
+      }
+    });
   }
 
   async requestAudioPermission() {
@@ -88,7 +136,7 @@ class NativeAudioService {
     }
   }
 
-  async playRecording(filePath) {
+  async playRecording(filePath, onComplete) {
     try {
       if (this.isPlaying) {
         await this.stopPlayback();
@@ -96,7 +144,9 @@ class NativeAudioService {
 
       console.log('[NativeAudioService] playRecording:', filePath);
 
-      // Call native method with Promise
+      this._playbackCompleteCallback = onComplete || null;
+
+      // Call native method with Promise (resolves when playback STARTS)
       await AudioRecorderModule.startPlayback(filePath);
 
       this.isPlaying = true;
@@ -109,6 +159,7 @@ class NativeAudioService {
       console.error('[NativeAudioService] playRecording error:', error);
       this.isPlaying = false;
       this.currentPlaybackFile = '';
+      this._playbackCompleteCallback = null;
       return { success: false, error: error.message };
     }
   }
@@ -129,9 +180,16 @@ class NativeAudioService {
 
       return { success: true };
     } catch (error) {
-      console.error('[NativeAudioService] stopPlayback error:', error);
       this.isPlaying = false;
       this.currentPlaybackFile = '';
+
+      // Audio finished naturally on its own before stop was called — not an error
+      const msg = (error.message || '').toLowerCase();
+      if (msg.includes('no audio') || msg.includes('not playing') || msg.includes('nothing playing')) {
+        return { success: true };
+      }
+
+      console.error('[NativeAudioService] stopPlayback error:', error);
       return { success: false, error: error.message };
     }
   }
@@ -156,13 +214,11 @@ class NativeAudioService {
     }
   }
 
-  // File-based storage using RNFS
   async saveRecording(recording) {
     try {
       const recordings = await this.getAllRecordings();
       recordings.push(recording);
-      const recordingsPath = `${Dirs.DocumentDir}/recordings.json`;
-      await FileSystem.writeFile(recordingsPath, JSON.stringify(recordings));
+      await writeAllRecordings(recordings);
       return { success: true };
     } catch (error) {
       console.error('[NativeAudioService] saveRecording error:', error);
@@ -172,13 +228,7 @@ class NativeAudioService {
 
   async getAllRecordings() {
     try {
-      const recordingsPath = `${Dirs.DocumentDir}/recordings.json`;
-      const exists = await FileSystem.exists(recordingsPath);
-      if (!exists) {
-        return [];
-      }
-      const recordings = await FileSystem.readFile(recordingsPath);
-      return JSON.parse(recordings);
+      return await readAllRecordingsFromStorage();
     } catch (error) {
       console.error('[NativeAudioService] getAllRecordings error:', error);
       return [];
@@ -189,8 +239,7 @@ class NativeAudioService {
     try {
       const recordings = await this.getAllRecordings();
       const filteredRecordings = recordings.filter(r => r.id !== recordingId);
-      const recordingsPath = `${Dirs.DocumentDir}/recordings.json`;
-      await FileSystem.writeFile(recordingsPath, JSON.stringify(filteredRecordings));
+      await writeAllRecordings(filteredRecordings);
       return { success: true };
     } catch (error) {
       console.error('[NativeAudioService] deleteRecording error:', error);
@@ -206,8 +255,7 @@ class NativeAudioService {
         return { success: false, error: 'Recording not found' };
       }
       recordings[idx] = { ...recordings[idx], ...transcriptData, updatedAt: new Date().toISOString() };
-      const recordingsPath = `${Dirs.DocumentDir}/recordings.json`;
-      await FileSystem.writeFile(recordingsPath, JSON.stringify(recordings));
+      await writeAllRecordings(recordings);
       return { success: true };
     } catch (error) {
       console.error('[NativeAudioService] updateRecordingTranscript error:', error);

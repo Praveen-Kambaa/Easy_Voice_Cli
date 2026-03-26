@@ -1,26 +1,9 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
-
-// Environment-Safe Base URL Configuration
-const getBaseURL = () => {
-  if (__DEV__) {
-    if (Platform.OS === 'android') {
-      if (Platform.isEmulator) {
-        return 'https://st0x556n-4000.inc1.devtunnels.ms/api';
-      } else {
-        return 'https://st0x556n-4000.inc1.devtunnels.ms/api';
-      }
-    } else if (Platform.OS === 'ios') {
-      return 'https://st0x556n-4000.inc1.devtunnels.ms/api';
-    }
-  }
-  
-  // Production
-  return 'https://st0x556n-4000.inc1.devtunnels.ms/api';
-};
+import { API_SERVERS } from '../config/api';
 
 const API_CONFIG = {
-  baseURL: getBaseURL(),
+  baseURL: API_SERVERS.EASY_VOICE,  // Use Easy Voice server by default
   timeout: 30000, // 30 seconds
   // SSL and network settings for Android
   // Note: Using HTTP so no SSL configuration needed

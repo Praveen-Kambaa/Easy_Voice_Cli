@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
   Platform,
 } from 'react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
@@ -16,9 +15,12 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 import PermissionModal from '../../components/PermissionModal';
 import { usePermissionsManager } from '../../hooks/usePermissionsManager';
 import { useAndroidPermissions } from '../../hooks/useAndroidPermissions';
+import { useAlert } from '../../context/AlertContext';
 import { Colors } from '../../theme/Colors';
 
 const SettingsScreen = () => {
+  const showAlert = useAlert();
+
   // ── Standard permissions (Microphone, Phone Call, SMS) ────────────────────
   const {
     permissionStatuses,
@@ -57,7 +59,7 @@ const SettingsScreen = () => {
 
   const handleStdRequest = async (permissionType) => {
     if (isPermissionBlocked(permissionType)) {
-      Alert.alert(
+      showAlert(
         'Permission Blocked',
         'This permission is blocked. Please enable it in app settings.',
         [
@@ -71,11 +73,11 @@ const SettingsScreen = () => {
     const result = await requestPermission(permissionType);
 
     if (result === 'granted') {
-      Alert.alert('Granted', `${STD_NAMES[permissionType]} permission granted!`);
+      showAlert('Granted', `${STD_NAMES[permissionType]} permission granted!`);
     } else if (result === 'denied') {
-      Alert.alert('Denied', `${STD_NAMES[permissionType]} permission was denied.`);
+      showAlert('Denied', `${STD_NAMES[permissionType]} permission was denied.`);
     } else if (result === 'blocked') {
-      Alert.alert(
+      showAlert(
         'Blocked',
         `${STD_NAMES[permissionType]} permission is blocked. Enable it in settings.`,
         [
@@ -101,13 +103,13 @@ const SettingsScreen = () => {
   const handleSysRequest = async (permissionType) => {
     try {
       if (!isPermissionSupported(permissionType)) {
-        Alert.alert('Not Supported', `${permissionType} is not supported on this device.`);
+        showAlert('Not Supported', `${permissionType} is not supported on this device.`);
         return;
       }
       clearPermissionError(permissionType);
       await requestSysPermission(permissionType);
     } catch (error) {
-      Alert.alert('Error', `Failed to request ${permissionType}. Please try again.`);
+      showAlert('Error', `Failed to request ${permissionType}. Please try again.`);
     }
   };
 

@@ -3,22 +3,37 @@ import {
   View,
   Text,
   StyleSheet,
-  Alert,
   TouchableOpacity,
   Animated,
   ActivityIndicator,
   ScrollView,
   TextInput,
 } from 'react-native';
+import {
+  Mic,
+  MicOff,
+  Music,
+  Circle,
+  Square,
+  Play,
+  Pencil,
+  Send,
+  X,
+  Info,
+  Lightbulb,
+  HelpCircle,
+} from 'lucide-react-native';
 import { FileSystem } from 'react-native-file-access';
 import NativeAudioService from '../../services/NativeAudioService';
 import { voiceApi } from '../../api/voiceApi';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { AppCard } from '../../components/common/AppCard';
 import { PrimaryButton } from '../../components/common/PrimaryButton';
+import { useAlert } from '../../context/AlertContext';
 import { Colors } from '../../theme/Colors';
 
 const VoiceRecorderScreen = ({ navigation }) => {
+  const showAlert = useAlert();
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -88,7 +103,7 @@ const VoiceRecorderScreen = ({ navigation }) => {
       setDuration(0);
       setFilePath(result.filePath);
     } else {
-      Alert.alert('Recording Error', result.error || 'Failed to start recording');
+      showAlert('Recording Error', result.error || 'Failed to start recording');
     }
   };
 
@@ -103,7 +118,7 @@ const VoiceRecorderScreen = ({ navigation }) => {
     if (!result.success) {
       await NativeAudioService.forceCleanup();
       setIsTranscribing(false);
-      Alert.alert('Error', `Failed to stop recording: ${result.error}`);
+      showAlert('Error', `Failed to stop recording: ${result.error}`);
       return;
     }
     setLastRecording(result.recordingData);
@@ -115,7 +130,7 @@ const VoiceRecorderScreen = ({ navigation }) => {
   const handlePlayPause = async () => {
     const path = lastRecording?.filePath || filePath;
     if (!path) {
-      Alert.alert('No Recording', 'Record something first before playing.');
+      showAlert('No Recording', 'Record something first before playing.');
       return;
     }
     if (isPlaying) {
@@ -132,7 +147,7 @@ const VoiceRecorderScreen = ({ navigation }) => {
           }
         }, 500);
       } else {
-        Alert.alert('Playback Error', r.error || 'Failed to play recording');
+        showAlert('Playback Error', r.error || 'Failed to play recording');
       }
     }
   };
@@ -172,7 +187,7 @@ const VoiceRecorderScreen = ({ navigation }) => {
       const msg = error.message || 'Transcription failed';
       setTranscriptError(msg);
       setTranscript(null);
-      Alert.alert(
+      showAlert(
         'Upload / Transcription Failed',
         msg,
         [
@@ -181,7 +196,7 @@ const VoiceRecorderScreen = ({ navigation }) => {
             onPress: () => {
               setIsTranscribing(false);
               setTranscriptError(null);
-              Alert.alert('Saved', 'Recording saved locally without transcription.');
+              showAlert('Saved', 'Recording saved locally without transcription.');
             },
           },
           {
@@ -204,7 +219,7 @@ const VoiceRecorderScreen = ({ navigation }) => {
 
   const handleSaveTranscript = async () => {
     if (!voiceAssetId) {
-      Alert.alert('Error', 'No voice asset ID available for update');
+      showAlert('Error', 'No voice asset ID available for update');
       return;
     }
     try {
@@ -218,21 +233,21 @@ const VoiceRecorderScreen = ({ navigation }) => {
             await NativeAudioService.updateRecordingTranscript(lastRecording.id, updated);
             setLastRecording(updated);
           }
-          Alert.alert('Success', 'Transcript updated successfully!');
+          showAlert('Success', 'Transcript updated successfully!');
         } else {
-          Alert.alert('Error', updateResult.error);
+          showAlert('Error', updateResult.error);
           return;
         }
       }
       setIsEditingTranscript(false);
     } catch {
-      Alert.alert('Error', 'Failed to save transcript');
+      showAlert('Error', 'Failed to save transcript');
     }
   };
 
   const handleExecuteVoiceCommand = async () => {
     if (!voiceAssetId) {
-      Alert.alert('Error', 'No voice asset ID available for execution');
+      showAlert('Error', 'No voice asset ID available for execution');
       return;
     }
     try {
@@ -263,16 +278,16 @@ const VoiceRecorderScreen = ({ navigation }) => {
 
       if (executeResult.success) {
         setIsEditingTranscript(false);
-        Alert.alert(
+        showAlert(
           'Command Executed!',
           `Voice command processed successfully.\n\n${hasChanged ? '(Transcript was updated before execution)' : '(Original transcript used)'}`,
-          [{ text: 'OK', style: 'cancel' }]
+          [{ text: 'OK' }]
         );
       } else {
         throw new Error(executeResult.error);
       }
     } catch (error) {
-      Alert.alert('Execution Failed', error.message || 'Failed to execute voice command');
+      showAlert('Execution Failed', error.message || 'Failed to execute voice command');
     } finally {
       setIsExecuting(false);
     }
@@ -297,7 +312,7 @@ const VoiceRecorderScreen = ({ navigation }) => {
               onPress={() => navigation.navigate('RecordedAudio')}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Text style={styles.headerAction}>🎵</Text>
+              <Music size={22} color={Colors.text.primary} strokeWidth={1.8} />
             </TouchableOpacity>
           ) : null
         }
@@ -315,7 +330,11 @@ const VoiceRecorderScreen = ({ navigation }) => {
             { transform: [{ scale: pulseAnim }] },
           ]}
         >
-          <Text style={styles.recordingEmoji}>{isRecording ? '🎙️' : '🎤'}</Text>
+          <View style={styles.recordingIconWrap}>
+            {isRecording
+              ? <Mic size={48} color={isRecording && !isPaused ? Colors.recording.active : Colors.text.secondary} strokeWidth={1.5} />
+              : <MicOff size={48} color={Colors.text.light} strokeWidth={1.5} />}
+          </View>
           <Text style={styles.statusText}>
             {isRecording
               ? isPaused ? 'Recording Paused' : 'Recording…'
@@ -340,7 +359,7 @@ const VoiceRecorderScreen = ({ navigation }) => {
               disabled={isTranscribing}
               activeOpacity={0.85}
             >
-              <Text style={styles.controlBtnIcon}>⏺</Text>
+              <Circle size={20} color="#FFFFFF" strokeWidth={2.5} />
               <Text style={styles.controlBtnLabel}>Start</Text>
             </TouchableOpacity>
           ) : (
@@ -349,7 +368,7 @@ const VoiceRecorderScreen = ({ navigation }) => {
               onPress={handleStop}
               activeOpacity={0.85}
             >
-              <Text style={styles.controlBtnIcon}>⏹</Text>
+              <Square size={20} color="#FFFFFF" strokeWidth={2} />
               <Text style={styles.controlBtnLabel}>Stop & Send</Text>
             </TouchableOpacity>
           )}
@@ -361,7 +380,9 @@ const VoiceRecorderScreen = ({ navigation }) => {
               disabled={isTranscribing}
               activeOpacity={0.85}
             >
-              <Text style={styles.controlBtnIcon}>{isPlaying ? '⏹' : '▶️'}</Text>
+              {isPlaying
+                ? <Square size={20} color="#FFFFFF" strokeWidth={2} />
+                : <Play size={20} color="#FFFFFF" strokeWidth={2} />}
               <Text style={styles.controlBtnLabel}>{isPlaying ? 'Stop' : 'Play'}</Text>
             </TouchableOpacity>
           )}
@@ -451,13 +472,15 @@ const VoiceRecorderScreen = ({ navigation }) => {
         <AppCard>
           <Text style={styles.tipsTitle}>Quick Tips</Text>
           {[
-            ['👆', 'Tap Start to begin recording'],
-            ['⏹', 'Tap Stop & Send to upload to backend'],
-            ['▶️', 'Play back the recorded audio'],
-            ['📁', 'Files saved in MP4/AAC format'],
-          ].map(([emoji, text]) => (
+            { Icon: Circle, text: 'Tap Start to begin recording', color: Colors.recording.active },
+            { Icon: Square, text: 'Tap Stop & Send to upload to backend', color: Colors.primary },
+            { Icon: Play, text: 'Play back the recorded audio', color: Colors.status.info },
+            { Icon: Music, text: 'Files saved in MP4/AAC format', color: Colors.text.secondary },
+          ].map(({ Icon, text, color }) => (
             <View key={text} style={styles.tipRow}>
-              <Text style={styles.tipEmoji}>{emoji}</Text>
+              <View style={styles.tipIconWrap}>
+                <Icon size={16} color={color} strokeWidth={2} />
+              </View>
               <Text style={styles.tipText}>{text}</Text>
             </View>
           ))}
@@ -471,9 +494,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: Colors.backgroundAlt,
-  },
-  headerAction: {
-    fontSize: 22,
   },
   scrollContent: {
     padding: 20,
@@ -498,9 +518,10 @@ const styles = StyleSheet.create({
     borderColor: Colors.recording.active,
     backgroundColor: Colors.recording.activeBg,
   },
-  recordingEmoji: {
-    fontSize: 60,
+  recordingIconWrap: {
     marginBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statusText: {
     fontSize: 18,
@@ -544,7 +565,7 @@ const styles = StyleSheet.create({
   stopBtn: { backgroundColor: Colors.primary },
   playBtn: { backgroundColor: Colors.status.info },
   stopPlayBtn: { backgroundColor: Colors.text.secondary },
-  controlBtnIcon: { fontSize: 22, marginBottom: 4 },
+  controlBtnIcon: { marginBottom: 4 },
   controlBtnLabel: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
 
   infoCard: {
@@ -643,11 +664,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-  tipEmoji: {
-    fontSize: 18,
-    marginRight: 12,
+  tipIconWrap: {
     width: 26,
-    textAlign: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   tipText: {
     fontSize: 13,

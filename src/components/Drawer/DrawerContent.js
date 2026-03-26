@@ -1,19 +1,38 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  Keyboard,
+  Home,
+  Mic,
+  Music,
+  Radio,
+  Settings,
+  X,
+  LogOut,
+  ChevronRight,
+  History,
+} from 'lucide-react-native';
 import { Colors } from '../../theme/Colors';
-import { APP_NAME, APP_TAGLINE, APP_VERSION } from '../../constants';
+import { APP_NAME, APP_TAGLINE } from '../../constants';
+import { useAuth } from '../../context/AuthContext';
+import { useAlert } from '../../context/AlertContext';
+import { useAppVersion } from '../../hooks/useAppVersion';
 
 const MENU_ITEMS = [
-  { title: 'Home', description: 'Dashboard & overview', emoji: '🏠', screen: 'Home' },
-  { title: 'Voice Recorder', description: 'Record your voice', emoji: '🎙️', screen: 'VoiceRecorder' },
-  { title: 'My Recordings', description: 'View saved audio', emoji: '🎵', screen: 'RecordedAudio' },
-  { title: 'Floating Mic', description: 'Background recording', emoji: '🎤', screen: 'FloatingMic' },
-  { title: 'Settings', description: 'Permissions & preferences', emoji: '⚙️', screen: 'Settings' },
+  { title: 'Home', description: 'Dashboard & overview', Icon: Home, screen: 'Home' },
+  { title: 'Voice Recorder', description: 'Record your voice', Icon: Mic, screen: 'VoiceRecorder' },
+  { title: 'My Recordings', description: 'View saved audio', Icon: Music, screen: 'RecordedAudio' },
+  { title: 'Floating Mic', description: 'Background recording', Icon: Radio, screen: 'FloatingMic' },
+  { title: 'Speech History', description: 'Floating mic transcripts', Icon: History, screen: 'FloatingMicHistory' },
+  { title: 'Settings', description: 'Permissions & preferences', Icon: Settings, screen: 'Settings' },
 ];
 
 export const DrawerContent = (props) => {
   const insets = useSafeAreaInsets();
+  const { user, logout } = useAuth();
+  const showAlert = useAlert();
+  const { version: appVersion } = useAppVersion();
 
   const currentRouteName = props.state?.routes?.[props.state?.index]?.name;
 
@@ -22,12 +41,21 @@ export const DrawerContent = (props) => {
     props.navigation.closeDrawer();
   };
 
+  const handleLogout = () => {
+    showAlert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [{ text: 'Cancel', style: 'cancel' }, { text: 'Sign Out', style: 'destructive', onPress: logout }],
+    );
+    // logout();
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Brand header */}
       <View style={styles.header}>
         <View style={styles.logoWrap}>
-          <Text style={styles.logoEmoji}>🎤</Text>
+          <Keyboard size={22} color="#FFFFFF" strokeWidth={1.8} />
         </View>
         <View style={styles.brandText}>
           <Text style={styles.appName}>{APP_NAME}</Text>
@@ -38,7 +66,7 @@ export const DrawerContent = (props) => {
           onPress={() => props.navigation.closeDrawer()}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.closeIcon}>✕</Text>
+          <X size={14} color={Colors.text.secondary} strokeWidth={2.5} />
         </TouchableOpacity>
       </View>
 
@@ -52,6 +80,7 @@ export const DrawerContent = (props) => {
 
         {MENU_ITEMS.map((item) => {
           const isActive = currentRouteName === item.screen;
+          const iconColor = isActive ? '#FFFFFF' : Colors.text.secondary;
 
           return (
             <TouchableOpacity
@@ -60,16 +89,20 @@ export const DrawerContent = (props) => {
               onPress={() => handleNav(item.screen)}
               activeOpacity={0.7}
             >
-              <View style={[styles.emojiWrap, isActive && styles.emojiWrapActive]}>
-                <Text style={styles.emoji}>{item.emoji}</Text>
+              <View style={[styles.iconWrap, isActive && styles.iconWrapActive]}>
+                <item.Icon size={18} color={iconColor} strokeWidth={1.8} />
               </View>
               <View style={styles.menuItemText}>
                 <Text style={[styles.menuTitle, isActive && styles.menuTitleActive]}>
                   {item.title}
                 </Text>
-                <Text style={styles.menuDesc}>{item.description}</Text>
+                <Text style={[styles.menuDesc, isActive && styles.menuDescActive]}>
+                  {item.description}
+                </Text>
               </View>
-              {isActive && <View style={styles.activeDot} />}
+              {isActive && (
+                <ChevronRight size={14} color="rgba(255,255,255,0.6)" strokeWidth={2} />
+              )}
             </TouchableOpacity>
           );
         })}
@@ -78,7 +111,29 @@ export const DrawerContent = (props) => {
       {/* Footer */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <View style={styles.divider} />
-        <Text style={styles.footerText}>{APP_NAME} v{APP_VERSION}</Text>
+
+        {user && (
+          <View style={styles.userRow}>
+            <View style={styles.userAvatar}>
+              <Text style={styles.userAvatarText}>
+                {user.username?.[0]?.toUpperCase() ?? 'U'}
+              </Text>
+            </View>
+            <View style={styles.userInfo}>
+              <Text style={styles.userDisplayName}>{user.displayName}</Text>
+              <Text style={styles.userUsername}>@{user.username}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.logoutBtn}
+              onPress={handleLogout}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <LogOut size={16} color="#EF4444" strokeWidth={2} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <Text style={styles.footerText}>{APP_NAME} v{appVersion}</Text>
         <Text style={styles.footerSubText}>Voice Assistant Platform</Text>
       </View>
     </View>
@@ -109,9 +164,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
-  logoEmoji: {
-    fontSize: 22,
-  },
   brandText: {
     flex: 1,
   },
@@ -135,11 +187,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
-  closeIcon: {
-    fontSize: 14,
-    color: Colors.text.secondary,
-    fontWeight: '700',
-  },
 
   menuScroll: {
     flex: 1,
@@ -152,7 +199,7 @@ const styles = StyleSheet.create({
   navLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: Colors.text.secondary,
+    color: Colors.text.light,
     letterSpacing: 1.2,
     marginLeft: 8,
     marginBottom: 8,
@@ -169,7 +216,7 @@ const styles = StyleSheet.create({
   menuItemActive: {
     backgroundColor: Colors.primary,
   },
-  emojiWrap: {
+  iconWrap: {
     width: 38,
     height: 38,
     borderRadius: 9,
@@ -178,11 +225,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
-  emojiWrapActive: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  emoji: {
-    fontSize: 18,
+  iconWrapActive: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
   },
   menuItemText: {
     flex: 1,
@@ -200,12 +244,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.text.secondary,
   },
-  activeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#FFFFFF',
-    flexShrink: 0,
+  menuDescActive: {
+    color: 'rgba(255,255,255,0.55)',
   },
 
   footer: {
@@ -216,6 +256,49 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: Colors.drawer.border,
     marginBottom: 14,
+  },
+  userRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+    gap: 10,
+  },
+  userAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  userAvatarText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  userInfo: {
+    flex: 1,
+  },
+  userDisplayName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.text.primary,
+  },
+  userUsername: {
+    fontSize: 11,
+    color: Colors.text.secondary,
+  },
+  logoutBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   footerText: {
     fontSize: 13,

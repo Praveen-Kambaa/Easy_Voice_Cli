@@ -11,6 +11,8 @@ import android.view.accessibility.AccessibilityManager;
 
 import androidx.annotation.NonNull;
 
+import com.typeeasy.BuildConfig;
+
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
@@ -35,6 +37,18 @@ public class AndroidPermissionsModule extends ReactContextBaseJavaModule {
     @Override
     public String getName() {
         return "AndroidPermissionsModule";
+    }
+
+    /**
+     * App version name from {@code android.defaultConfig.versionName} in app/build.gradle (BuildConfig.VERSION_NAME).
+     */
+    @ReactMethod
+    public void getAppVersion(Promise promise) {
+        try {
+            promise.resolve(BuildConfig.VERSION_NAME);
+        } catch (Exception e) {
+            promise.reject(E_PERMISSION_ERROR, "Failed to get app version", e);
+        }
     }
 
     /**

@@ -4,27 +4,30 @@
  */
 
 import React from 'react';
-import { StatusBar, StyleSheet, useColorScheme } from 'react-native';
+import { StatusBar, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
-import AppNavigator from './src/navigation/DrawerNavigator';
+import AuthNavigator from './src/navigation/AuthNavigator';
+import { AlertProvider } from './src/context/AlertContext';
+import { AuthProvider } from './src/context/AuthContext';
+import { FloatingSpeechHistorySync } from './src/components/FloatingSpeechHistorySync';
+
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-        <AppNavigator />
-      </NavigationContainer>
+      <AuthProvider>
+        <AlertProvider>
+          <NavigationContainer>
+            <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+            <FloatingSpeechHistorySync />
+            <AuthNavigator />
+          </NavigationContainer>
+        </AlertProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-});
 
 export default App;

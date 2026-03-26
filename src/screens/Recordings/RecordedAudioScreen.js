@@ -4,22 +4,22 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  Alert,
   TouchableOpacity,
   RefreshControl,
   TextInput,
   ActivityIndicator,
+  DeviceEventEmitter,
 } from 'react-native';
-import NativeAudioService from '../../services/NativeAudioService';
+import { Play, Square, Music2, Trash2, Pencil, Zap, X, Plus, Send } from 'lucide-react-native';
+import NativeAudioService, { VOICE_RECORDINGS_UPDATED_EVENT } from '../../services/NativeAudioService';
 import { voiceApi } from '../../api/voiceApi';
 import { AppHeader } from '../../components/Header/AppHeader';
-import { AppCard } from '../../components/common/AppCard';
-import { PrimaryButton } from '../../components/common/PrimaryButton';
+import { useAlert } from '../../context/AlertContext';
 import { Colors } from '../../theme/Colors';
 
 const RecordedAudioScreen = ({ navigation }) => {
+  const showAlert = useAlert();
   const [recordings, setRecordings] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [playingStates, setPlayingStates] = useState({});
   const [refreshing, setRefreshing] = useState(false);
   const [editingTranscript, setEditingTranscript] = useState(null);
@@ -28,6 +28,13 @@ const RecordedAudioScreen = ({ navigation }) => {
 
   useEffect(() => {
     loadRecordings();
+  }, []);
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(VOICE_RECORDINGS_UPDATED_EVENT, () => {
+      loadRecordings();
+    });
+    return () => sub.remove();
   }, []);
 
   const loadRecordings = async () => {
@@ -47,42 +54,37 @@ const RecordedAudioScreen = ({ navigation }) => {
 
   const handlePlay = async (filePath, recordingId) => {
     try {
+      // Stop any currently playing
+      const current = Object.entries(playingStates).find(([, v]) => v === 'playing');
+      if (current) {
+        setPlayingStates(prev => ({ ...prev, [current[0]]: 'stopped' }));
+        await NativeAudioService.stopPlayback();
+      }
       setPlayingStates(prev => ({ ...prev, [recordingId]: 'playing' }));
-      const result = await NativeAudioService.playRecording(filePath);
+
+      // Pass onComplete callback — fires when native audio finishes naturally
+      const result = await NativeAudioService.playRecording(filePath, () => {
+        setPlayingStates(prev => ({ ...prev, [recordingId]: 'stopped' }));
+      });
+
       if (!result.success) {
-        Alert.alert('Error', result.error);
+        showAlert('Playback Error', result.error);
         setPlayingStates(prev => ({ ...prev, [recordingId]: 'stopped' }));
       }
     } catch {
-      Alert.alert('Error', 'Failed to play audio');
-      setPlayingStates(prev => ({ ...prev, [recordingId]: 'stopped' }));
-    }
-  };
-
-  const handlePause = async (recordingId) => {
-    try {
-      setPlayingStates(prev => ({ ...prev, [recordingId]: 'paused' }));
-      const result = await NativeAudioService.pausePlayback();
-      if (!result.success) setPlayingStates(prev => ({ ...prev, [recordingId]: 'stopped' }));
-    } catch {
-      Alert.alert('Error', 'Failed to pause audio');
+      showAlert('Error', 'Failed to play audio');
       setPlayingStates(prev => ({ ...prev, [recordingId]: 'stopped' }));
     }
   };
 
   const handleStop = async (recordingId) => {
-    try {
-      setPlayingStates(prev => ({ ...prev, [recordingId]: 'stopped' }));
-      const result = await NativeAudioService.stopPlayback();
-      if (!result.success) Alert.alert('Error', result.error);
-    } catch {
-      Alert.alert('Error', 'Failed to stop audio');
-      setPlayingStates(prev => ({ ...prev, [recordingId]: 'stopped' }));
-    }
+    setPlayingStates(prev => ({ ...prev, [recordingId]: 'stopped' }));
+    await NativeAudioService.stopPlayback();
+    // stopPlayback already handles "no audio playing" silently
   };
 
   const handleDelete = async (recordingId) => {
-    Alert.alert(
+    showAlert(
       'Delete Recording',
       'Are you sure you want to delete this recording?',
       [
@@ -95,12 +97,11 @@ const RecordedAudioScreen = ({ navigation }) => {
               const result = await NativeAudioService.deleteRecording(recordingId);
               if (result.success) {
                 await loadRecordings();
-                Alert.alert('Deleted', 'Recording deleted successfully');
               } else {
-                Alert.alert('Error', result.error);
+                showAlert('Error', result.error);
               }
             } catch {
-              Alert.alert('Error', 'Failed to delete recording');
+              showAlert('Error', 'Failed to delete recording');
             }
           },
         },
@@ -117,23 +118,22 @@ const RecordedAudioScreen = ({ navigation }) => {
     try {
       const original = recording.refinedTranscript || recording.rawTranscript;
       const hasChanged = transcriptText.trim() !== original;
-
       if (hasChanged) {
         const updateResult = await voiceApi.updateTranscript(recording.voiceAssetId, transcriptText.trim());
         if (updateResult.success) {
           const updated = { ...recording, refinedTranscript: transcriptText.trim(), updatedAt: new Date().toISOString() };
           await NativeAudioService.updateRecordingTranscript(recording.id, updated);
           setRecordings(prev => prev.map(r => r.id === recording.id ? updated : r));
-          Alert.alert('Success', 'Transcript updated successfully!');
+          showAlert('Saved', 'Transcript updated successfully.');
         } else {
-          Alert.alert('Error', updateResult.error);
+          showAlert('Error', updateResult.error);
           return;
         }
       }
       setEditingTranscript(null);
       setTranscriptText('');
     } catch {
-      Alert.alert('Error', 'Failed to save transcript');
+      showAlert('Error', 'Failed to save transcript');
     }
   };
 
@@ -144,21 +144,7 @@ const RecordedAudioScreen = ({ navigation }) => {
       const currentTranscript = isEditing
         ? transcriptText.trim()
         : recording.refinedTranscript || recording.rawTranscript;
-      const originalTranscript = recording.rawTranscript;
       let voiceAssetId = recording.voiceAssetId;
-      let hasChanged = currentTranscript !== originalTranscript;
-
-      if (hasChanged && !isEditing && recording.voiceAssetId) {
-        const updateResult = await voiceApi.updateTranscript(recording.voiceAssetId, currentTranscript);
-        if (updateResult.success) {
-          voiceAssetId = updateResult.data.voiceAssetId;
-          const updated = { ...recording, refinedTranscript: currentTranscript, updatedAt: new Date().toISOString() };
-          await NativeAudioService.updateRecordingTranscript(recording.id, updated);
-          setRecordings(prev => prev.map(r => r.id === recording.id ? updated : r));
-        } else {
-          throw new Error(`Failed to update transcript: ${updateResult.error}`);
-        }
-      }
 
       if (isEditing) {
         await handleSaveTranscript(recording);
@@ -167,20 +153,17 @@ const RecordedAudioScreen = ({ navigation }) => {
       }
 
       const executeResult = await voiceApi.executeVoiceCommand(voiceAssetId, {
+        transcript: currentTranscript,
         timestamp: new Date().toISOString(),
       });
 
       if (executeResult.success) {
-        Alert.alert(
-          'Command Executed!',
-          `Voice command processed successfully.\n\n${hasChanged ? '(Transcript was updated before execution)' : '(Original transcript used)'}`,
-          [{ text: 'OK', style: 'cancel' }]
-        );
+        showAlert('Command Executed!', 'Voice command processed successfully.', [{ text: 'OK' }]);
       } else {
         throw new Error(executeResult.error);
       }
     } catch (error) {
-      Alert.alert('Execution Failed', error.message || 'Failed to execute voice command');
+      showAlert('Execution Failed', error.message || 'Failed to execute voice command');
     } finally {
       setExecutingStates(prev => ({ ...prev, [recording.id]: false }));
     }
@@ -192,13 +175,12 @@ const RecordedAudioScreen = ({ navigation }) => {
   };
 
   const formatDuration = (milliseconds) => {
-    const s = Math.floor(milliseconds / 1000);
+    const s = Math.floor((milliseconds || 0) / 1000);
     return `${Math.floor(s / 60).toString().padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
   };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleDateString('en-US', {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -207,36 +189,73 @@ const RecordedAudioScreen = ({ navigation }) => {
     });
   };
 
-  const renderRecordingItem = ({ item }) => {
-    const playingState = playingStates[item.id] || 'stopped';
+  const renderRecordingItem = ({ item, index }) => {
+    const isPlaying = playingStates[item.id] === 'playing';
     const isEditing = editingTranscript === item.id;
     const isExecuting = executingStates[item.id] || false;
+    const hasTranscript = !!(item.rawTranscript || item.refinedTranscript);
 
     return (
-      <AppCard style={styles.recordingCard}>
-        {/* Header row */}
-        <View style={styles.cardHeader}>
-          <View style={styles.iconWrap}>
-            <Text style={styles.recordingEmoji}>🎵</Text>
+      <View style={styles.playerCard}>
+        {/* Card top: track info + delete */}
+        <View style={styles.trackHeader}>
+          <View style={styles.trackIconCircle}>
+            <Music2 size={18} color="#FFFFFF" strokeWidth={1.8} />
           </View>
-          <View style={styles.recordingDetails}>
-            <Text style={styles.recordingName}>Recording {String(item.id).slice(-6)}</Text>
-            <Text style={styles.recordingDate}>{formatDate(item.createdAt)}</Text>
+          <View style={styles.trackMeta}>
+            <Text style={styles.trackTitle}>Recording {String(item.id).slice(-6)}</Text>
+            <Text style={styles.trackDate}>{formatDate(item.createdAt)}</Text>
           </View>
+          <TouchableOpacity
+            style={styles.deleteBtn}
+            onPress={() => handleDelete(item.id)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Trash2 size={14} color={Colors.recording.active} strokeWidth={2} />
+          </TouchableOpacity>
         </View>
 
-        {/* Meta badges */}
-        <View style={styles.metaRow}>
-          <View style={styles.durationBadge}>
-            <Text style={styles.badgeText}>⏱ {formatDuration(item.duration)}</Text>
+        {/* Dark player bar */}
+        <View style={styles.playerBar}>
+          <View style={styles.playerLeft}>
+            <Text style={styles.durationText}>{formatDuration(item.duration)}</Text>
+            <View style={styles.formatChip}>
+              <Text style={styles.formatChipText}>M4A</Text>
+            </View>
           </View>
-          <View style={styles.formatBadge}>
-            <Text style={styles.formatBadgeText}>M4A</Text>
-          </View>
+
+          <TouchableOpacity
+            style={[styles.playPauseBtn, isPlaying && styles.stopBtnStyle]}
+            onPress={() => isPlaying ? handleStop(item.id) : handlePlay(item.filePath, item.id)}
+            activeOpacity={0.8}
+          >
+            {isPlaying
+              ? <Square size={15} color="#FFFFFF" strokeWidth={2} />
+              : <Play size={15} color="#FFFFFF" strokeWidth={2} />}
+            <Text style={styles.playPauseBtnLabel}>{isPlaying ? 'Stop' : 'Play'}</Text>
+          </TouchableOpacity>
+
+          {item.voiceAssetId && (
+            <TouchableOpacity
+              style={styles.executeBtn}
+              onPress={() => handleExecuteVoiceCommand(item)}
+              disabled={isExecuting || isEditing}
+              activeOpacity={0.8}
+            >
+              {isExecuting ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Zap size={13} color="#FFFFFF" strokeWidth={2} />
+                  <Text style={styles.executeBtnLabel}>Send</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Transcript section */}
-        {(item.rawTranscript || item.refinedTranscript) && (
+        {hasTranscript && (
           <View style={styles.transcriptSection}>
             {isEditing ? (
               <>
@@ -246,126 +265,84 @@ const RecordedAudioScreen = ({ navigation }) => {
                   value={transcriptText}
                   onChangeText={setTranscriptText}
                   placeholder="Edit transcript…"
+                  placeholderTextColor={Colors.text.light}
                   autoFocus
                 />
                 <View style={styles.editActionsRow}>
-                  <PrimaryButton
-                    title="Save"
+                  <TouchableOpacity
+                    style={[styles.editActionBtn, styles.saveBtn]}
                     onPress={() => handleSaveTranscript(item)}
-                    variant="ghost"
-                    style={styles.editBtn}
-                    textStyle={{ color: Colors.status.granted }}
-                  />
-                  <PrimaryButton
-                    title="Send"
+                  >
+                    <Text style={styles.saveActionText}>Save</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.editActionBtn, styles.sendEditBtn]}
                     onPress={() => handleExecuteVoiceCommand(item)}
-                    loading={executingStates[item.id]}
-                    style={styles.editBtn}
-                  />
-                  <PrimaryButton
-                    title="Cancel"
+                    disabled={isExecuting}
+                  >
+                    {isExecuting ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.sendEditText}>Send</Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.editActionBtn, styles.cancelEditBtn]}
                     onPress={handleCancelEdit}
-                    variant="danger"
-                    style={styles.editBtn}
-                  />
+                  >
+                    <Text style={styles.cancelEditText}>Cancel</Text>
+                  </TouchableOpacity>
                 </View>
               </>
             ) : (
               <>
-                <Text style={styles.transcriptLabel}>Transcript</Text>
-                <Text style={styles.transcriptText} numberOfLines={3}>
+                <Text style={styles.transcriptLabel}>TRANSCRIPT</Text>
+                <Text style={styles.transcriptBody} numberOfLines={3}>
                   {item.refinedTranscript || item.rawTranscript}
                 </Text>
-                <View style={styles.transcriptActionsRow}>
-                  <TouchableOpacity
-                    style={styles.smallActionBtn}
-                    onPress={() => handleEditTranscript(item)}
-                  >
-                    <Text style={styles.smallActionText}>✏️ Edit</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.smallActionBtn, styles.sendActionBtn]}
-                    onPress={() => handleExecuteVoiceCommand(item)}
-                    disabled={executingStates[item.id]}
-                  >
-                    {executingStates[item.id] ? (
-                      <ActivityIndicator size="small" color={Colors.status.info} />
-                    ) : (
-                      <Text style={[styles.smallActionText, { color: Colors.status.info }]}>📤 Send</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                  style={styles.editTranscriptBtn}
+                  onPress={() => handleEditTranscript(item)}
+                >
+                  <Pencil size={12} color={Colors.text.primary} strokeWidth={2} />
+                  <Text style={styles.editTranscriptBtnText}>Edit Transcript</Text>
+                </TouchableOpacity>
               </>
             )}
           </View>
         )}
-
-        {/* Playback + action buttons */}
-        <View style={styles.actionsRow}>
-          <View style={styles.playbackRow}>
-            {playingState === 'playing' ? (
-              <TouchableOpacity style={[styles.iconBtn, styles.pauseBtn]} onPress={() => handlePause(item.id)}>
-                <Text style={styles.iconBtnText}>⏸️</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity style={[styles.iconBtn, styles.playBtn]} onPress={() => handlePlay(item.filePath, item.id)}>
-                <Text style={styles.iconBtnText}>▶️</Text>
-              </TouchableOpacity>
-            )}
-            {playingState !== 'stopped' && (
-              <TouchableOpacity style={[styles.iconBtn, styles.stopPlayBtn]} onPress={() => handleStop(item.id)}>
-                <Text style={styles.iconBtnText}>⏹️</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={styles.moreActionsRow}>
-            {item.voiceAssetId && (
-              <TouchableOpacity
-                style={[styles.iconBtn, styles.executeBtn]}
-                onPress={() => handleExecuteVoiceCommand(item)}
-                disabled={isExecuting || isEditing}
-              >
-                {isExecuting ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.iconBtnText}>⚡</Text>
-                )}
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={[styles.iconBtn, styles.deleteBtn]} onPress={() => handleDelete(item.id)}>
-              <Text style={styles.iconBtnText}>🗑️</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </AppCard>
+      </View>
     );
   };
 
-  const renderEmptyState = () => (
+  const renderEmpty = () => (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyEmoji}>🎤</Text>
+      <View style={styles.emptyIconCircle}>
+        <Music2 size={40} color="#FFFFFF" strokeWidth={1.4} />
+      </View>
       <Text style={styles.emptyTitle}>No Recordings Yet</Text>
-      <Text style={styles.emptyDescription}>Start recording your voice to see them here!</Text>
+      <Text style={styles.emptyDesc}>Start recording your voice to see them here</Text>
       <TouchableOpacity
-        style={styles.startBtn}
+        style={styles.emptyBtn}
         onPress={() => navigation.navigate('VoiceRecorder')}
+        activeOpacity={0.85}
       >
-        <Text style={styles.startBtnText}>🎙️  Start Recording</Text>
+        <Text style={styles.emptyBtnText}>🎙️  Start Recording</Text>
       </TouchableOpacity>
     </View>
   );
 
   return (
-    <View style={styles.safeArea}>
+    <View style={styles.screen}>
       <AppHeader
         title="My Recordings"
         rightComponent={
           <TouchableOpacity
             onPress={() => navigation.navigate('VoiceRecorder')}
+            style={styles.addBtn}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Text style={styles.addIcon}>➕</Text>
+            <Plus size={18} color="#FFFFFF" strokeWidth={2.5} />
           </TouchableOpacity>
         }
       />
@@ -375,8 +352,10 @@ const RecordedAudioScreen = ({ navigation }) => {
         renderItem={renderRecordingItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={renderEmptyState}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+        }
+        ListEmptyComponent={renderEmpty}
         showsVerticalScrollIndicator={false}
       />
     </View>
@@ -384,133 +363,215 @@ const RecordedAudioScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  screen: {
     flex: 1,
     backgroundColor: Colors.backgroundAlt,
   },
-  addIcon: {
-    fontSize: 22,
-  },
-  listContent: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-
-  recordingCard: {
-    marginBottom: 12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: Colors.backgroundAlt,
+  addBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
-  recordingEmoji: {
-    fontSize: 20,
+  addBtnIcon: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    fontWeight: '300',
+    lineHeight: 22,
   },
-  recordingDetails: {
+  listContent: {
+    padding: 16,
+    paddingBottom: 48,
+    flexGrow: 1,
+  },
+
+  // Player card
+  playerCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 14,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+
+  // Track header
+  trackHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    paddingBottom: 12,
+    gap: 12,
+  },
+  trackIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  trackIconText: {
+    fontSize: 18,
+    color: '#FFFFFF',
+  },
+  trackMeta: {
     flex: 1,
   },
-  recordingName: {
+  trackTitle: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.text.primary,
     marginBottom: 2,
   },
-  recordingDate: {
+  trackDate: {
     fontSize: 12,
     color: Colors.text.secondary,
   },
+  deleteBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.recording.activeBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  deleteBtnText: {
+    fontSize: 12,
+    color: Colors.recording.active,
+    fontWeight: '700',
+  },
 
-  metaRow: {
+  // Dark player bar
+  playerBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  durationBadge: {
-    backgroundColor: Colors.backgroundAlt,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  badgeText: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-    fontWeight: '500',
-  },
-  formatBadge: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
   },
-  formatBadgeText: {
-    fontSize: 11,
+  playerLeft: {
+    flex: 1,
+    gap: 6,
+  },
+  durationText: {
+    fontSize: 18,
+    fontWeight: '700',
     color: '#FFFFFF',
-    fontWeight: '600',
+    fontFamily: 'monospace',
+    letterSpacing: 1,
+  },
+  formatChip: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  formatChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.8)',
+    letterSpacing: 0.5,
+  },
+  playPauseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.recording.play,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  stopBtnStyle: {
+    backgroundColor: Colors.recording.active,
+  },
+  playPauseBtnIcon: {
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  playPauseBtnLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  executeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#7C3AED',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 4,
+    minWidth: 64,
+    justifyContent: 'center',
+  },
+  executeBtnIcon: {
+    fontSize: 13,
+  },
+  executeBtnLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 
+  // Transcript section
   transcriptSection: {
+    padding: 14,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
-    paddingTop: 12,
-    marginBottom: 12,
   },
   transcriptLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
-    color: Colors.text.secondary,
-    letterSpacing: 0.6,
-    marginBottom: 6,
+    color: Colors.text.light,
+    letterSpacing: 1,
+    marginBottom: 8,
   },
-  transcriptText: {
+  transcriptBody: {
     fontSize: 14,
     color: Colors.text.primary,
     lineHeight: 20,
     marginBottom: 10,
   },
-  transcriptActionsRow: {
+  editTranscriptBtn: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
-    gap: 8,
-  },
-  smallActionBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    alignItems: 'center',
+    gap: 6,
     backgroundColor: Colors.backgroundAlt,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: Colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
-  sendActionBtn: {
-    borderColor: Colors.status.infoBg,
-    backgroundColor: Colors.status.infoBg,
-  },
-  smallActionText: {
+  editTranscriptBtnText: {
     fontSize: 12,
     fontWeight: '600',
     color: Colors.text.primary,
   },
 
+  // Edit mode
   transcriptInput: {
     fontSize: 14,
     color: Colors.text.primary,
     lineHeight: 20,
-    minHeight: 72,
+    minHeight: 80,
     textAlignVertical: 'top',
     backgroundColor: Colors.backgroundAlt,
     borderRadius: 8,
-    padding: 10,
+    padding: 12,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -519,51 +580,56 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
-  editBtn: {
+  editActionBtn: {
     flex: 1,
-    minHeight: 38,
-    paddingVertical: 0,
-  },
-
-  actionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  playbackRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  moreActionsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  iconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    borderRadius: 8,
+    paddingVertical: 9,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconBtnText: {
-    fontSize: 16,
+  saveBtn: {
+    backgroundColor: Colors.recording.play,
   },
-  playBtn: { backgroundColor: Colors.recording.play },
-  pauseBtn: { backgroundColor: Colors.recording.pause },
-  stopPlayBtn: { backgroundColor: Colors.status.blocked },
-  executeBtn: { backgroundColor: '#8B5CF6' },
-  deleteBtn: { backgroundColor: Colors.backgroundAlt, borderWidth: 1, borderColor: Colors.border },
+  saveActionText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  sendEditBtn: {
+    backgroundColor: Colors.primary,
+  },
+  sendEditText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  cancelEditBtn: {
+    backgroundColor: Colors.backgroundAlt,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  cancelEditText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
 
+  // Empty state
   emptyState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
+    paddingVertical: 80,
     paddingHorizontal: 40,
   },
-  emptyEmoji: {
-    fontSize: 60,
-    marginBottom: 16,
+  emptyIconCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   },
   emptyTitle: {
     fontSize: 20,
@@ -571,23 +637,39 @@ const styles = StyleSheet.create({
     color: Colors.text.primary,
     marginBottom: 8,
   },
-  emptyDescription: {
-    fontSize: 15,
+  emptyDesc: {
+    fontSize: 14,
     color: Colors.text.secondary,
     textAlign: 'center',
     marginBottom: 28,
-    lineHeight: 22,
+    lineHeight: 20,
   },
-  startBtn: {
+  emptyBtn: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 13,
-    borderRadius: 10,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 12,
   },
-  startBtnText: {
+  emptyBtnText: {
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  trackIconText: {
+    fontSize: 18,
+    color: '#FFFFFF',
+  },
+  deleteBtnText: {
+    fontSize: 12,
+    color: Colors.recording.active,
+    fontWeight: '700',
+  },
+  playPauseBtnIcon: {
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  executeBtnIcon: {
+    fontSize: 13,
   },
 });
 

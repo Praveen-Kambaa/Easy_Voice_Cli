@@ -7,7 +7,9 @@ import {
   ScrollView,
   NativeModules,
   DeviceEventEmitter,
+  TouchableOpacity,
 } from 'react-native';
+import { History, ChevronRight } from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { AppCard } from '../../components/common/AppCard';
@@ -18,7 +20,7 @@ import { Colors } from '../../theme/Colors';
 
 const { FloatingMicModule } = NativeModules;
 
-const FloatingMicScreen = () => {
+const FloatingMicScreen = ({ navigation }) => {
   const [lastTranscription, setLastTranscription] = useState('');
 
   const {
@@ -36,9 +38,8 @@ const FloatingMicScreen = () => {
       DeviceEventEmitter.addListener('FloatingMic_onAudioRecorded', (audioPath) => {
         console.log('Audio recorded:', audioPath);
       }),
-      DeviceEventEmitter.addListener('FloatingMic_onSpeechResult', (text) => {
-        console.log('Speech transcribed:', text);
-        setLastTranscription(text);
+      DeviceEventEmitter.addListener('FloatingMicService_onTranscriptionComplete', (text) => {
+        setLastTranscription(typeof text === 'string' ? text : String(text ?? ''));
       }),
     ];
     return () => listeners.forEach(l => l.remove());
@@ -121,6 +122,19 @@ const FloatingMicScreen = () => {
           ) : null}
         </AppCard>
 
+        <TouchableOpacity
+          style={styles.historyRow}
+          onPress={() => navigation.navigate('FloatingMicHistory')}
+          activeOpacity={0.7}
+        >
+          <History size={20} color={Colors.primary} strokeWidth={1.8} />
+          <View style={styles.historyRowText}>
+            <Text style={styles.historyRowTitle}>Speech history</Text>
+            <Text style={styles.historyRowSub}>Transcripts from the floating mic</Text>
+          </View>
+          <ChevronRight size={18} color={Colors.text.light} strokeWidth={2} />
+        </TouchableOpacity>
+
         {/* Controls */}
         <AppCard>
           <Text style={styles.sectionTitle}>Controls</Text>
@@ -180,6 +194,31 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
     paddingBottom: 40,
+  },
+
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 16,
+    marginBottom: 16,
+    gap: 12,
+  },
+  historyRowText: {
+    flex: 1,
+  },
+  historyRowTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.text.primary,
+  },
+  historyRowSub: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    marginTop: 2,
   },
 
   sectionTitle: {

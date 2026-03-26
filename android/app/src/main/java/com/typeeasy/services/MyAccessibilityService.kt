@@ -51,6 +51,11 @@ class MyAccessibilityService : AccessibilityService() {
         const val ACTION_SHOW_MIC = "com.typeeasy.SHOW_MIC"
         const val ACTION_HIDE_MIC = "com.typeeasy.HIDE_MIC"
 
+        private const val ARG_SELECTION_START =
+            "android.view.accessibility.action.ARGUMENT_SELECTION_START"
+        private const val ARG_SELECTION_END =
+            "android.view.accessibility.action.ARGUMENT_SELECTION_END"
+
         // How long after a successful injection to ignore further broadcasts.
         private const val COOLDOWN_MS = 5_000L
 
@@ -235,9 +240,44 @@ class MyAccessibilityService : AccessibilityService() {
     }
 
     /**
+     * If the field still shows a hint-style value (e.g. WhatsApp "Message"), treat it as empty
+     * and replace with the transcript; otherwise append after real user text.
+     */
+    private fun isPlaceholderOrHintContent(raw: String): Boolean {
+        val s = raw.trim()
+        if (s.isEmpty()) return true
+        val t = s.lowercase(java.util.Locale.US)
+        val hints = setOf(
+            "message",
+            "type a message",
+            "type message",
+            "enter message",
+            "write a message",
+            "say something",
+            "search",
+            "search messages",
+            "add a caption",
+            "caption",
+            "comment"
+        )
+        if (t in hints) return true
+        val oneWord = t.split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (oneWord.size == 1 && oneWord[0] in setOf("message", "msg", "chat", "search")) {
+            return true
+        }
+        return false
+    }
+
+    private fun buildInjectedText(currentRaw: String, newText: String): String {
+        val newTrim = newText.trim()
+        if (newTrim.isEmpty()) return currentRaw.trim()
+        val current = currentRaw.trim()
+        if (isPlaceholderOrHintContent(current)) return newTrim
+        return if (current.isEmpty()) newTrim else "$current $newTrim"
+    }
+
+    /**
      * Strict injection into the current focused EditText only.
-     * NO fallback logic, NO scanning, NO heuristics.
-     * REPLACES existing text to prevent prefix issues.
      */
     private fun injectText(newText: String): Boolean {
         val node = rootInActiveWindow
@@ -250,14 +290,13 @@ class MyAccessibilityService : AccessibilityService() {
                 !node.isEditable
             ) return false
 
-            val currentText = node.text?.toString()?.trim() ?: ""
-            val textToInject = if (currentText.isNotEmpty()) {
-                "$currentText $newText"
-            } else {
-                newText
-            }
+            val currentRaw = node.text?.toString() ?: ""
+            val textToInject = buildInjectedText(currentRaw, newText)
 
-            Log.d(TAG, "💉 Injection: existing='$currentText', new='$newText', final='$textToInject'")
+            Log.d(
+                TAG,
+                "💉 Injection: existing='${currentRaw.trim()}', new='$newText', final='$textToInject'"
+            )
 
             val args = Bundle()
             args.putCharSequence(
@@ -265,10 +304,33 @@ class MyAccessibilityService : AccessibilityService() {
                 textToInject
             )
 
-            return node.performAction(
+            val ok = node.performAction(
                 AccessibilityNodeInfo.ACTION_SET_TEXT,
                 args
             )
+
+            if (ok && textToInject.isNotEmpty()) {
+                val len = textToInject.length
+                val sel = Bundle().apply {
+                    putInt(ARG_SELECTION_START, len)
+                    putInt(ARG_SELECTION_END, len)
+                }
+                val selOk = node.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, sel)
+                if (!selOk) {
+                    handler.postDelayed({
+                        val n2 = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                        n2?.let {
+                            try {
+                                it.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, sel)
+                            } finally {
+                                it.recycle()
+                            }
+                        }
+                    }, 80L)
+                }
+            }
+
+            return ok
         } finally {
             node.recycle()
         }
