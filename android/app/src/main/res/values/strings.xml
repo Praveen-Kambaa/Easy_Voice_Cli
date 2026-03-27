@@ -14,6 +14,10 @@
     
     <!-- User Feedback Messages -->
     <string name="voice_listening">Listening...</string>
+    <string name="floating_mic_recording_cloud">Recording… tap Stop to send</string>
+    <string name="floating_mic_recording_translate">Recording… tap Stop to translate</string>
+    <string name="floating_mic_uploading">Uploading…</string>
+    <string name="floating_mic_translating">Translating…</string>
     <string name="voice_processing">Processing...</string>
     <string name="voice_injected">Text injected successfully</string>
     <string name="voice_error">Error: %s</string>

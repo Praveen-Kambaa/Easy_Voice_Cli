@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { NativeModules, DeviceEventEmitter, Platform, Alert, Linking } from 'react-native';
+import { syncFloatingMicSettingsToNative } from '../services/floatingMicConfig';
 
 const { FloatingMicModule } = NativeModules;
 
@@ -137,6 +138,7 @@ export const useFloatingMic = () => {
         return;
       }
 
+      await syncFloatingMicSettingsToNative();
       const result = await FloatingMicModule.startFloatingMic();
       setIsServiceActive(true);
       console.log('Floating mic started:', result);

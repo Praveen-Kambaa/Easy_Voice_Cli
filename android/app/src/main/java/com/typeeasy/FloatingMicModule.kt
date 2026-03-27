@@ -1,6 +1,5 @@
 package com.typeeasy
 
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -139,6 +138,37 @@ class FloatingMicModule(reactContext: ReactApplicationContext) : ReactContextBas
     @ReactMethod
     fun removeListeners(count: Int) {
         // Required for event emitter
+    }
+
+    /**
+     * Persists floating mic mode and voice API base URL (same host/path prefix as JS buildEasyVoiceUrl("")).
+     * Call whenever the user changes Settings or on app launch.
+     */
+    @ReactMethod
+    fun syncFloatingMicSettings(
+        internalTranscribe: Boolean,
+        voiceBaseUrl: String,
+        speechTranslatePath: String,
+        sourceLang: String,
+        targetLang: String,
+        elevenLabsApiKey: String,
+        promise: Promise,
+    ) {
+        try {
+            FloatingMicConfigStore.applySettings(
+                reactApplicationContext,
+                internalTranscribe,
+                voiceBaseUrl,
+                speechTranslatePath,
+                sourceLang,
+                targetLang,
+                elevenLabsApiKey,
+            )
+            reactApplicationContext.sendBroadcast(Intent("com.typeeasy.FLOATING_MIC_CONFIG_UPDATED"))
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("FLOATING_MIC_SYNC_ERROR", e.message, e)
+        }
     }
 
     @ReactMethod

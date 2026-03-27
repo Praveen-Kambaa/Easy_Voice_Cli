@@ -10,6 +10,9 @@ export const API_ENDPOINTS = {
   AUTH: {
     LOGIN: '/auth/user-login',
     REGISTER: '/auth/register',
+    SEND_OTP: '/auth/send-otp',
+    VERIFY_OTP: '/auth/verify-otp',
+    COMPLETE_REGISTRATION: '/auth/complete-registration',
     LOGOUT: '/auth/logout',
     REFRESH: '/auth/refresh',
     REQUEST_RESET: '/auth/request-reset-password',
@@ -21,6 +24,8 @@ export const API_ENDPOINTS = {
   VOICE: {
     TRANSCRIBE: '/voice/transcribe',
     HISTORY: '/voice/history',
+    /** Text translation (POST). Body/response shape can be adjusted when your API is ready. */
+    TEXT_TRANSLATE: '/voice/translate-text',
   },
   USER: {
     PROFILE: '/user/profile',

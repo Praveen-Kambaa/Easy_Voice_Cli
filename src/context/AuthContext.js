@@ -74,25 +74,79 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (userData) => {
+  const parseJsonSafe = async (response) => {
     try {
-      const response = await fetch(buildTypeEasyUrl(API_ENDPOINTS.AUTH.REGISTER), {
+      return await response.json();
+    } catch {
+      return {};
+    }
+  };
+
+  const sendRegistrationOtp = async (email) => {
+    try {
+      const response = await fetch(buildTypeEasyUrl(API_ENDPOINTS.AUTH.SEND_OTP), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(userData),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
       });
-
-      const data = await response.json();
-
+      const data = await parseJsonSafe(response);
       if (response.ok && data.success) {
-        return { success: true, message: 'Account created successfully!' };
-      } else {
-        return { success: false, error: data.message || 'Registration failed' };
+        return { success: true, message: data.message };
       }
+      return { success: false, error: data.message || 'Could not send OTP' };
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error('sendRegistrationOtp error:', error);
+      return { success: false, error: 'Network error. Please try again.' };
+    }
+  };
+
+  const verifyRegistrationOtp = async (email, otp) => {
+    try {
+      const response = await fetch(buildTypeEasyUrl(API_ENDPOINTS.AUTH.VERIFY_OTP), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), otp: String(otp).trim() }),
+      });
+      const data = await parseJsonSafe(response);
+      if (response.ok && data.success) {
+        return { success: true, message: data.message };
+      }
+      return { success: false, error: data.message || 'Invalid or expired OTP' };
+    } catch (error) {
+      console.error('verifyRegistrationOtp error:', error);
+      return { success: false, error: 'Network error. Please try again.' };
+    }
+  };
+
+  const completeRegistration = async (payload) => {
+    try {
+      const response = await fetch(buildTypeEasyUrl(API_ENDPOINTS.AUTH.COMPLETE_REGISTRATION), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await parseJsonSafe(response);
+      if (response.ok && data.success) {
+        if (data.token) {
+          const userData = {
+            email: payload.email.trim(),
+            loginTime: new Date().toISOString(),
+            displayName: data.user?.name || payload.name,
+            token: data.token,
+          };
+          await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(userData));
+          setUser(userData);
+        }
+        return {
+          success: true,
+          message: data.message || 'Registration completed',
+          user: data.user,
+          token: data.token,
+        };
+      }
+      return { success: false, error: data.message || 'Registration failed' };
+    } catch (error) {
+      console.error('completeRegistration error:', error);
       return { success: false, error: 'Network error. Please try again.' };
     }
   };
@@ -195,7 +249,19 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, requestPasswordReset, signInWithGoogle, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading,
+        login,
+        sendRegistrationOtp,
+        verifyRegistrationOtp,
+        completeRegistration,
+        requestPasswordReset,
+        signInWithGoogle,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -11,28 +11,32 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.PixelFormat
+import android.media.MediaRecorder
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.ImageView
-import android.widget.TextView
+import android.widget.ProgressBar
 import androidx.core.app.NotificationCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.content.ContextCompat
 import com.facebook.react.ReactApplication
-import com.facebook.react.bridge.ReactContext
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import java.io.File
 import java.util.ArrayList
 import kotlin.math.roundToInt
 
@@ -43,6 +47,11 @@ class FloatingMicService : Service() {
         IDLE,           // [ MIC ]
         RECORDING,      // [ STOP ]
         STOPPED         // Processing...
+    }
+
+    private enum class SessionMode {
+        MIC,
+        TRANSLATOR,
     }
 
     private var recordingState = RecordingState.IDLE
@@ -65,10 +74,24 @@ class FloatingMicService : Service() {
     // ─── BUTTON REFERENCES ─────────────────────────────────────────────
     private var btnMic: ImageView? = null
     private var btnStop: ImageView? = null
-    private var dragHandle: View? = null
-    private var listeningLabel: TextView? = null
+    private var statusIndicatorContainer: View? = null
+    private var soundWaveView: SoundWaveOverlayView? = null
+    private var uploadProgress: ProgressBar? = null
+    private var actionMenuPanel: View? = null
+    private var btnActionMicrophone: ImageView? = null
+    private var btnActionTranslator: ImageView? = null
+    private var actionMenuVisible = false
     private var lastImeInsetBottom = 0
-    
+
+    /** Cloud mode: raw mic capture + OkHttp upload to /voice/transcribe */
+    private var mediaRecorder: MediaRecorder? = null
+    private var externalAudioFile: File? = null
+    private var isExternalUploading = false
+    private val mainHandler = Handler(Looper.getMainLooper())
+    /** For Microphone mode only: internal SpeechRecognizer vs cloud transcribe. */
+    private var sessionUsesInternalTranscription = true
+    private var sessionMode = SessionMode.MIC
+
     // ─── SMART FLOATING MIC CONTROL ────────────────────────────────────────
     private var micControlReceiver: BroadcastReceiver? = null
     private var isOverlayCreated = false
@@ -88,6 +111,7 @@ class FloatingMicService : Service() {
         // Recording control actions
         const val ACTION_START_RECORDING = "com.typeeasy.START_RECORDING"
         const val ACTION_STOP_RECORDING = "com.typeeasy.STOP_RECORDING"
+        const val ACTION_CONFIG_UPDATED = "com.typeeasy.FLOATING_MIC_CONFIG_UPDATED"
         
         fun startService(context: Context) {
             val intent = Intent(context, FloatingMicService::class.java)
@@ -180,8 +204,12 @@ class FloatingMicService : Service() {
             // Get button references
             btnMic = floatingView?.findViewById(R.id.btn_mic)
             btnStop = floatingView?.findViewById(R.id.btn_stop)
-            dragHandle = floatingView?.findViewById(R.id.floating_root)
-            listeningLabel = floatingView?.findViewById(R.id.listening_label)
+            statusIndicatorContainer = floatingView?.findViewById(R.id.status_indicator_container)
+            soundWaveView = floatingView?.findViewById(R.id.sound_wave_view)
+            uploadProgress = floatingView?.findViewById(R.id.upload_progress)
+            actionMenuPanel = floatingView?.findViewById(R.id.action_menu_panel)
+            btnActionMicrophone = floatingView?.findViewById(R.id.btn_action_microphone)
+            btnActionTranslator = floatingView?.findViewById(R.id.btn_action_translator)
             
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -230,7 +258,7 @@ class FloatingMicService : Service() {
             Log.d(TAG, "✅ Floating view created and hidden successfully")
             val root = floatingView!!
             setupTouchListener(root)
-            setupButtonListeners()
+            setupMenuListeners()
             
             // Initialize UI state
             updateUIState()
@@ -245,111 +273,157 @@ class FloatingMicService : Service() {
         }
     }
 
-    private fun setupButtonListeners() {
-        btnMic?.setOnClickListener {
-            Log.d(TAG, "🎤 Mic Pressed → Starting Speech Recognition")
-            startSpeechRecognition()
+    private fun setupMenuListeners() {
+        btnActionMicrophone?.setOnClickListener {
+            beginMicrophoneCapture()
         }
-        
-        btnStop?.setOnClickListener {
-            Log.d(TAG, "🛑 Stop Pressed → Stopping Speech Recognition")
-            stopSpeechRecognition()
+        btnActionTranslator?.setOnClickListener {
+            beginTranslatorCapture()
+        }
+    }
+
+    private fun useInternalTranscription(): Boolean =
+        FloatingMicConfigStore.isInternalTranscribeEnabled(this)
+
+    private fun showActionMenu() {
+        actionMenuPanel?.visibility = View.VISIBLE
+        actionMenuVisible = true
+    }
+
+    private fun hideActionMenu() {
+        actionMenuPanel?.visibility = View.GONE
+        actionMenuVisible = false
+    }
+
+    private fun showOrToggleActionMenu() {
+        if (recordingState != RecordingState.IDLE) return
+        if (actionMenuVisible) hideActionMenu() else showActionMenu()
+    }
+
+    /** Microphone row: respects Internal Transcribe (device vs /voice/transcribe). */
+    private fun beginMicrophoneCapture() {
+        hideActionMenu()
+        sessionMode = SessionMode.MIC
+        sessionUsesInternalTranscription = useInternalTranscription()
+        if (sessionUsesInternalTranscription) {
+            startSpeechRecognition()
+        } else {
+            startExternalRecording()
+        }
+    }
+
+    /** Translator row: always record + /speech-translate (path from prefs). */
+    private fun beginTranslatorCapture() {
+        hideActionMenu()
+        sessionMode = SessionMode.TRANSLATOR
+        sessionUsesInternalTranscription = false
+        startTranslatorRecording()
+    }
+
+    private fun stopVoiceCapture() {
+        when {
+            recordingState != RecordingState.RECORDING -> return
+            sessionMode == SessionMode.MIC && sessionUsesInternalTranscription ->
+                stopSpeechRecognition()
+            mediaRecorder != null -> stopMediaAndUpload()
+            else -> Log.w(TAG, "stopVoiceCapture: no active media session")
         }
     }
 
     /**
-     * Drag via [dragSource] (wide handle) so mic/stop taps are never eaten by the mover.
-     * Positions [overlayRoot] in window coordinates; clamps above the IME when possible.
+     * Long-press (~2s) then drag to move the overlay. Short tap on mic/stop opens menu or stops.
+     * Listener is attached to the overlay root (padding), [btnMic], and [btnStop] so touches on the
+     * FAB are not lost (root FrameLayout does not receive events that children consume).
      */
-private fun setupTouchListener(rootView: View) {
-    val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
-    val longPressTimeout = 500L // 0.5 seconds to trigger drag mode
-    var longPressHandler = android.os.Handler(android.os.Looper.getMainLooper())
-    
-    rootView.setOnTouchListener(object : View.OnTouchListener {
-        private var isLongPressActive = false
-        private var dragStarted = false
-        
-        // Long press runnable to enable dragging
-        private val longPressRunnable = Runnable {
-            isLongPressActive = true
-            showToast("Move mode active")
-            // Optional: Add a small scale-up animation or haptic feedback here
-            rootView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-        }
+    private fun setupTouchListener(overlayRoot: View) {
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+        val longPressTimeoutMs = 2000L
+        // Require a deliberate move to cancel the long-press timer (finger jitter was killing drag).
+        val cancelLongPressDistSq = (touchSlop * 5) * (touchSlop * 5)
 
-        override fun onTouch(v: View, event: MotionEvent): Boolean {
-            val params = rootView.layoutParams as WindowManager.LayoutParams
+        val dragListener = object : View.OnTouchListener {
+            private var isLongPressActive = false
+            private var dragStarted = false
 
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    initialX = params.x
-                    initialY = params.y
-                    initialTouchX = event.rawX
-                    initialTouchY = event.rawY
-                    isLongPressActive = false
-                    dragStarted = false
-                    
-                    // Start the timer for long press
-                    longPressHandler.postDelayed(longPressRunnable, longPressTimeout)
-                    return true
-                }
-
-                MotionEvent.ACTION_MOVE -> {
-                    val deltaX = event.rawX - initialTouchX
-                    val deltaY = event.rawY - initialTouchY
-
-                    // If user moves too much before the long press, cancel it
-                    if (!isLongPressActive && (deltaX * deltaX + deltaY * deltaY > touchSlop * touchSlop)) {
-                        longPressHandler.removeCallbacks(longPressRunnable)
-                    }
-
-                    // Only move if long press was triggered
-                    if (isLongPressActive) {
-                        dragStarted = true
-                        params.x = initialX + deltaX.roundToInt()
-                        params.y = initialY + deltaY.roundToInt()
-                        clampOverlayPosition(rootView, params)
-                        windowManager.updateViewLayout(rootView, params)
-                    }
-                    return true
-                }
-
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    longPressHandler.removeCallbacks(longPressRunnable)
-                    
-                    if (!isLongPressActive && !dragStarted) {
-                        // It was a simple TAP - Toggle Recording
-                        handleMicTap()
-                    } else if (dragStarted) {
-                        // Snap to edges after dragging
-                        snapToEdges(params, rootView)
-                    }
-                    
-                    isLongPressActive = false
-                    return true
-                }
+            private val longPressRunnable = Runnable {
+                isLongPressActive = true
+                overlayRoot.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                Log.d(TAG, "Floating overlay: move mode (long-press ${longPressTimeoutMs}ms)")
             }
-            return false
+
+            override fun onTouch(v: View, event: MotionEvent): Boolean {
+                val params = overlayRoot.layoutParams as WindowManager.LayoutParams
+
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        initialX = params.x
+                        initialY = params.y
+                        initialTouchX = event.rawX
+                        initialTouchY = event.rawY
+                        isLongPressActive = false
+                        dragStarted = false
+                        mainHandler.removeCallbacks(longPressRunnable)
+                        mainHandler.postDelayed(longPressRunnable, longPressTimeoutMs)
+                        return true
+                    }
+
+                    MotionEvent.ACTION_MOVE -> {
+                        val deltaX = event.rawX - initialTouchX
+                        val deltaY = event.rawY - initialTouchY
+                        val distSq = deltaX * deltaX + deltaY * deltaY
+
+                        if (!isLongPressActive && distSq > cancelLongPressDistSq) {
+                            mainHandler.removeCallbacks(longPressRunnable)
+                        }
+
+                        if (isLongPressActive) {
+                            dragStarted = true
+                            params.x = initialX + deltaX.roundToInt()
+                            params.y = initialY + deltaY.roundToInt()
+                            clampOverlayPosition(overlayRoot, params)
+                            windowManager.updateViewLayout(overlayRoot, params)
+                        }
+                        return true
+                    }
+
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        mainHandler.removeCallbacks(longPressRunnable)
+
+                        when {
+                            dragStarted -> snapToEdges(params, overlayRoot)
+                            !isLongPressActive -> handleFabTap()
+                            else -> { /* long-press only, no drag */ }
+                        }
+
+                        isLongPressActive = false
+                        dragStarted = false
+                        return true
+                    }
+                }
+                return false
+            }
         }
-    })
-}
 
-private fun handleMicTap() {
-    if (recordingState == RecordingState.IDLE) {
-        startSpeechRecognition()
-    } else if (recordingState == RecordingState.RECORDING) {
-        stopSpeechRecognition()
+        overlayRoot.setOnTouchListener(dragListener)
+        btnMic?.setOnTouchListener(dragListener)
+        btnStop?.setOnTouchListener(dragListener)
     }
-}
 
-private fun snapToEdges(params: WindowManager.LayoutParams, view: View) {
-    val screenWidth = resources.displayMetrics.widthPixels
-    val vw = view.width.coerceAtLeast(1)
-    params.x = if (params.x + vw / 2 < screenWidth / 2) 0 else screenWidth - vw
-    clampOverlayPosition(view, params)
-    windowManager.updateViewLayout(view, params)
-}
+    private fun handleFabTap() {
+        when (recordingState) {
+            RecordingState.IDLE -> showOrToggleActionMenu()
+            RecordingState.RECORDING -> stopVoiceCapture()
+            else -> { }
+        }
+    }
+
+    private fun snapToEdges(params: WindowManager.LayoutParams, view: View) {
+        val screenWidth = resources.displayMetrics.widthPixels
+        val vw = view.width.coerceAtLeast(1)
+        params.x = if (params.x + vw / 2 < screenWidth / 2) 0 else screenWidth - vw
+        clampOverlayPosition(view, params)
+        windowManager.updateViewLayout(view, params)
+    }
     private fun clampOverlayPosition(overlay: View, params: WindowManager.LayoutParams) {
         val dm = resources.displayMetrics
         val vw = overlay.width.coerceAtLeast(overlay.measuredWidth).coerceAtLeast(120)
@@ -371,7 +445,10 @@ private fun snapToEdges(params: WindowManager.LayoutParams, view: View) {
         
         try {
             Log.d(TAG, "🎤 Starting Speech Recognition")
-            
+
+            hideActionMenu()
+            sessionMode = SessionMode.MIC
+
             // Reset injection gate for new recording session
             resetInjectionGate()
             
@@ -396,7 +473,6 @@ private fun snapToEdges(params: WindowManager.LayoutParams, view: View) {
             recordingState = RecordingState.RECORDING
             updateUIState()
             sendEventToReactNative("onRecordingStarted", null)
-            showToast("Listening...")
             
             // Start alive check
             startAliveCheck()
@@ -429,13 +505,180 @@ private fun snapToEdges(params: WindowManager.LayoutParams, view: View) {
             recordingState = RecordingState.STOPPED
             updateUIState()
             sendEventToReactNative("onRecordingStopped", null)
-            showToast("Processing...")
             
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to stop speech recognition", e)
             sendEventToReactNative("onError", "Failed to stop speech recognition: ${e.message}")
             resetToIdleState()
         }
+    }
+
+    private fun startExternalRecording() {
+        startMediaRecording(SessionMode.MIC, "floating_mic_")
+    }
+
+    private fun startTranslatorRecording() {
+        startMediaRecording(SessionMode.TRANSLATOR, "floating_translate_")
+    }
+
+    private fun startMediaRecording(
+        mode: SessionMode,
+        filePrefix: String,
+    ) {
+        if (recordingState != RecordingState.IDLE) {
+            Log.w(TAG, "⚠️ Cannot start media recording: not IDLE")
+            return
+        }
+        if (!hasRecordAudioPermission()) {
+            sendEventToReactNative("onError", "Microphone permission not granted")
+            showToast("Microphone permission required")
+            return
+        }
+        val baseUrl = FloatingMicConfigStore.getVoiceTranscribeBaseUrl(this)
+        val elevenLabsMic = mode == SessionMode.MIC &&
+            FloatingMicConfigStore.shouldUseElevenLabsForMicTranscribe(this)
+        val canMicCloud = baseUrl.isNotBlank() || elevenLabsMic
+        if (mode == SessionMode.MIC && !canMicCloud) {
+            sendEventToReactNative(
+                "onError",
+                "Configure ElevenLabs API key or voice server URL in the app → Settings.",
+            )
+            showToast("Configure ElevenLabs key or voice server")
+            return
+        }
+        if (mode == SessionMode.TRANSLATOR && baseUrl.isBlank()) {
+            sendEventToReactNative("onError", "Voice API URL not configured. Open the app → Settings.")
+            showToast("Configure voice server in Settings")
+            return
+        }
+
+        try {
+            hideActionMenu()
+            sessionMode = mode
+            sessionUsesInternalTranscription = false
+            resetInjectionGate()
+            externalAudioFile = File(cacheDir, "${filePrefix}${System.currentTimeMillis()}.m4a")
+            val outPath = externalAudioFile!!.absolutePath
+
+            val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                MediaRecorder(this)
+            } else {
+                @Suppress("DEPRECATION")
+                MediaRecorder()
+            }
+            recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            recorder.setOutputFile(outPath)
+            recorder.prepare()
+            recorder.start()
+            mediaRecorder = recorder
+
+            recordingState = RecordingState.RECORDING
+            isExternalUploading = false
+            updateUIState()
+            sendEventToReactNative("onRecordingStarted", null)
+            startAliveCheck()
+            Log.d(TAG, "✅ Media recording started ($mode) → $outPath")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Media recording failed", e)
+            try {
+                mediaRecorder?.release()
+            } catch (_: Exception) {
+            }
+            mediaRecorder = null
+            externalAudioFile?.delete()
+            externalAudioFile = null
+            sendEventToReactNative("onError", e.message ?: "Recording failed")
+            showToast("Recording failed")
+            resetToIdleState()
+        }
+    }
+
+    private fun stopMediaAndUpload() {
+        if (recordingState != RecordingState.RECORDING || mediaRecorder == null) {
+            Log.w(TAG, "⚠️ Cannot stop media recording")
+            return
+        }
+
+        stopAliveCheck()
+        val file = externalAudioFile
+        val mode = sessionMode
+
+        try {
+            mediaRecorder?.stop()
+        } catch (e: Exception) {
+            Log.e(TAG, "MediaRecorder.stop", e)
+        }
+        try {
+            mediaRecorder?.reset()
+            mediaRecorder?.release()
+        } catch (_: Exception) {
+        }
+        mediaRecorder = null
+
+        recordingState = RecordingState.STOPPED
+        isExternalUploading = true
+        updateUIState()
+        sendEventToReactNative("onRecordingStopped", null)
+
+        if (file == null || !file.exists() || file.length() == 0L) {
+            isExternalUploading = false
+            sendEventToReactNative("onError", "Recording file empty")
+            sendEventToReactNative("onTranscriptionError", "Recording file empty")
+            file?.delete()
+            externalAudioFile = null
+            resetToIdleState()
+            return
+        }
+
+        val baseUrl = FloatingMicConfigStore.getVoiceTranscribeBaseUrl(this)
+        Thread {
+            val result = when (mode) {
+                SessionMode.TRANSLATOR -> VoiceTranscribeClient.translateSpeechFile(
+                    baseUrl,
+                    FloatingMicConfigStore.getSpeechTranslatePath(this@FloatingMicService),
+                    file,
+                    FloatingMicConfigStore.getTranslateSourceLang(this@FloatingMicService),
+                    FloatingMicConfigStore.getTranslateTargetLang(this@FloatingMicService),
+                )
+                else -> {
+                    if (FloatingMicConfigStore.shouldUseElevenLabsForMicTranscribe(this@FloatingMicService)) {
+                        ElevenLabsTranscribeClient.transcribeFile(
+                            FloatingMicConfigStore.getElevenLabsApiKey(this@FloatingMicService),
+                            file,
+                            FloatingMicConfigStore.getTranslateSourceLang(this@FloatingMicService),
+                        )
+                    } else {
+                        VoiceTranscribeClient.transcribeFile(baseUrl, file)
+                    }
+                }
+            }
+            mainHandler.post {
+                isExternalUploading = false
+                val text = result.getOrNull()
+                if (text != null) {
+                    Log.d(TAG, "✅ Server text injected: $text")
+                    injectText(text)
+                    sendEventToReactNative("onTranscriptionComplete", text)
+                    showToast(getString(R.string.voice_injected))
+                } else {
+                    val err = result.exceptionOrNull()
+                    val msg = err?.message ?: if (mode == SessionMode.TRANSLATOR) {
+                        "Translation failed"
+                    } else {
+                        "Transcription failed"
+                    }
+                    Log.e(TAG, "Upload failed: $msg", err)
+                    sendEventToReactNative("onError", msg)
+                    sendEventToReactNative("onTranscriptionError", msg)
+                    showToast(msg)
+                }
+                runCatching { file.delete() }
+                externalAudioFile = null
+                resetToIdleState()
+            }
+        }.start()
     }
 
     private fun createRecognitionListener(): RecognitionListener {
@@ -575,13 +818,22 @@ private fun snapToEdges(params: WindowManager.LayoutParams, view: View) {
     }
     
     private fun resetToIdleState() {
-        // Stop alive check
+        isExternalUploading = false
         stopAliveCheck()
-        
-        // Reset injection lock
+
         isInjecting = false
-        
-        // Destroy speech recognizer properly
+
+        try {
+            mediaRecorder?.stop()
+        } catch (_: Exception) {
+        }
+        try {
+            mediaRecorder?.reset()
+            mediaRecorder?.release()
+        } catch (_: Exception) {
+        }
+        mediaRecorder = null
+
         speechRecognizer?.let { recognizer ->
             try {
                 recognizer.stopListening()
@@ -597,8 +849,9 @@ private fun snapToEdges(params: WindowManager.LayoutParams, view: View) {
         
         // Reset state
         recordingState = RecordingState.IDLE
+        hideActionMenu()
         updateUIState()
-        
+
         Log.d(TAG, "🔄 Reset to IDLE state - SpeechRecognizer destroyed")
     }
     
@@ -610,17 +863,35 @@ private fun snapToEdges(params: WindowManager.LayoutParams, view: View) {
             RecordingState.IDLE -> {
                 btnMic?.visibility = View.VISIBLE
                 btnStop?.visibility = View.GONE
-                listeningLabel?.visibility = View.GONE
+                soundWaveView?.stopWave()
+                soundWaveView?.visibility = View.GONE
+                uploadProgress?.visibility = View.GONE
+                statusIndicatorContainer?.visibility = View.GONE
             }
             RecordingState.RECORDING -> {
                 btnMic?.visibility = View.GONE
                 btnStop?.visibility = View.VISIBLE
-                listeningLabel?.visibility = View.VISIBLE
+                statusIndicatorContainer?.visibility = View.VISIBLE
+                soundWaveView?.visibility = View.VISIBLE
+                uploadProgress?.visibility = View.GONE
+                soundWaveView?.startWave()
             }
             RecordingState.STOPPED -> {
-                btnMic?.visibility = View.VISIBLE
-                btnStop?.visibility = View.GONE
-                listeningLabel?.visibility = View.GONE
+                if (isExternalUploading) {
+                    btnMic?.visibility = View.GONE
+                    btnStop?.visibility = View.GONE
+                    statusIndicatorContainer?.visibility = View.VISIBLE
+                    soundWaveView?.stopWave()
+                    soundWaveView?.visibility = View.GONE
+                    uploadProgress?.visibility = View.VISIBLE
+                } else {
+                    btnMic?.visibility = View.VISIBLE
+                    btnStop?.visibility = View.GONE
+                    soundWaveView?.stopWave()
+                    soundWaveView?.visibility = View.GONE
+                    uploadProgress?.visibility = View.GONE
+                    statusIndicatorContainer?.visibility = View.GONE
+                }
             }
         }
     }
@@ -679,11 +950,14 @@ private fun snapToEdges(params: WindowManager.LayoutParams, view: View) {
                     }
                     ACTION_START_RECORDING -> {
                         Log.d(TAG, "🎤 Received start recording command")
-                        startSpeechRecognition()
+                        beginMicrophoneCapture()
                     }
                     ACTION_STOP_RECORDING -> {
                         Log.d(TAG, "🛑 Received stop recording command")
-                        stopSpeechRecognition()
+                        stopVoiceCapture()
+                    }
+                    ACTION_CONFIG_UPDATED -> {
+                        Log.d(TAG, "⚙️ Floating mic config updated from app")
                     }
                 }
             }
@@ -694,6 +968,7 @@ private fun snapToEdges(params: WindowManager.LayoutParams, view: View) {
             addAction(ACTION_HIDE_MIC)
             addAction(ACTION_START_RECORDING)
             addAction(ACTION_STOP_RECORDING)
+            addAction(ACTION_CONFIG_UPDATED)
         }
         registerReceiver(micControlReceiver, filter)
         Log.d(TAG, "✅ Mic and recording control receiver registered")
@@ -736,7 +1011,21 @@ private fun snapToEdges(params: WindowManager.LayoutParams, view: View) {
         // Stop alive check
         stopAliveCheck()
         
-        // Stop speech recognition if active
+        if (recordingState == RecordingState.RECORDING || isExternalUploading) {
+            try {
+                mediaRecorder?.stop()
+            } catch (_: Exception) {
+            }
+            try {
+                mediaRecorder?.release()
+            } catch (_: Exception) {
+            }
+            mediaRecorder = null
+            runCatching { externalAudioFile?.delete() }
+            externalAudioFile = null
+            isExternalUploading = false
+        }
+
         if (recordingState == RecordingState.RECORDING) {
             speechRecognizer?.let { recognizer ->
                 try {

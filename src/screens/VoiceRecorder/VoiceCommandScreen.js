@@ -32,7 +32,7 @@ import { PrimaryButton } from '../../components/common/PrimaryButton';
 import { useAlert } from '../../context/AlertContext';
 import { Colors } from '../../theme/Colors';
 
-const VoiceRecorderScreen = ({ navigation }) => {
+const VoiceCommandScreen = ({ navigation }) => {
   const showAlert = useAlert();
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -676,4 +676,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default VoiceRecorderScreen;
+export default VoiceCommandScreen;

@@ -6,6 +6,8 @@
 export const VOICE_ENDPOINTS = {
   // Voice transcription endpoints
   TRANSCRIBE: '/voice/transcribe',
+  /** Floating overlay translator (native OkHttp); must match floatingMicConfig.SPEECH_TRANSLATE_PATH */
+  SPEECH_TRANSLATE: '/voice/speech-translate',
   TRANSCRIPT: '/voice/transcript',
   EXECUTE: '/voice/execute',
   

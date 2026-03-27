@@ -12,10 +12,11 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Mail, Eye, EyeOff, User, Lock } from 'lucide-react-native';
+import { Mail, Eye, EyeOff, Lock } from 'lucide-react-native';
 import { useAuth } from '../../context/AuthContext';
-import { Colors } from '../../theme/Colors';
 import ForgotPasswordModal from '../../components/ForgotPasswordModal';
+
+const iconMuted = '#94a3b8';
 
 const LoginScreen = ({ navigation }) => {
   const { login, signInWithGoogle } = useAuth();
@@ -66,22 +67,23 @@ const LoginScreen = ({ navigation }) => {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-  
-
-          {/* Card */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Welcome back</Text>
-            <Text style={styles.cardSubtitle}>Sign in to continue</Text>
+            <View style={styles.logoContainer}>
+              <Image
+                source={require('../../assets/splashscreen.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+            </View>
 
-            {/* Email */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Email</Text>
               <View style={[styles.inputWrapper, error && !email ? styles.inputError : null]}>
-                <Mail size={16} color="#666666" strokeWidth={2} style={{ marginRight: 8 }} />
+                <Mail size={18} color={iconMuted} strokeWidth={2} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Enter email"
-                  placeholderTextColor="#999999"
+                  placeholderTextColor="#64748b"
                   value={email}
                   onChangeText={(text) => {
                     setEmail(text);
@@ -99,11 +101,11 @@ const LoginScreen = ({ navigation }) => {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Password</Text>
               <View style={[styles.inputWrapper, error && email && !password ? styles.inputError : null]}>
-                <Lock size={16} color="#666666" strokeWidth={2} style={{ marginRight: 8 }} />
+                <Lock size={18} color={iconMuted} strokeWidth={2} style={styles.inputIcon} />
                 <TextInput
                   style={styles.inputFlex}
                   placeholder="Enter password"
-                  placeholderTextColor="#999999"
+                  placeholderTextColor="#64748b"
                   value={password}
                   onChangeText={(text) => {
                     setPassword(text);
@@ -118,9 +120,11 @@ const LoginScreen = ({ navigation }) => {
                   style={styles.eyeBtn}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  {showPassword
-                    ? <EyeOff size={18} color="#666666" strokeWidth={2} />
-                    : <Eye size={18} color="#666666" strokeWidth={2} />}
+                  {showPassword ? (
+                    <EyeOff size={20} color={iconMuted} strokeWidth={2} />
+                  ) : (
+                    <Eye size={20} color={iconMuted} strokeWidth={2} />
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -140,7 +144,7 @@ const LoginScreen = ({ navigation }) => {
               activeOpacity={0.85}
             >
               {isLoading ? (
-                <ActivityIndicator color="#000000" size="small" />
+                <ActivityIndicator color="#0a0a0a" size="small" />
               ) : (
                 <Text style={styles.loginBtnText}>Sign In</Text>
               )}
@@ -207,7 +211,7 @@ const LoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#050505',
   },
   flex: {
     flex: 1,
@@ -215,180 +219,157 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 32,
+    paddingHorizontal: 22,
+    paddingVertical: 28,
   },
-
-  // Header
-  headerContainer: {
+  headerBlock: {
     alignItems: 'center',
-    marginBottom: 36,
+    marginBottom: 22,
   },
-  logoCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#F5F5F5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
+  badge: {
+    backgroundColor: '#14b8a6',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 999,
+    marginBottom: 14,
   },
-  appName: {
-    fontSize: 28,
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+  },
+  title: {
+    fontSize: 24,
     fontWeight: '700',
-    color: '#000000',
-    letterSpacing: 0.5,
+    color: '#f8fafc',
+    textAlign: 'center',
   },
-  tagline: {
-    fontSize: 14,
-    color: '#666666',
-    marginTop: 4,
-  },
-
-  // Card
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 28,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    elevation: 8,
+    backgroundColor: '#121212',
+    borderRadius: 18,
+    padding: 22,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: 'rgba(255,255,255,0.08)',
+    shadowColor: '#14b8a6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 6,
   },
-  cardTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#000000',
-    marginBottom: 4,
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
   },
-  cardSubtitle: {
-    fontSize: 14,
-    color: '#666666',
-    marginBottom: 24,
+  logoImage: {
+    width: 240,
+    height: 120,
+    borderRadius: 12,
   },
-
-  // Input
   inputGroup: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
   label: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#000000',
+    color: '#cbd5e1',
     marginBottom: 8,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#E0E0E0',
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
-    height: 50,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+    borderRadius: 10,
+    backgroundColor: '#0a0a0a',
+    paddingHorizontal: 12,
+    minHeight: 50,
+  },
+  inputIcon: {
+    marginRight: 8,
   },
   inputError: {
-    borderColor: '#DC2626',
+    borderColor: '#f87171',
   },
   input: {
     flex: 1,
     fontSize: 15,
-    color: '#000000',
-    paddingVertical: 0,
+    color: '#f1f5f9',
+    paddingVertical: 12,
   },
   inputFlex: {
     flex: 1,
     fontSize: 15,
-    color: '#000000',
-    paddingVertical: 0,
+    color: '#f1f5f9',
+    paddingVertical: 12,
   },
   eyeBtn: {
     paddingLeft: 8,
   },
-
-  // Error
   errorBox: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: 'rgba(248,113,113,0.12)',
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: 'rgba(248,113,113,0.35)',
     borderRadius: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   errorText: {
     fontSize: 13,
-    color: '#DC2626',
+    color: '#fca5a5',
     fontWeight: '500',
   },
-
-  // Login Button
   loginBtn: {
-    backgroundColor: '#000000',
-    borderRadius: 12,
+    backgroundColor: '#00d16b',
+    borderRadius: 10,
     height: 52,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
   },
   loginBtnDisabled: {
-    opacity: 0.7,
+    opacity: 0.65,
   },
   loginBtnText: {
-    color: '#FFFFFF',
+    color: '#0a0a0a',
     fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
-
-  // Forgot Password
   forgotPasswordBtn: {
     alignSelf: 'center',
     marginTop: 16,
   },
   forgotPasswordText: {
-    color: '#000000',
+    color: '#2dd4bf',
     fontSize: 14,
     fontWeight: '600',
   },
-
-  // Divider
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 24,
+    marginVertical: 22,
   },
   dividerLine: {
     flex: 1,
-    height: 1,
-    backgroundColor: '#E0E0E0',
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.15)',
   },
   dividerText: {
-    marginHorizontal: 16,
-    fontSize: 12,
-    color: '#666666',
+    marginHorizontal: 12,
+    fontSize: 11,
+    color: '#64748b',
     fontWeight: '500',
   },
-
-  // Google Sign In
   googleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0a0a0a',
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 12,
+    borderColor: 'rgba(255,255,255,0.22)',
+    borderRadius: 10,
     height: 52,
     paddingHorizontal: 16,
   },
@@ -407,54 +388,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   googleBtnText: {
-    color: '#000000',
+    color: '#f8fafc',
     fontSize: 16,
     fontWeight: '600',
   },
-
-  // Register
   registerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 24,
+    marginTop: 22,
   },
   registerText: {
-    color: '#666666',
+    color: '#64748b',
     fontSize: 14,
   },
   registerLink: {
-    color: '#000000',
+    color: '#f8fafc',
     fontSize: 14,
     fontWeight: '700',
-  },
-
-  // Hint box
-  hintBox: {
-    marginTop: 20,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 10,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E9ECEF',
-  },
-  hintTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#495057',
-    marginBottom: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  hintText: {
-    fontSize: 13,
-    color: '#6C757D',
-    lineHeight: 20,
-  },
-  hintValue: {
-    fontWeight: '700',
-    color: '#000000',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
 });
 

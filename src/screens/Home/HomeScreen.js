@@ -9,7 +9,7 @@ import {
   DeviceEventEmitter,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Mic, Music, Radio, Settings, Circle, ChevronRight, History } from 'lucide-react-native';
+import { Mic, Music, Radio, Settings, Circle, ChevronRight, History, Languages } from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { Colors } from '../../theme/Colors';
@@ -90,10 +90,11 @@ const HomeScreen = ({ navigation }) => {
   const greeting = `${TIME_LABELS.getGreeting()}, ${USER.DEFAULT_NAME}`;
 
   const QUICK_ACTIONS = [
-    { Icon: Mic, label: 'Record', screen: 'VoiceRecorder', color: '#EF4444' },
-    { Icon: Music, label: 'My Recordings', screen: 'RecordedAudio', color: '#10B981' },
+    { Icon: Mic, label: 'Voice Command', screen: 'VoiceRecorder', color: '#EF4444' },
     { Icon: Radio, label: 'Floating Mic', screen: 'FloatingMic', color: '#6366F1' },
+    { Icon: Music, label: 'My Recordings', screen: 'RecordedAudio', color: '#10B981' },
     { Icon: History, label: 'Speech History', screen: 'FloatingMicHistory', color: '#0EA5E9' },
+    { Icon: Languages, label: 'Translator', screen: 'Translator', color: '#38BDF8' },
     { Icon: Settings, label: 'Settings', screen: 'Settings', color: '#F59E0B' },
   ];
 
@@ -111,7 +112,7 @@ const HomeScreen = ({ navigation }) => {
           <View style={styles.heroTop}>
             <View>
               <Text style={styles.heroGreeting}>{greeting}</Text>
-              <Text style={styles.heroSubtitle}>Ready to record your voice?</Text>
+              <Text style={styles.heroSubtitle}>Ready to give voice commands?</Text>
             </View>
             <View style={styles.heroMicWrap}>
               <Mic size={26} color="#FFFFFF" strokeWidth={1.8} />
@@ -141,7 +142,7 @@ const HomeScreen = ({ navigation }) => {
           activeOpacity={0.85}
         >
           <Circle size={18} color="#FFFFFF" strokeWidth={2.5} />
-          <Text style={styles.ctaBtnText}>Start Recording</Text>
+          <Text style={styles.ctaBtnText}>Start Voice Command</Text>
         </TouchableOpacity>
 
         {/* Quick Actions */}
@@ -262,7 +263,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    // marginBottom: 20,
   },
   heroGreeting: {
     fontSize: 22,

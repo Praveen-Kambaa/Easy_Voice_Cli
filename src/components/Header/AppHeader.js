@@ -2,34 +2,52 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { Menu } from 'lucide-react-native';
+import { Menu, ChevronLeft } from 'lucide-react-native';
 import { Colors } from '../../theme/Colors';
 
 export const AppHeader = ({
   title,
   showMenuButton = true,
   rightComponent,
+  /** Dark bar for Translator and similar screens */
+  dark = false,
+  /** When set, shows back instead of the menu button */
+  onBack,
 }) => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
 
+  const barBg = dark ? '#0f1419' : Colors.surface;
+  const barBorder = dark ? 'rgba(255,255,255,0.08)' : Colors.border;
+  const titleColor = dark ? '#f1f5f9' : Colors.text.primary;
+  const iconColor = dark ? '#e2e8f0' : Colors.text.primary;
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: barBg, borderBottomColor: barBorder }]}>
       <View style={styles.headerRow}>
-        {showMenuButton ? (
+        {onBack ? (
+          <TouchableOpacity
+            style={styles.menuButton}
+            onPress={onBack}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <ChevronLeft size={24} color={iconColor} strokeWidth={2} />
+          </TouchableOpacity>
+        ) : showMenuButton ? (
           <TouchableOpacity
             style={styles.menuButton}
             onPress={() => navigation.openDrawer()}
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Menu size={22} color={Colors.text.primary} strokeWidth={2} />
+            <Menu size={22} color={iconColor} strokeWidth={2} />
           </TouchableOpacity>
         ) : (
           <View style={styles.menuPlaceholder} />
         )}
 
-        <Text style={styles.title} numberOfLines={1}>
+        <Text style={[styles.title, { color: titleColor }]} numberOfLines={1}>
           {title}
         </Text>
 
@@ -43,9 +61,7 @@ export const AppHeader = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -73,7 +89,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 17,
     fontWeight: '700',
-    color: Colors.text.primary,
     letterSpacing: -0.3,
   },
   rightSlot: {

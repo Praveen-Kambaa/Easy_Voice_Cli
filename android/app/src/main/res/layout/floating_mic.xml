@@ -3,44 +3,109 @@
     android:id="@+id/floating_root"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:background="@drawable/floating_mic_bar_bg"
+    android:background="@android:color/transparent"
     android:elevation="18dp"
-    android:padding="10dp">
+    android:padding="6dp">
 
-    <RelativeLayout
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:background="@drawable/floating_mic_bar_bg"
-        android:elevation="8dp">
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
 
-        <ImageView
-            android:id="@+id/btn_mic"
-            android:layout_width="20dp"
-            android:layout_height="20dp"
-            android:layout_centerInParent="true"
-            android:src="@drawable/ic_mic_normal"
-            android:contentDescription="Mic" />
-
-        <ImageView
-            android:id="@+id/btn_stop"
-            android:layout_width="20dp"
-            android:layout_height="20dp"
-            android:layout_centerInParent="true"
-            android:src="@drawable/ic_stop_inner"
-            android:visibility="gone"
-            android:contentDescription="Stop" />
-            
-        <TextView
-            android:id="@+id/listening_label"
+        <!-- Icon-only action menu -->
+        <LinearLayout
+            android:id="@+id/action_menu_panel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_alignParentBottom="true"
-            android:layout_centerHorizontal="true"
-            android:layout_marginBottom="4dp"
-            android:text="REC"
-            android:textColor="#FF0000"
-            android:textSize="8sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
-    </RelativeLayout>
+            android:layout_marginBottom="10dp"
+            android:background="@drawable/floating_menu_bg"
+            android:orientation="vertical"
+            android:padding="6dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/btn_action_microphone"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Microphone"
+                android:padding="8dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_floating_menu_mic" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginHorizontal="6dp"
+                android:layout_marginVertical="2dp"
+                android:background="#33FFFFFF" />
+
+            <ImageView
+                android:id="@+id/btn_action_translator"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Translator"
+                android:padding="8dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_floating_menu_translate" />
+        </LinearLayout>
+
+        <!-- Main FAB: app Icon.png -->
+        <RelativeLayout
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/floating_mic_bar_bg"
+            android:elevation="8dp"
+            android:padding="4dp">
+
+            <ImageView
+                android:id="@+id/btn_mic"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_centerInParent="true"
+                android:contentDescription="Open voice menu"
+                android:scaleType="fitCenter"
+                android:src="@drawable/floating_main_icon" />
+
+            <ImageView
+                android:id="@+id/btn_stop"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_centerInParent="true"
+                android:background="@drawable/bg_stop_rounded"
+                android:contentDescription="Stop"
+                android:padding="6dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_stop_inner"
+                android:visibility="gone" />
+        </RelativeLayout>
+
+        <!-- Recording: animated waves. Upload/translate: small spinner (no long text). -->
+        <FrameLayout
+            android:id="@+id/status_indicator_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:visibility="gone">
+
+            <com.typeeasy.SoundWaveOverlayView
+                android:id="@+id/sound_wave_view"
+                android:layout_width="44dp"
+                android:layout_height="12dp"
+                android:layout_gravity="center_horizontal"
+                android:visibility="gone" />
+
+            <ProgressBar
+                android:id="@+id/upload_progress"
+                style="?android:attr/progressBarStyleSmall"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:indeterminate="true"
+                android:visibility="gone" />
+        </FrameLayout>
+    </LinearLayout>
 </FrameLayout>

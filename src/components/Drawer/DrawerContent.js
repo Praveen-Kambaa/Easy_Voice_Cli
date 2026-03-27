@@ -12,6 +12,7 @@ import {
   LogOut,
   ChevronRight,
   History,
+  Languages,
 } from 'lucide-react-native';
 import { Colors } from '../../theme/Colors';
 import { APP_NAME, APP_TAGLINE } from '../../constants';
@@ -21,10 +22,11 @@ import { useAppVersion } from '../../hooks/useAppVersion';
 
 const MENU_ITEMS = [
   { title: 'Home', description: 'Dashboard & overview', Icon: Home, screen: 'Home' },
-  { title: 'Voice Recorder', description: 'Record your voice', Icon: Mic, screen: 'VoiceRecorder' },
-  { title: 'My Recordings', description: 'View saved audio', Icon: Music, screen: 'RecordedAudio' },
+  { title: 'Voice Command', description: 'Record your voice', Icon: Mic, screen: 'VoiceRecorder' },
   { title: 'Floating Mic', description: 'Background recording', Icon: Radio, screen: 'FloatingMic' },
+  { title: 'My Recordings', description: 'View saved audio', Icon: Music, screen: 'RecordedAudio' },
   { title: 'Speech History', description: 'Floating mic transcripts', Icon: History, screen: 'FloatingMicHistory' },
+  { title: 'Translator', description: 'Text translation', Icon: Languages, screen: 'Translator' },
   { title: 'Settings', description: 'Permissions & preferences', Icon: Settings, screen: 'Settings' },
 ];
 

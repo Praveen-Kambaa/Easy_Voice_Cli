@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,13 +12,22 @@ import {
 } from 'react-native';
 import { Mail, X } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
+import AlertModal from './common/AlertModal';
 
 const ForgotPasswordModal = ({ visible, onClose }) => {
   const { requestPasswordReset } = useAuth();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [successAlertVisible, setSuccessAlertVisible] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+
+  useEffect(() => {
+    if (!visible) {
+      setSuccessAlertVisible(false);
+      setSuccessMessage('');
+    }
+  }, [visible]);
 
   const handleSubmit = async () => {
     if (!email.trim()) {
@@ -27,19 +36,17 @@ const ForgotPasswordModal = ({ visible, onClose }) => {
     }
 
     setError('');
-    setSuccess('');
     setIsLoading(true);
 
     const result = await requestPasswordReset(email);
     setIsLoading(false);
 
     if (result.success) {
-      setSuccess(result.message);
+      const message =
+        result.message || 'If the email exists, reset instructions have been sent';
       setEmail('');
-      setTimeout(() => {
-        onClose();
-        setSuccess('');
-      }, 3000);
+      setSuccessMessage(message);
+      setSuccessAlertVisible(true);
     } else {
       setError(result.error);
     }
@@ -48,11 +55,13 @@ const ForgotPasswordModal = ({ visible, onClose }) => {
   const handleClose = () => {
     setEmail('');
     setError('');
-    setSuccess('');
+    setSuccessAlertVisible(false);
+    setSuccessMessage('');
     onClose();
   };
 
   return (
+    <>
     <Modal
       visible={visible}
       animationType="slide"
@@ -79,7 +88,7 @@ const ForgotPasswordModal = ({ visible, onClose }) => {
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Email Address</Text>
             <View style={[styles.inputWrapper, error && !email ? styles.inputError : null]}>
-              <Mail size={16} color="#666666" strokeWidth={2} style={{ marginRight: 8 }} />
+              <Mail size={16} color="#666666" strokeWidth={2} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="Enter your email"
@@ -88,7 +97,6 @@ const ForgotPasswordModal = ({ visible, onClose }) => {
                 onChangeText={(text) => {
                   setEmail(text);
                   setError('');
-                  setSuccess('');
                 }}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -103,13 +111,6 @@ const ForgotPasswordModal = ({ visible, onClose }) => {
           {!!error && (
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>{error}</Text>
-            </View>
-          )}
-
-          {/* Success message */}
-          {!!success && (
-            <View style={styles.successBox}>
-              <Text style={styles.successText}>{success}</Text>
             </View>
           )}
 
@@ -128,6 +129,14 @@ const ForgotPasswordModal = ({ visible, onClose }) => {
         </View>
       </KeyboardAvoidingView>
     </Modal>
+    <AlertModal
+      visible={successAlertVisible}
+      title="Success"
+      message={successMessage}
+      onDismiss={() => setSuccessAlertVisible(false)}
+      buttons={[{ text: 'OK', onPress: handleClose }]}
+    />
+    </>
   );
 };
 
@@ -176,6 +185,9 @@ const styles = StyleSheet.create({
     color: '#000000',
     marginBottom: 8,
   },
+  inputIcon: {
+    marginRight: 8,
+  },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -207,20 +219,6 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 13,
     color: '#DC2626',
-    fontWeight: '500',
-  },
-  successBox: {
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 20,
-  },
-  successText: {
-    fontSize: 13,
-    color: '#16A34A',
     fontWeight: '500',
   },
   submitBtn: {
