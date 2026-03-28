@@ -11,6 +11,7 @@ import AuthNavigator from './src/navigation/AuthNavigator';
 import { AlertProvider } from './src/context/AlertContext';
 import { AuthProvider } from './src/context/AuthContext';
 import { FloatingSpeechHistorySync } from './src/components/FloatingSpeechHistorySync';
+import { AiQaHistorySync } from './src/components/AiQaHistorySync';
 import { syncFloatingMicSettingsToNative } from './src/services/floatingMicConfig';
 
 function FloatingMicNativeSync() {
@@ -31,6 +32,7 @@ function App() {
             <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
             <FloatingMicNativeSync />
             <FloatingSpeechHistorySync />
+            <AiQaHistorySync />
             <AuthNavigator />
           </NavigationContainer>
         </AlertProvider>

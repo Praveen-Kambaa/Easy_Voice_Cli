@@ -36,8 +36,10 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.content.ContextCompat
 import com.facebook.react.ReactApplication
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import org.json.JSONObject
 import java.io.File
 import java.util.ArrayList
+import java.util.Locale
 import kotlin.math.roundToInt
 
 class FloatingMicService : Service() {
@@ -52,6 +54,8 @@ class FloatingMicService : Service() {
     private enum class SessionMode {
         MIC,
         TRANSLATOR,
+        /** Voice (English) → AI provider → inject assistant reply (no ML Kit on answer) */
+        ASK,
     }
 
     private var recordingState = RecordingState.IDLE
@@ -80,6 +84,9 @@ class FloatingMicService : Service() {
     private var actionMenuPanel: View? = null
     private var btnActionMicrophone: ImageView? = null
     private var btnActionTranslator: ImageView? = null
+    private var actionMenuDivider: View? = null
+    private var actionMenuDividerAsk: View? = null
+    private var btnActionAsk: ImageView? = null
     private var actionMenuVisible = false
     private var lastImeInsetBottom = 0
 
@@ -87,6 +94,8 @@ class FloatingMicService : Service() {
     private var mediaRecorder: MediaRecorder? = null
     private var externalAudioFile: File? = null
     private var isExternalUploading = false
+    /** AI chat after English STT for Ask mode (no post-translate on the answer) */
+    private var isAskProcessing = false
     private val mainHandler = Handler(Looper.getMainLooper())
     /** For Microphone mode only: internal SpeechRecognizer vs cloud transcribe. */
     private var sessionUsesInternalTranscription = true
@@ -210,6 +219,9 @@ class FloatingMicService : Service() {
             actionMenuPanel = floatingView?.findViewById(R.id.action_menu_panel)
             btnActionMicrophone = floatingView?.findViewById(R.id.btn_action_microphone)
             btnActionTranslator = floatingView?.findViewById(R.id.btn_action_translator)
+            actionMenuDivider = floatingView?.findViewById(R.id.action_menu_divider)
+            actionMenuDividerAsk = floatingView?.findViewById(R.id.action_menu_divider_ask)
+            btnActionAsk = floatingView?.findViewById(R.id.btn_action_ask)
             
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -280,6 +292,9 @@ class FloatingMicService : Service() {
         btnActionTranslator?.setOnClickListener {
             beginTranslatorCapture()
         }
+        btnActionAsk?.setOnClickListener {
+            beginAskQuestionCapture()
+        }
     }
 
     private fun useInternalTranscription(): Boolean =
@@ -295,8 +310,53 @@ class FloatingMicService : Service() {
         actionMenuVisible = false
     }
 
+    private fun overlayMicOn(): Boolean =
+        FloatingMicConfigStore.isOverlayMicEnabled(this)
+
+    private fun overlayTranslationOn(): Boolean =
+        FloatingMicConfigStore.isOverlayTranslationEnabled(this)
+
+    private fun overlayAskOn(): Boolean =
+        FloatingMicConfigStore.isOverlayAskQuestionEnabled(this)
+
+    private fun overlayEnabledActionCount(): Int {
+        var n = 0
+        if (overlayMicOn()) n++
+        if (overlayTranslationOn()) n++
+        if (overlayAskOn()) n++
+        return n
+    }
+
+    /**
+     * When idle: FAB icon + which rows appear in the pop-up (when more than one action is on).
+     */
+    private fun applyIdleOverlayAppearance() {
+        if (recordingState != RecordingState.IDLE) return
+        val micOn = overlayMicOn()
+        val transOn = overlayTranslationOn()
+        val askOn = overlayAskOn()
+        btnActionMicrophone?.visibility = if (micOn) View.VISIBLE else View.GONE
+        btnActionTranslator?.visibility = if (transOn) View.VISIBLE else View.GONE
+        btnActionAsk?.visibility = if (askOn) View.VISIBLE else View.GONE
+        // Dividers between consecutive visible rows
+        actionMenuDivider?.visibility = if (micOn && transOn) View.VISIBLE else View.GONE
+        val showDividerBeforeAsk = askOn && (micOn || transOn)
+        actionMenuDividerAsk?.visibility = if (showDividerBeforeAsk) View.VISIBLE else View.GONE
+        when {
+            overlayEnabledActionCount() >= 2 -> btnMic?.setImageResource(R.drawable.floating_main_icon)
+            micOn -> btnMic?.setImageResource(R.drawable.ic_floating_menu_mic)
+            transOn -> btnMic?.setImageResource(R.drawable.ic_floating_menu_translate)
+            askOn -> btnMic?.setImageResource(R.drawable.ic_floating_menu_ask)
+            else -> btnMic?.setImageResource(R.drawable.ic_floating_menu_mic)
+        }
+    }
+
     private fun showOrToggleActionMenu() {
         if (recordingState != RecordingState.IDLE) return
+        if (overlayEnabledActionCount() <= 1) {
+            hideActionMenu()
+            return
+        }
         if (actionMenuVisible) hideActionMenu() else showActionMenu()
     }
 
@@ -312,32 +372,47 @@ class FloatingMicService : Service() {
         }
     }
 
-    /** Translator row: always record + /speech-translate (path from prefs). */
+    /**
+     * Translator row: server /speech-translate upload, OR on-device SpeechRecognizer + ML Kit
+     * when [FloatingMicConfigStore.isInternalFloatingTranslationEnabled].
+     */
     private fun beginTranslatorCapture() {
         hideActionMenu()
         sessionMode = SessionMode.TRANSLATOR
-        sessionUsesInternalTranscription = false
-        startTranslatorRecording()
+        if (FloatingMicConfigStore.isInternalFloatingTranslationEnabled(this)) {
+            sessionUsesInternalTranscription = true
+            startSpeechRecognitionForTranslate()
+        } else {
+            sessionUsesInternalTranscription = false
+            startTranslatorRecording()
+        }
+    }
+
+    /** Ask: English STT → AI provider → inject assistant text as-is. */
+    private fun beginAskQuestionCapture() {
+        hideActionMenu()
+        sessionMode = SessionMode.ASK
+        sessionUsesInternalTranscription = true
+        startSpeechRecognitionForAsk()
     }
 
     private fun stopVoiceCapture() {
         when {
             recordingState != RecordingState.RECORDING -> return
-            sessionMode == SessionMode.MIC && sessionUsesInternalTranscription ->
-                stopSpeechRecognition()
+            sessionUsesInternalTranscription -> stopSpeechRecognition()
             mediaRecorder != null -> stopMediaAndUpload()
             else -> Log.w(TAG, "stopVoiceCapture: no active media session")
         }
     }
 
     /**
-     * Long-press (~2s) then drag to move the overlay. Short tap on mic/stop opens menu or stops.
+     * Long-press (~1s) then drag to move the overlay. Short tap on mic/stop opens menu or stops.
      * Listener is attached to the overlay root (padding), [btnMic], and [btnStop] so touches on the
      * FAB are not lost (root FrameLayout does not receive events that children consume).
      */
     private fun setupTouchListener(overlayRoot: View) {
         val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
-        val longPressTimeoutMs = 2000L
+        val longPressTimeoutMs = 1000L
         // Require a deliberate move to cancel the long-press timer (finger jitter was killing drag).
         val cancelLongPressDistSq = (touchSlop * 5) * (touchSlop * 5)
 
@@ -411,7 +486,15 @@ class FloatingMicService : Service() {
 
     private fun handleFabTap() {
         when (recordingState) {
-            RecordingState.IDLE -> showOrToggleActionMenu()
+            RecordingState.IDLE -> {
+                when {
+                    overlayEnabledActionCount() > 1 -> showOrToggleActionMenu()
+                    overlayMicOn() -> beginMicrophoneCapture()
+                    overlayTranslationOn() -> beginTranslatorCapture()
+                    overlayAskOn() -> beginAskQuestionCapture()
+                    else -> beginMicrophoneCapture()
+                }
+            }
             RecordingState.RECORDING -> stopVoiceCapture()
             else -> { }
         }
@@ -487,6 +570,40 @@ class FloatingMicService : Service() {
         }
     }
 
+    /** Ask Question: same as mic STT but [SessionMode.ASK] for downstream AI chat completion. */
+    private fun startSpeechRecognitionForAsk() {
+        if (recordingState != RecordingState.IDLE) {
+            Log.w(TAG, "⚠️ Cannot start Ask speech recognition: Not in IDLE state")
+            return
+        }
+        try {
+            Log.d(TAG, "🎤 Starting Speech Recognition (Ask / English)")
+            hideActionMenu()
+            sessionMode = SessionMode.ASK
+            resetInjectionGate()
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+            recognitionIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
+            }
+            speechRecognizer?.setRecognitionListener(createRecognitionListener())
+            speechRecognizer?.startListening(recognitionIntent)
+            recordingState = RecordingState.RECORDING
+            updateUIState()
+            sendEventToReactNative("onRecordingStarted", null)
+            startAliveCheck()
+            Log.d(TAG, "✅ Ask speech recognition started")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to start Ask speech recognition", e)
+            sendEventToReactNative("onError", "Failed to start speech recognition: ${e.message}")
+            showToast("Failed to start speech recognition")
+            resetToIdleState()
+        }
+    }
+
     private fun stopSpeechRecognition() {
         if (recordingState != RecordingState.RECORDING) {
             Log.w(TAG, "⚠️ Cannot stop speech recognition: Not in RECORDING state")
@@ -509,6 +626,45 @@ class FloatingMicService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to stop speech recognition", e)
             sendEventToReactNative("onError", "Failed to stop speech recognition: ${e.message}")
+            resetToIdleState()
+        }
+    }
+
+    /** Floating translation + internal translation: STT in source language from Settings, then ML Kit. */
+    private fun startSpeechRecognitionForTranslate() {
+        if (recordingState != RecordingState.IDLE) {
+            Log.w(TAG, "⚠️ Cannot start translate speech recognition: Not in IDLE state")
+            return
+        }
+        try {
+            Log.d(TAG, "🎤 Starting speech recognition for on-device translation")
+            hideActionMenu()
+            // Same as [startSpeechRecognition] / [startMediaRecording]: unlock accessibility gate
+            // so the translated [VOICE_RESULT] is not dropped after a prior injection.
+            resetInjectionGate()
+            val sourceLang = FloatingMicConfigStore.getTranslateSourceLang(this)
+            val localeTag = Locale.forLanguageTag(sourceLang).toLanguageTag().ifBlank { "en-US" }
+
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+            recognitionIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, localeTag)
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
+            }
+            speechRecognizer?.setRecognitionListener(createRecognitionListener())
+            speechRecognizer?.startListening(recognitionIntent)
+
+            recordingState = RecordingState.RECORDING
+            updateUIState()
+            sendEventToReactNative("onRecordingStarted", null)
+            startAliveCheck()
+            Log.d(TAG, "✅ Translate speech recognition started (locale=$localeTag)")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to start translate speech recognition", e)
+            sendEventToReactNative("onError", "Failed to start speech recognition: ${e.message}")
+            showToast("Failed to start speech recognition")
             resetToIdleState()
         }
     }
@@ -546,7 +702,9 @@ class FloatingMicService : Service() {
             showToast("Configure ElevenLabs key or voice server")
             return
         }
-        if (mode == SessionMode.TRANSLATOR && baseUrl.isBlank()) {
+        if (mode == SessionMode.TRANSLATOR && baseUrl.isBlank() &&
+            !FloatingMicConfigStore.isInternalFloatingTranslationEnabled(this)
+        ) {
             sendEventToReactNative("onError", "Voice API URL not configured. Open the app → Settings.")
             showToast("Configure voice server in Settings")
             return
@@ -714,26 +872,93 @@ class FloatingMicService : Service() {
             }
 
             override fun onResults(results: Bundle?) {
-                // Prevent duplicate injection
                 if (isInjecting) return
                 isInjecting = true
-                
+
+                val useOnDeviceTranslate =
+                    sessionMode == SessionMode.TRANSLATOR &&
+                        FloatingMicConfigStore.isInternalFloatingTranslationEnabled(this@FloatingMicService)
+                var deferredTranslation = false
+                var deferredAsk = false
+
                 try {
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    val spokenText = matches?.getOrNull(0)?.trim() ?: ""
-    
-                    if (spokenText.isNotEmpty()) {
-                        Log.d(TAG, "✅ Speech recognition result: $spokenText")
-                        injectText(spokenText)
-                        sendEventToReactNative("onTranscriptionComplete", spokenText)
-                        showToast("Text injected")
-                    } else {
+                    val spokenText = matches?.getOrNull(0)?.trim().orEmpty()
+
+                    if (spokenText.isEmpty()) {
                         Log.w(TAG, "⚠️ No speech recognition results")
+                        return
                     }
+
+                    if (sessionMode == SessionMode.ASK) {
+                        val apiKey = FloatingMicConfigStore.getAiProviderApiKey(this@FloatingMicService)
+                        if (apiKey.isEmpty()) {
+                            Log.e(TAG, "AI provider API key missing")
+                            sendEventToReactNative("onError", "Set AI_PROVIDER_API_KEY in aiProvider.js (app config).")
+                            showToast("AI API key missing in app config")
+                            return
+                        }
+                        deferredAsk = true
+                        stopAliveCheck()
+                        recordingState = RecordingState.STOPPED
+                        isAskProcessing = true
+                        updateUIState()
+                        sendEventToReactNative("onRecordingStopped", null)
+                        val appCtx = applicationContext
+                        Thread {
+                            val ai = AiProviderChatClient.chatCompletion(appCtx, apiKey, spokenText)
+                            mainHandler.post {
+                                isAskProcessing = false
+                                isInjecting = false
+                                when {
+                                    ai.isSuccess -> {
+                                        val t = ai.getOrNull().orEmpty()
+                                        injectText(t)
+                                        val qaPayload = JSONObject().apply {
+                                            put("question", spokenText)
+                                            put("answer", t)
+                                        }.toString()
+                                        sendEventToReactNative("onAskQuestionComplete", qaPayload)
+                                        showToast(getString(R.string.voice_injected))
+                                    }
+                                    else -> {
+                                        val msg = ai.exceptionOrNull()?.message ?: "AI request failed"
+                                        sendEventToReactNative("onError", msg)
+                                        sendEventToReactNative("onTranscriptionError", msg)
+                                        showToast(msg)
+                                    }
+                                }
+                                resetToIdleState()
+                            }
+                        }.start()
+                        return
+                    }
+
+                    if (useOnDeviceTranslate) {
+                        deferredTranslation = true
+                        val appCtx = applicationContext
+                        val src = FloatingMicConfigStore.getTranslateSourceLang(appCtx)
+                        val tgt = FloatingMicConfigStore.getTranslateTargetLang(appCtx)
+                        Log.d(TAG, "✅ STT for translate: $spokenText → ML Kit ($src → $tgt)")
+                        mainHandler.post { resetToIdleState() }
+                        Thread {
+                            val tr = MlKitTranslateHelper.translate(appCtx, spokenText, src, tgt)
+                            mainHandler.post {
+                                deliverOnDeviceTranslationResult(tr)
+                            }
+                        }.start()
+                        return
+                    }
+
+                    Log.d(TAG, "✅ Speech recognition result: $spokenText")
+                    injectText(spokenText)
+                    sendEventToReactNative("onTranscriptionComplete", spokenText)
+                    showToast("Text injected")
                 } finally {
-                    isInjecting = false
-                    // Reset to IDLE after processing
-                    resetToIdleState()
+                    if (!deferredTranslation && !deferredAsk) {
+                        isInjecting = false
+                        resetToIdleState()
+                    }
                 }
             }
 
@@ -785,6 +1010,22 @@ class FloatingMicService : Service() {
         }
     }
 
+    private fun deliverOnDeviceTranslationResult(result: Result<String>) {
+        isInjecting = false
+        if (result.isSuccess) {
+            val t = result.getOrNull().orEmpty()
+            injectText(t)
+            sendEventToReactNative("onTranscriptionComplete", t)
+            showToast(getString(R.string.voice_injected))
+        } else {
+            val msg = result.exceptionOrNull()?.message ?: "Translation failed"
+            Log.e(TAG, "On-device translation failed: $msg")
+            sendEventToReactNative("onError", msg)
+            sendEventToReactNative("onTranscriptionError", msg)
+            showToast(msg)
+        }
+    }
+
     /**
      * Reset injection gate in accessibility service for new recording session
      */
@@ -819,6 +1060,7 @@ class FloatingMicService : Service() {
     
     private fun resetToIdleState() {
         isExternalUploading = false
+        isAskProcessing = false
         stopAliveCheck()
 
         isInjecting = false
@@ -867,6 +1109,7 @@ class FloatingMicService : Service() {
                 soundWaveView?.visibility = View.GONE
                 uploadProgress?.visibility = View.GONE
                 statusIndicatorContainer?.visibility = View.GONE
+                applyIdleOverlayAppearance()
             }
             RecordingState.RECORDING -> {
                 btnMic?.visibility = View.GONE
@@ -877,7 +1120,7 @@ class FloatingMicService : Service() {
                 soundWaveView?.startWave()
             }
             RecordingState.STOPPED -> {
-                if (isExternalUploading) {
+                if (isExternalUploading || isAskProcessing) {
                     btnMic?.visibility = View.GONE
                     btnStop?.visibility = View.GONE
                     statusIndicatorContainer?.visibility = View.VISIBLE
@@ -958,6 +1201,10 @@ class FloatingMicService : Service() {
                     }
                     ACTION_CONFIG_UPDATED -> {
                         Log.d(TAG, "⚙️ Floating mic config updated from app")
+                        mainHandler.post {
+                            hideActionMenu()
+                            applyIdleOverlayAppearance()
+                        }
                     }
                 }
             }
@@ -1011,7 +1258,7 @@ class FloatingMicService : Service() {
         // Stop alive check
         stopAliveCheck()
         
-        if (recordingState == RecordingState.RECORDING || isExternalUploading) {
+        if (recordingState == RecordingState.RECORDING || isExternalUploading || isAskProcessing) {
             try {
                 mediaRecorder?.stop()
             } catch (_: Exception) {

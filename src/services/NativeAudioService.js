@@ -1,6 +1,7 @@
 import { NativeModules, DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FileSystem, Dirs } from 'react-native-file-access';
+import { formatDateTime } from '../utils/dateTimeFormat';
 
 const { AudioRecorderModule } = NativeModules;
 
@@ -109,7 +110,7 @@ class NativeAudioService {
 
       const recordingData = {
         id: Date.now().toString(),
-        name: `Recording ${new Date().toLocaleString()}`,
+        name: `Recording ${formatDateTime(new Date())}`,
         filePath: filePath,
         duration,
         createdAt: new Date().toISOString(),
@@ -281,13 +282,7 @@ class NativeAudioService {
   }
 
   formatDate(dateString) {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return formatDateTime(dateString);
   }
 
   async forceCleanup() {

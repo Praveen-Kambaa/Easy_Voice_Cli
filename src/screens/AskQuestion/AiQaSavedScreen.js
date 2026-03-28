@@ -3,16 +3,16 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Trash2 } from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
-import { getLanguageName } from '../../constants/translationLanguages';
-import { getSavedTranslations, toggleSavedTranslation } from '../../services/translationTextStorage';
+import { getSavedAiQa, toggleSavedAiQa } from '../../services/aiQaStorage';
 import { Colors } from '../../theme/Colors';
+import { formatDateTime } from '../../utils/dateTimeFormat';
 
-const TranslatorSavedScreen = () => {
+const AiQaSavedScreen = () => {
   const navigation = useNavigation();
   const [items, setItems] = useState([]);
 
   const load = useCallback(async () => {
-    setItems(await getSavedTranslations());
+    setItems(await getSavedAiQa());
   }, []);
 
   useFocusEffect(
@@ -22,40 +22,35 @@ const TranslatorSavedScreen = () => {
   );
 
   const removeItem = async (item) => {
-    await toggleSavedTranslation({
-      sourceText: item.sourceText,
-      translatedText: item.translatedText,
-      fromCode: item.fromCode,
-      toCode: item.toCode,
-    });
+    await toggleSavedAiQa({ question: item.question, answer: item.answer });
     load();
   };
 
   const renderItem = ({ item }) => (
     <View style={styles.card}>
       <View style={styles.cardTop}>
-        <Text style={styles.meta}>
-          {getLanguageName(item.fromCode)} → {getLanguageName(item.toCode)}
-        </Text>
+        <Text style={styles.timeStamp}>{formatDateTime(item.createdAt)}</Text>
         <TouchableOpacity onPress={() => removeItem(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Trash2 size={18} color={Colors.text.secondary} strokeWidth={2} />
         </TouchableOpacity>
       </View>
-      <Text style={styles.source}>{item.sourceText}</Text>
+      <Text style={styles.label}>Question</Text>
+      <Text style={styles.question}>{item.question}</Text>
       <View style={styles.divider} />
-      <Text style={styles.target}>{item.translatedText}</Text>
+      <Text style={styles.label}>Answer</Text>
+      <Text style={styles.answer}>{item.answer}</Text>
     </View>
   );
 
   return (
     <View style={styles.screen}>
-      <AppHeader title="Saved translations" onBack={() => navigation.goBack()} />
+      <AppHeader title="Saved Q&A" onBack={() => navigation.goBack()} />
       {items.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>Nothing saved</Text>
           <Text style={styles.emptySub}>
-            Tap the star on a translation in the Translate screen to save it here. Saved items are not removed
-            automatically (unlike History, which keeps entries for two days only).
+            Tap the star on an entry in Q&A history to save it here. Saved pairs are kept until you remove them;
+            history without a star drops off after two days.
           </Text>
         </View>
       ) : (
@@ -92,17 +87,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 10,
   },
-  meta: {
+  timeStamp: {
+    fontSize: 11,
+    color: Colors.text.secondary,
+  },
+  label: {
     fontSize: 11,
     fontWeight: '700',
     color: Colors.text.light,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
-    flex: 1,
+    marginBottom: 6,
   },
-  source: {
+  question: {
     fontSize: 15,
     color: Colors.text.primary,
     lineHeight: 22,
@@ -112,7 +111,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
     marginVertical: 10,
   },
-  target: {
+  answer: {
     fontSize: 15,
     color: Colors.text.secondary,
     lineHeight: 22,
@@ -138,4 +137,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default TranslatorSavedScreen;
+export default AiQaSavedScreen;

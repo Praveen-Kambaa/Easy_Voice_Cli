@@ -152,6 +152,13 @@ class FloatingMicModule(reactContext: ReactApplicationContext) : ReactContextBas
         sourceLang: String,
         targetLang: String,
         elevenLabsApiKey: String,
+        overlayMicEnabled: Boolean,
+        overlayTranslationEnabled: Boolean,
+        internalFloatingTranslation: Boolean,
+        overlayAskQuestionEnabled: Boolean,
+        aiProviderApiKey: String,
+        aiChatApiBaseUrl: String,
+        aiChatModel: String,
         promise: Promise,
     ) {
         try {
@@ -163,6 +170,13 @@ class FloatingMicModule(reactContext: ReactApplicationContext) : ReactContextBas
                 sourceLang,
                 targetLang,
                 elevenLabsApiKey,
+                overlayMicEnabled,
+                overlayTranslationEnabled,
+                internalFloatingTranslation,
+                overlayAskQuestionEnabled,
+                aiProviderApiKey,
+                aiChatApiBaseUrl,
+                aiChatModel,
             )
             reactApplicationContext.sendBroadcast(Intent("com.typeeasy.FLOATING_MIC_CONFIG_UPDATED"))
             promise.resolve(true)
@@ -210,7 +224,8 @@ class FloatingMicModule(reactContext: ReactApplicationContext) : ReactContextBas
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
         )
         
-        val serviceName = "${context.packageName}/${context.packageName}.MyAccessibilityService"
+        val serviceName =
+            "${context.packageName}/com.typeeasy.services.MyAccessibilityService"
         return enabledServices?.contains(serviceName) == true || 
                accessibilityManager.getEnabledAccessibilityServiceList(0).any { 
                    it.resolveInfo.serviceInfo.packageName == context.packageName 

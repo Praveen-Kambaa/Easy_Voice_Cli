@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { NativeModules, DeviceEventEmitter, Platform, Alert, Linking } from 'react-native';
 import { syncFloatingMicSettingsToNative } from '../services/floatingMicConfig';
+import { logActivity, ActivityCategory } from '../services/appActivityHistoryService';
 
 const { FloatingMicModule } = NativeModules;
 
@@ -142,6 +143,9 @@ export const useFloatingMic = () => {
       const result = await FloatingMicModule.startFloatingMic();
       setIsServiceActive(true);
       console.log('Floating mic started:', result);
+      await logActivity(ActivityCategory.FLOATING_MIC, 'service_started', {
+        label: 'Floating mic overlay started',
+      });
     } catch (error) {
       console.error('Failed to start floating mic:', error);
       Alert.alert('Error', error.message || 'Failed to start floating microphone');
@@ -162,6 +166,9 @@ export const useFloatingMic = () => {
         error: null,
       });
       console.log('Floating mic stopped:', result);
+      await logActivity(ActivityCategory.FLOATING_MIC, 'service_stopped', {
+        label: 'Floating mic overlay stopped',
+      });
     } catch (error) {
       console.error('Failed to stop floating mic:', error);
       Alert.alert('Error', error.message || 'Failed to stop floating microphone');

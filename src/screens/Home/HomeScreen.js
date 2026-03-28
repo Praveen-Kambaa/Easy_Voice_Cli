@@ -19,20 +19,36 @@ import {
   FloatingSpeechHistoryService,
   FLOATING_SPEECH_UPDATED_EVENT,
 } from '../../services/FloatingSpeechHistoryService';
+import { formatTime, formatCompactDateTime } from '../../utils/dateTimeFormat';
+import {
+  getAllRecent,
+  ACTIVITY_HISTORY_UPDATED_EVENT,
+} from '../../services/appActivityHistoryService';
+
+const CATEGORY_SHORT = {
+  floating_mic: 'Floating mic',
+  voice_recorder: 'Voice',
+  recordings: 'Recordings',
+  translator: 'Translate',
+  settings: 'Settings',
+};
 
 const HomeScreen = ({ navigation }) => {
   const [recordings, setRecordings] = useState([]);
   const [speechPreview, setSpeechPreview] = useState([]);
+  const [appActivityPreview, setAppActivityPreview] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadDashboard = useCallback(async () => {
     try {
-      const [all, speechAll] = await Promise.all([
+      const [all, speechAll, recentActs] = await Promise.all([
         NativeAudioService.getAllRecordings(),
         FloatingSpeechHistoryService.getAll(),
+        getAllRecent(12),
       ]);
       setRecordings(all.slice().reverse().slice(0, 5));
       setSpeechPreview(speechAll.slice().reverse().slice(0, 4));
+      setAppActivityPreview(recentActs.slice(0, 8));
     } catch {
       // Non-critical
     }
@@ -51,9 +67,11 @@ const HomeScreen = ({ navigation }) => {
   useEffect(() => {
     const a = DeviceEventEmitter.addListener(FLOATING_SPEECH_UPDATED_EVENT, loadDashboard);
     const b = DeviceEventEmitter.addListener(VOICE_RECORDINGS_UPDATED_EVENT, loadDashboard);
+    const c = DeviceEventEmitter.addListener(ACTIVITY_HISTORY_UPDATED_EVENT, loadDashboard);
     return () => {
       a.remove();
       b.remove();
+      c.remove();
     };
   }, [loadDashboard]);
 
@@ -61,24 +79,6 @@ const HomeScreen = ({ navigation }) => {
     setRefreshing(true);
     await loadDashboard();
     setRefreshing(false);
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    return new Date(dateString).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const formatSpeechDate = (iso) => {
-    if (!iso) return '';
-    return new Date(iso).toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
   };
 
   const formatDuration = (ms) => {
@@ -163,6 +163,33 @@ const HomeScreen = ({ navigation }) => {
           ))}
         </View>
 
+        {appActivityPreview.length > 0 ? (
+          <>
+            <Text style={styles.sectionTitleActivity}>Latest actions</Text>
+            <View style={styles.activityFeedCard}>
+              {appActivityPreview.map((e) => (
+                <View key={e.id} style={styles.activityFeedRow}>
+                  <View style={styles.activityFeedDot} />
+                  <View style={styles.activityFeedBody}>
+                    <Text style={styles.activityFeedCategory}>
+                      {CATEGORY_SHORT[e.category] || e.category}
+                    </Text>
+                    <Text style={styles.activityFeedLabel} numberOfLines={2}>
+                      {e.label}
+                    </Text>
+                    {e.meta ? (
+                      <Text style={styles.activityFeedMeta} numberOfLines={1}>
+                        {e.meta}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.activityFeedTime}>{formatCompactDateTime(e.createdAt)}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        ) : null}
+
         {/* Floating mic transcripts (AsyncStorage via FloatingSpeechHistoryService) */}
         <View style={styles.sectionRow}>
           <Text style={styles.sectionTitle}>Recent transcripts</Text>
@@ -194,7 +221,7 @@ const HomeScreen = ({ navigation }) => {
                 <Text style={styles.transcriptPreviewTitle} numberOfLines={2}>
                   {entry.text}
                 </Text>
-                <Text style={styles.activityMeta}>{formatSpeechDate(entry.createdAt)}</Text>
+                <Text style={styles.activityMeta}>{formatCompactDateTime(entry.createdAt)}</Text>
               </View>
               <ChevronRight size={16} color={Colors.text.light} strokeWidth={2} />
             </TouchableOpacity>
@@ -202,7 +229,7 @@ const HomeScreen = ({ navigation }) => {
         )}
 
         {/* Recent Activity */}
-        <View style={[styles.sectionRow, { marginTop: 20 }]}>
+        <View style={styles.sectionRowRecent}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
           {recordings.length > 0 && (
             <TouchableOpacity onPress={() => navigation.navigate('RecordedAudio')}>
@@ -233,7 +260,7 @@ const HomeScreen = ({ navigation }) => {
                   {rec.refinedTranscript || rec.rawTranscript || `Recording ${String(rec.id || '').slice(-6)}`}
                 </Text>
                 <Text style={styles.activityMeta}>
-                  {formatDate(rec.createdAt)} · {formatDuration(rec.duration)}
+                  {formatTime(rec.createdAt)} · {formatDuration(rec.duration)}
                 </Text>
               </View>
               <ChevronRight size={16} color={Colors.text.light} strokeWidth={2} />
@@ -345,6 +372,13 @@ const styles = StyleSheet.create({
     color: Colors.text.primary,
     marginBottom: 12,
   },
+  sectionTitleActivity: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    marginBottom: 12,
+    marginTop: 6,
+  },
   quickGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -380,12 +414,74 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  activityFeedCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 24,
+  },
+  activityFeedRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 10,
+    gap: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  activityFeedDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.primary,
+    marginTop: 5,
+    flexShrink: 0,
+  },
+  activityFeedBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  activityFeedCategory: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.text.light,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  activityFeedLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  activityFeedMeta: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    marginTop: 2,
+  },
+  activityFeedTime: {
+    fontSize: 11,
+    color: Colors.text.light,
+    flexShrink: 0,
+    maxWidth: '32%',
+    textAlign: 'right',
+  },
+
   // Section header row
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 12,
+  },
+  sectionRowRecent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    marginTop: 20,
   },
   viewAllText: {
     fontSize: 13,

@@ -48,6 +48,10 @@
 # Keep JS bundle
 -keep class com.typeeasy.MainActivity { *; }
 
+# Google ML Kit (on-device translation)
+-keep class com.google.mlkit.** { *; }
+-dontwarn com.google.mlkit.**
+
 # Keep all React Native packages
 -keep class * extends com.facebook.react.ReactPackage { *; }
 

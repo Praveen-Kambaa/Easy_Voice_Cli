@@ -1,6 +1,8 @@
 // Simple in-memory storage for demo purposes
 // In production, this would use proper persistent storage
 
+import { formatDateOnly } from '../utils/dateTimeFormat';
+
 let recordings = [];
 
 export const AudioStorageService = {
@@ -44,9 +46,7 @@ export const AudioStorageService = {
   },
 
   formatDate(dateString) {
-    const date = new Date(dateString);
-    const options = { day: '2-digit', month: 'short', year: 'numeric' };
-    return date.toLocaleDateString('en-US', options);
+    return formatDateOnly(dateString);
   },
 
   formatDuration(durationMs) {

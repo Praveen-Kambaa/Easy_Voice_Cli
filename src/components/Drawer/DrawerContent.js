@@ -13,6 +13,7 @@ import {
   ChevronRight,
   History,
   Languages,
+  MessageCircle,
 } from 'lucide-react-native';
 import { Colors } from '../../theme/Colors';
 import { APP_NAME, APP_TAGLINE } from '../../constants';
@@ -26,6 +27,7 @@ const MENU_ITEMS = [
   { title: 'Floating Mic', description: 'Background recording', Icon: Radio, screen: 'FloatingMic' },
   { title: 'My Recordings', description: 'View saved audio', Icon: Music, screen: 'RecordedAudio' },
   { title: 'Speech History', description: 'Floating mic transcripts', Icon: History, screen: 'FloatingMicHistory' },
+  { title: 'Ask Question', description: 'Voice Q&A — answer pastes here', Icon: MessageCircle, screen: 'AskQuestion' },
   { title: 'Translator', description: 'Text translation', Icon: Languages, screen: 'Translator' },
   { title: 'Settings', description: 'Permissions & preferences', Icon: Settings, screen: 'Settings' },
 ];

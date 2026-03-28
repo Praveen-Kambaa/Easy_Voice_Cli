@@ -10,16 +10,24 @@ import {
   ActivityIndicator,
   DeviceEventEmitter,
 } from 'react-native';
-import { Play, Square, Music2, Trash2, Pencil, Zap, X, Plus, Send } from 'lucide-react-native';
+import { Play, Square, Music2, Trash2, Pencil, Zap, Plus } from 'lucide-react-native';
 import NativeAudioService, { VOICE_RECORDINGS_UPDATED_EVENT } from '../../services/NativeAudioService';
 import { voiceApi } from '../../api/voiceApi';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { useAlert } from '../../context/AlertContext';
 import { Colors } from '../../theme/Colors';
+import { formatDateTime, formatCompactDateTime } from '../../utils/dateTimeFormat';
+import {
+  logActivity,
+  ActivityCategory,
+  getByCategory,
+  ACTIVITY_HISTORY_UPDATED_EVENT,
+} from '../../services/appActivityHistoryService';
 
 const RecordedAudioScreen = ({ navigation }) => {
   const showAlert = useAlert();
   const [recordings, setRecordings] = useState([]);
+  const [recentActivities, setRecentActivities] = useState([]);
   const [playingStates, setPlayingStates] = useState({});
   const [refreshing, setRefreshing] = useState(false);
   const [editingTranscript, setEditingTranscript] = useState(null);
@@ -34,13 +42,23 @@ const RecordedAudioScreen = ({ navigation }) => {
     const sub = DeviceEventEmitter.addListener(VOICE_RECORDINGS_UPDATED_EVENT, () => {
       loadRecordings();
     });
-    return () => sub.remove();
+    const subAct = DeviceEventEmitter.addListener(ACTIVITY_HISTORY_UPDATED_EVENT, () => {
+      loadRecordings();
+    });
+    return () => {
+      sub.remove();
+      subAct.remove();
+    };
   }, []);
 
   const loadRecordings = async () => {
     try {
-      const stored = await NativeAudioService.getAllRecordings();
+      const [stored, acts] = await Promise.all([
+        NativeAudioService.getAllRecordings(),
+        getByCategory(ActivityCategory.RECORDINGS, 30),
+      ]);
       setRecordings(stored.reverse());
+      setRecentActivities(acts);
     } catch (error) {
       console.error('Error loading recordings:', error);
     }
@@ -70,6 +88,11 @@ const RecordedAudioScreen = ({ navigation }) => {
       if (!result.success) {
         showAlert('Playback Error', result.error);
         setPlayingStates(prev => ({ ...prev, [recordingId]: 'stopped' }));
+      } else {
+        await logActivity(ActivityCategory.RECORDINGS, 'playback_started', {
+          label: 'Played recording',
+          meta: `ID …${String(recordingId).slice(-6)}`,
+        });
       }
     } catch {
       showAlert('Error', 'Failed to play audio');
@@ -96,6 +119,10 @@ const RecordedAudioScreen = ({ navigation }) => {
             try {
               const result = await NativeAudioService.deleteRecording(recordingId);
               if (result.success) {
+                await logActivity(ActivityCategory.RECORDINGS, 'recording_deleted', {
+                  label: 'Recording deleted',
+                  meta: `ID …${String(recordingId).slice(-6)}`,
+                });
                 await loadRecordings();
               } else {
                 showAlert('Error', result.error);
@@ -125,6 +152,10 @@ const RecordedAudioScreen = ({ navigation }) => {
           await NativeAudioService.updateRecordingTranscript(recording.id, updated);
           setRecordings(prev => prev.map(r => r.id === recording.id ? updated : r));
           showAlert('Saved', 'Transcript updated successfully.');
+          await logActivity(ActivityCategory.RECORDINGS, 'transcript_updated', {
+            label: 'Transcript saved',
+            meta: transcriptText.trim().slice(0, 160),
+          });
         } else {
           showAlert('Error', updateResult.error);
           return;
@@ -158,6 +189,10 @@ const RecordedAudioScreen = ({ navigation }) => {
       });
 
       if (executeResult.success) {
+        await logActivity(ActivityCategory.RECORDINGS, 'command_executed', {
+          label: 'Voice command sent',
+          meta: currentTranscript.slice(0, 160),
+        });
         showAlert('Command Executed!', 'Voice command processed successfully.', [{ text: 'OK' }]);
       } else {
         throw new Error(executeResult.error);
@@ -179,16 +214,6 @@ const RecordedAudioScreen = ({ navigation }) => {
     return `${Math.floor(s / 60).toString().padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
   };
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
   const renderRecordingItem = ({ item, index }) => {
     const isPlaying = playingStates[item.id] === 'playing';
     const isEditing = editingTranscript === item.id;
@@ -204,7 +229,7 @@ const RecordedAudioScreen = ({ navigation }) => {
           </View>
           <View style={styles.trackMeta}>
             <Text style={styles.trackTitle}>Recording {String(item.id).slice(-6)}</Text>
-            <Text style={styles.trackDate}>{formatDate(item.createdAt)}</Text>
+            <Text style={styles.trackDate}>{formatDateTime(item.createdAt)}</Text>
           </View>
           <TouchableOpacity
             style={styles.deleteBtn}
@@ -315,6 +340,24 @@ const RecordedAudioScreen = ({ navigation }) => {
     );
   };
 
+  const renderActivityFooter = () => {
+    if (recentActivities.length === 0) return null;
+    return (
+      <View style={styles.activitySection}>
+        <Text style={styles.activitySectionTitle}>Recent actions</Text>
+        {recentActivities.map((a) => (
+          <View key={a.id} style={styles.activityLogRow}>
+            <View style={styles.activityLogMain}>
+              <Text style={styles.activityLogLabel}>{a.label}</Text>
+              {a.meta ? <Text style={styles.activityLogMeta} numberOfLines={2}>{a.meta}</Text> : null}
+            </View>
+            <Text style={styles.activityLogTime}>{formatCompactDateTime(a.createdAt)}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
   const renderEmpty = () => (
     <View style={styles.emptyState}>
       <View style={styles.emptyIconCircle}>
@@ -356,6 +399,7 @@ const RecordedAudioScreen = ({ navigation }) => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
         }
         ListEmptyComponent={renderEmpty}
+        ListFooterComponent={renderActivityFooter}
         showsVerticalScrollIndicator={false}
       />
     </View>
@@ -385,6 +429,47 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 48,
     flexGrow: 1,
+  },
+  activitySection: {
+    marginTop: 8,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  activitySectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    marginBottom: 12,
+    letterSpacing: 0.3,
+  },
+  activityLogRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  activityLogMain: {
+    flex: 1,
+  },
+  activityLogLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  activityLogMeta: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    marginTop: 4,
+  },
+  activityLogTime: {
+    fontSize: 11,
+    color: Colors.text.light,
+    flexShrink: 0,
+    maxWidth: '38%',
+    textAlign: 'right',
   },
 
   // Player card
@@ -654,22 +739,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
-  },
-  trackIconText: {
-    fontSize: 18,
-    color: '#FFFFFF',
-  },
-  deleteBtnText: {
-    fontSize: 12,
-    color: Colors.recording.active,
-    fontWeight: '700',
-  },
-  playPauseBtnIcon: {
-    fontSize: 14,
-    color: '#FFFFFF',
-  },
-  executeBtnIcon: {
-    fontSize: 13,
   },
 });
 

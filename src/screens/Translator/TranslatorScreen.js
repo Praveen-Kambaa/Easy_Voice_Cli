@@ -10,34 +10,58 @@ import {
   Platform,
   Share,
   ScrollView,
+  Clipboard,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import {
-  Mic,
   X,
   ArrowLeftRight,
   Star,
   Volume2,
   Share2,
+  Copy,
+  Mic,
+  MessageCircle,
   History,
   Bookmark,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppHeader } from '../../components/Header/AppHeader';
-import { getLanguageName } from '../../constants/translationLanguages';
-import { translateText } from '../../services/textTranslationApi';
+import { LanguagePickerModal } from '../../components/LanguagePickerModal';
+import {
+  TRANSLATION_LANGUAGES,
+  getLanguageName,
+  normalizeStoredLanguageCode,
+} from '../../constants/translationLanguages';
+import { translateOffline, translateEnglishToTarget } from '../../services/translationService';
+import {
+  startTranslatorRecording,
+  stopTranslatorRecordingAndTranscribe,
+} from '../../services/speechService';
 import {
   addTranslationHistory,
   isTranslationSaved,
   toggleSavedTranslation,
 } from '../../services/translationTextStorage';
-import { syncFloatingMicSettingsToNative } from '../../services/floatingMicConfig';
+import { addAiQaHistory } from '../../services/aiQaStorage';
+import {
+  syncFloatingMicSettingsToNative,
+  getOverlayAskQuestionEnabled,
+} from '../../services/floatingMicConfig';
+import { askQuestion } from '../../services/aiService';
 import { Colors } from '../../theme/Colors';
+import { logActivity, ActivityCategory } from '../../services/appActivityHistoryService';
+import { useAlert } from '../../context/AlertContext';
+import {
+  speakTranslatedText,
+  stopTranslationSpeech,
+} from '../../services/translationTtsService';
 
 /** Subtle tint for translated block (light theme, matches “output” panel feel) */
 const OUTPUT_TINT = 'rgba(14, 165, 233, 0.08)';
 
 const TranslatorScreen = ({ navigation }) => {
+  const showAlert = useAlert();
   const [fromCode, setFromCode] = useState('en');
   const [toCode, setToCode] = useState('es');
   const [sourceText, setSourceText] = useState('');
@@ -45,33 +69,110 @@ const TranslatorScreen = ({ navigation }) => {
   const [translateError, setTranslateError] = useState('');
   const [translating, setTranslating] = useState(false);
   const [starred, setStarred] = useState(false);
+  const [recordingVoice, setRecordingVoice] = useState(false);
+  const [transcribingVoice, setTranscribingVoice] = useState(false);
+  /** null | 'from' | 'to' */
+  const [languagePickerFor, setLanguagePickerFor] = useState(null);
 
   const requestIdRef = useRef(0);
+  const debounceTimerRef = useRef(null);
+  /** After voice input, source text is English until the user edits the field */
+  const sttSourceLangRef = useRef(null);
+  /** Skip one debounced translate after Ask Question fills source + translation */
+  const skipNextSourceTranslateRef = useRef(false);
 
-  const openSettings = useCallback(() => {
-    const parent = navigation.getParent?.();
-    if (parent) parent.navigate('Settings');
-    else navigation.navigate('Settings');
-  }, [navigation]);
+  const [askFeatureEnabled, setAskFeatureEnabled] = useState(false);
+  const [recordingAskVoice, setRecordingAskVoice] = useState(false);
+  const [askBusyPhase, setAskBusyPhase] = useState(
+    /** @type {'transcribe' | 'ai' | null} */ (null),
+  );
 
   const loadLanguages = useCallback(async () => {
     try {
       const f = await AsyncStorage.getItem('@from_language');
       const t = await AsyncStorage.getItem('@to_language');
-      if (f) setFromCode(f);
-      if (t) setToCode(t);
+      if (f) setFromCode(normalizeStoredLanguageCode(f, 'en'));
+      if (t) setToCode(normalizeStoredLanguageCode(t, 'es'));
+      if (Platform.OS === 'android') {
+        setAskFeatureEnabled(await getOverlayAskQuestionEnabled());
+      } else {
+        setAskFeatureEnabled(false);
+      }
     } catch {
       // ignore
     }
   }, []);
 
+  const onSelectLanguageFromPicker = useCallback(
+    async (code) => {
+      try {
+        if (languagePickerFor === 'from') {
+          setFromCode(code);
+          await AsyncStorage.setItem('@from_language', code);
+        } else if (languagePickerFor === 'to') {
+          setToCode(code);
+          await AsyncStorage.setItem('@to_language', code);
+        }
+        await syncFloatingMicSettingsToNative();
+      } catch {
+        // ignore
+      }
+    },
+    [languagePickerFor],
+  );
+
   useFocusEffect(
     useCallback(() => {
       loadLanguages();
+      return () => {
+        stopTranslationSpeech();
+      };
     }, [loadLanguages]),
   );
 
+  const runTranslation = useCallback(
+    async (trimmed, id) => {
+      if (!trimmed) {
+        setTranslatedText('');
+        setTranslateError('');
+        setTranslating(false);
+        return;
+      }
+      const sourceAppCode = sttSourceLangRef.current ?? fromCode;
+      setTranslating(true);
+      setTranslateError('');
+      console.log('[Translator] runTranslation', { sourceAppCode, fromCode, toCode, len: trimmed.length });
+      try {
+        const result = await translateOffline({
+          text: trimmed,
+          sourceAppCode,
+          targetAppCode: toCode,
+        });
+        if (id !== requestIdRef.current) return;
+        if (result.success) {
+          setTranslatedText(result.translatedText);
+          await addTranslationHistory({
+            sourceText: trimmed,
+            translatedText: result.translatedText,
+            fromCode: sourceAppCode,
+            toCode,
+          });
+        } else {
+          setTranslatedText('');
+          setTranslateError(result.error);
+        }
+      } finally {
+        if (id === requestIdRef.current) setTranslating(false);
+      }
+    },
+    [fromCode, toCode],
+  );
+
   useEffect(() => {
+    if (skipNextSourceTranslateRef.current) {
+      skipNextSourceTranslateRef.current = false;
+      return;
+    }
     const trimmed = sourceText.trim();
     if (!trimmed) {
       setTranslatedText('');
@@ -80,35 +181,14 @@ const TranslatorScreen = ({ navigation }) => {
       return;
     }
 
-    const handle = setTimeout(async () => {
+    clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
       const id = ++requestIdRef.current;
-      setTranslating(true);
-      setTranslateError('');
-      try {
-        const out = await translateText({
-          text: trimmed,
-          sourceLanguage: fromCode,
-          targetLanguage: toCode,
-        });
-        if (id !== requestIdRef.current) return;
-        setTranslatedText(out);
-        await addTranslationHistory({
-          sourceText: trimmed,
-          translatedText: out,
-          fromCode,
-          toCode,
-        });
-      } catch (e) {
-        if (id !== requestIdRef.current) return;
-        setTranslatedText('');
-        setTranslateError(e?.message || 'Translation failed');
-      } finally {
-        if (id === requestIdRef.current) setTranslating(false);
-      }
+      runTranslation(trimmed, id);
     }, 480);
 
-    return () => clearTimeout(handle);
-  }, [sourceText, fromCode, toCode]);
+    return () => clearTimeout(debounceTimerRef.current);
+  }, [sourceText, fromCode, toCode, runTranslation]);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,7 +197,8 @@ const TranslatorScreen = ({ navigation }) => {
         if (!cancelled) setStarred(false);
         return;
       }
-      const s = await isTranslationSaved(sourceText.trim(), fromCode, toCode);
+      const effectiveFrom = sttSourceLangRef.current ?? fromCode;
+      const s = await isTranslationSaved(sourceText.trim(), effectiveFrom, toCode);
       if (!cancelled) setStarred(s);
     })();
     return () => {
@@ -140,13 +221,129 @@ const TranslatorScreen = ({ navigation }) => {
   };
 
   const clearSource = () => {
+    sttSourceLangRef.current = null;
+    skipNextSourceTranslateRef.current = false;
     setSourceText('');
     setTranslatedText('');
     setTranslateError('');
   };
 
-  const onMicPress = () => {
-    /* Voice input — wire when API/flow is ready */
+  const onSourceChange = (t) => {
+    sttSourceLangRef.current = null;
+    setSourceText(t);
+  };
+
+  const onMicPress = async () => {
+    if (recordingAskVoice || askBusyPhase) return;
+    if (transcribingVoice || (translating && !recordingVoice)) return;
+
+    if (recordingVoice) {
+      setRecordingVoice(false);
+      setTranscribingVoice(true);
+      setTranslateError('');
+      const id = ++requestIdRef.current;
+      clearTimeout(debounceTimerRef.current);
+      try {
+        const tx = await stopTranslatorRecordingAndTranscribe({ language: 'en-US' });
+        if (id !== requestIdRef.current) return;
+        if (!tx.success) {
+          setTranslateError(tx.error || 'Transcription failed');
+          return;
+        }
+        sttSourceLangRef.current = 'en';
+        setSourceText(tx.transcript);
+        setTranslatedText('');
+        setTranslating(true);
+        setTranslateError('');
+        console.log('[Translator] voice → ML Kit (en → target)', toCode);
+        const tr = await translateEnglishToTarget(tx.transcript, toCode);
+        if (id !== requestIdRef.current) return;
+        if (tr.success) {
+          setTranslatedText(tr.translatedText);
+          await addTranslationHistory({
+            sourceText: tx.transcript,
+            translatedText: tr.translatedText,
+            fromCode: 'en',
+            toCode,
+          });
+        } else {
+          setTranslatedText('');
+          setTranslateError(tr.error);
+        }
+      } finally {
+        setTranscribingVoice(false);
+        if (id === requestIdRef.current) setTranslating(false);
+      }
+      return;
+    }
+
+    clearTimeout(debounceTimerRef.current);
+    setTranslateError('');
+    setTranslatedText('');
+    const started = await startTranslatorRecording();
+    if (!started.success) {
+      setTranslateError(started.error || 'Could not access microphone');
+      return;
+    }
+    setRecordingVoice(true);
+    console.log('[Translator] recording started');
+  };
+
+  const onAskPress = async () => {
+    if (recordingVoice || transcribingVoice || askBusyPhase) return;
+    if (translating && !recordingAskVoice) return;
+
+    if (recordingAskVoice) {
+      setRecordingAskVoice(false);
+      setAskBusyPhase('transcribe');
+      setTranslateError('');
+      const id = ++requestIdRef.current;
+      clearTimeout(debounceTimerRef.current);
+      try {
+        const tx = await stopTranslatorRecordingAndTranscribe({ language: 'en-US' });
+        if (id !== requestIdRef.current) return;
+        if (!tx.success) {
+          setTranslateError(tx.error || 'Transcription failed');
+          return;
+        }
+        setAskBusyPhase('ai');
+        const ai = await askQuestion(tx.transcript);
+        if (id !== requestIdRef.current) return;
+        if (!ai.success) {
+          setTranslateError(ai.error || 'AI request failed');
+          return;
+        }
+        skipNextSourceTranslateRef.current = true;
+        sttSourceLangRef.current = 'en';
+        setSourceText(tx.transcript);
+        setTranslatedText(ai.answer);
+        setTranslateError('');
+        await addTranslationHistory({
+          sourceText: tx.transcript,
+          translatedText: ai.answer,
+          fromCode: 'en',
+          toCode: 'en',
+        });
+        await addAiQaHistory({ question: tx.transcript, answer: ai.answer });
+        await logActivity(ActivityCategory.TRANSLATOR, 'ask_question_answered', {
+          label: 'Ask Question (AI answer, no translate)',
+          meta: 'en',
+        });
+      } finally {
+        setAskBusyPhase(null);
+      }
+      return;
+    }
+
+    clearTimeout(debounceTimerRef.current);
+    setTranslateError('');
+    setTranslatedText('');
+    const started = await startTranslatorRecording();
+    if (!started.success) {
+      setTranslateError(started.error || 'Could not access microphone');
+      return;
+    }
+    setRecordingAskVoice(true);
   };
 
   const onShareTranslation = async () => {
@@ -158,21 +355,47 @@ const TranslatorScreen = ({ navigation }) => {
     }
   };
 
+  const onSpeakTranslation = useCallback(async () => {
+    if (!translatedText?.trim()) return;
+    const r = await speakTranslatedText(translatedText, toCode);
+    if (!r.success) {
+      showAlert('Read aloud', r.error || 'Could not play speech');
+    }
+  }, [translatedText, toCode, showAlert]);
+
+  const onCopyTranslation = useCallback(() => {
+    if (!translatedText?.trim()) return;
+    Clipboard.setString(translatedText);
+    showAlert('Copied', 'Translation copied to clipboard.');
+  }, [translatedText, showAlert]);
+
   const onToggleStar = async () => {
     const src = sourceText.trim();
     if (!src || !translatedText) return;
+    const effectiveFrom = sttSourceLangRef.current ?? fromCode;
     const nowSaved = await toggleSavedTranslation({
       sourceText: src,
       translatedText,
-      fromCode,
+      fromCode: effectiveFrom,
       toCode,
     });
     setStarred(nowSaved);
+    await logActivity(
+      ActivityCategory.TRANSLATOR,
+      nowSaved ? 'translation_favorited' : 'translation_unfavorited',
+      {
+        label: nowSaved ? 'Saved translation' : 'Removed saved translation',
+        meta: `${effectiveFrom} → ${toCode}`,
+      },
+    );
   };
 
   const charCount = sourceText.length;
   const fromName = getLanguageName(fromCode);
   const toName = getLanguageName(toCode);
+
+  const askLoadingLabel =
+    askBusyPhase === 'transcribe' ? 'Transcribing…' : askBusyPhase === 'ai' ? 'Asking AI…' : '';
 
   const iconMuted = Colors.text.secondary;
   const starColor = starred ? '#F59E0B' : Colors.text.secondary;
@@ -181,16 +404,32 @@ const TranslatorScreen = ({ navigation }) => {
     <View style={styles.screen}>
       <AppHeader title="Translate" />
 
+      <LanguagePickerModal
+        visible={languagePickerFor !== null}
+        onClose={() => setLanguagePickerFor(null)}
+        title={languagePickerFor === 'from' ? 'Translate from' : 'Translate to'}
+        languages={TRANSLATION_LANGUAGES}
+        selectedCode={
+          languagePickerFor === 'from'
+            ? fromCode
+            : languagePickerFor === 'to'
+              ? toCode
+              : ''
+        }
+        onSelect={onSelectLanguageFromPicker}
+      />
+
       {Platform.OS === 'ios' ? (
         <KeyboardAvoidingView style={styles.kav} behavior="padding" keyboardVerticalOffset={8}>
           <TranslatorScrollBody
             navigation={navigation}
             fromName={fromName}
             toName={toName}
-            openSettings={openSettings}
+            onPressFromLang={() => setLanguagePickerFor('from')}
+            onPressToLang={() => setLanguagePickerFor('to')}
             swapLanguages={swapLanguages}
             sourceText={sourceText}
-            setSourceText={setSourceText}
+            onSourceChange={onSourceChange}
             translatedText={translatedText}
             translateError={translateError}
             translating={translating}
@@ -200,8 +439,17 @@ const TranslatorScreen = ({ navigation }) => {
             starColor={starColor}
             clearSource={clearSource}
             onMicPress={onMicPress}
+            recordingVoice={recordingVoice}
+            transcribingVoice={transcribingVoice}
+            askFeatureEnabled={askFeatureEnabled}
+            onAskPress={onAskPress}
+            recordingAskVoice={recordingAskVoice}
+            askBusyPhase={askBusyPhase}
+            askLoadingLabel={askLoadingLabel}
             onToggleStar={onToggleStar}
             onShareTranslation={onShareTranslation}
+            onSpeakTranslation={onSpeakTranslation}
+            onCopyTranslation={onCopyTranslation}
           />
         </KeyboardAvoidingView>
       ) : (
@@ -210,10 +458,11 @@ const TranslatorScreen = ({ navigation }) => {
             navigation={navigation}
             fromName={fromName}
             toName={toName}
-            openSettings={openSettings}
+            onPressFromLang={() => setLanguagePickerFor('from')}
+            onPressToLang={() => setLanguagePickerFor('to')}
             swapLanguages={swapLanguages}
             sourceText={sourceText}
-            setSourceText={setSourceText}
+            onSourceChange={onSourceChange}
             translatedText={translatedText}
             translateError={translateError}
             translating={translating}
@@ -223,8 +472,17 @@ const TranslatorScreen = ({ navigation }) => {
             starColor={starColor}
             clearSource={clearSource}
             onMicPress={onMicPress}
+            recordingVoice={recordingVoice}
+            transcribingVoice={transcribingVoice}
+            askFeatureEnabled={askFeatureEnabled}
+            onAskPress={onAskPress}
+            recordingAskVoice={recordingAskVoice}
+            askBusyPhase={askBusyPhase}
+            askLoadingLabel={askLoadingLabel}
             onToggleStar={onToggleStar}
             onShareTranslation={onShareTranslation}
+            onSpeakTranslation={onSpeakTranslation}
+            onCopyTranslation={onCopyTranslation}
           />
         </View>
       )}
@@ -237,10 +495,11 @@ function TranslatorScrollBody({
   navigation,
   fromName,
   toName,
-  openSettings,
+  onPressFromLang,
+  onPressToLang,
   swapLanguages,
   sourceText,
-  setSourceText,
+  onSourceChange,
   translatedText,
   translateError,
   translating,
@@ -250,8 +509,12 @@ function TranslatorScrollBody({
   starColor,
   clearSource,
   onMicPress,
+  recordingVoice,
+  transcribingVoice,
   onToggleStar,
   onShareTranslation,
+  onSpeakTranslation,
+  onCopyTranslation,
 }) {
   return (
         <ScrollView
@@ -262,7 +525,7 @@ function TranslatorScrollBody({
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.langBar}>
-            <TouchableOpacity style={styles.langBtn} onPress={openSettings} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.langBtn} onPress={onPressFromLang} activeOpacity={0.7}>
               <Text style={styles.langText} numberOfLines={1}>
                 {fromName}
               </Text>
@@ -272,14 +535,25 @@ function TranslatorScrollBody({
               <ArrowLeftRight size={22} color={Colors.primary} strokeWidth={2.2} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.langBtn} onPress={openSettings} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.langBtn} onPress={onPressToLang} activeOpacity={0.7}>
               <Text style={styles.langText} numberOfLines={1}>
                 {toName}
               </Text>
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.langHint}>Languages are saved in Settings</Text>
+          <Text style={styles.langHint}>Tap a language to change · search in the picker</Text>
+          {Platform.OS === 'android' ? (
+            <Text style={styles.langHintVoice}>
+              Typed text: on-device translate ({fromName} → {toName}). Voice: English speech-to-text,
+              then on-device translate to {toName}.
+            </Text>
+          ) : (
+            <Text style={styles.langHintVoice}>
+              On-device translation (ML Kit) runs on Android. On iOS, use typed text with your existing
+              server translator if configured.
+            </Text>
+          )}
 
           <View style={styles.columns}>
             <View style={[styles.panel, styles.panelSource]}>
@@ -296,16 +570,65 @@ function TranslatorScrollBody({
                 placeholder="Enter text"
                 placeholderTextColor={Colors.text.light}
                 value={sourceText}
-                onChangeText={setSourceText}
+                onChangeText={onSourceChange}
                 multiline
                 textAlignVertical="top"
                 scrollEnabled
                 maxLength={5000}
               />
               <View style={styles.panelToolbar}>
-                <TouchableOpacity style={styles.iconHit} onPress={onMicPress} activeOpacity={0.65}>
-                  <Mic size={22} color={iconMuted} strokeWidth={2} />
+                <TouchableOpacity
+                  style={styles.iconHit}
+                  onPress={onMicPress}
+                  activeOpacity={0.65}
+                  disabled={
+                    transcribingVoice ||
+                    (translating && !recordingVoice) ||
+                    recordingAskVoice ||
+                    !!askBusyPhase
+                  }
+                >
+                  <Mic
+                    size={22}
+                    color={
+                      recordingVoice
+                        ? Colors.primary
+                        : transcribingVoice || (translating && !recordingVoice)
+                          ? Colors.borderLight
+                          : iconMuted
+                    }
+                    strokeWidth={2}
+                  />
                 </TouchableOpacity>
+                {askFeatureEnabled ? (
+                  <TouchableOpacity
+                    style={styles.iconHit}
+                    onPress={onAskPress}
+                    activeOpacity={0.65}
+                    disabled={
+                      transcribingVoice ||
+                      recordingVoice ||
+                      (translating && !recordingAskVoice) ||
+                      !!askBusyPhase
+                    }
+                    accessibilityLabel="Ask question with voice"
+                  >
+                    <MessageCircle
+                      size={22}
+                      color={
+                        recordingAskVoice
+                          ? Colors.primary
+                          : transcribingVoice ||
+                              recordingVoice ||
+                              (translating && !recordingAskVoice) ||
+                              askBusyPhase
+                            ? Colors.borderLight
+                            : iconMuted
+                      }
+                      strokeWidth={2}
+                    />
+                  </TouchableOpacity>
+                ) : null}
                 <View style={styles.flex1} />
                 <Text style={styles.charCount}>{charCount}</Text>
               </View>
@@ -335,10 +658,14 @@ function TranslatorScrollBody({
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
               >
-                {translating && !translatedText && !translateError ? (
+                {(translating || transcribingVoice || askBusyPhase) &&
+                !translatedText &&
+                !translateError ? (
                   <View style={styles.loadingRow}>
                     <ActivityIndicator color={Colors.primary} size="small" />
-                    <Text style={styles.loadingText}>Translating…</Text>
+                    <Text style={styles.loadingText}>
+                      {askBusyPhase ? askLoadingLabel : transcribingVoice ? 'Transcribing…' : 'Translating…'}
+                    </Text>
                   </View>
                 ) : translateError ? (
                   <Text style={styles.errorText}>{translateError}</Text>
@@ -350,8 +677,27 @@ function TranslatorScrollBody({
               </ScrollView>
 
               <View style={styles.panelToolbar}>
-                <TouchableOpacity style={styles.iconHit} activeOpacity={0.5} disabled={!translatedText}>
+                <TouchableOpacity
+                  style={styles.iconHit}
+                  activeOpacity={0.5}
+                  disabled={!translatedText}
+                  onPress={onSpeakTranslation}
+                  accessibilityLabel="Read translation aloud"
+                >
                   <Volume2
+                    size={22}
+                    color={translatedText ? iconMuted : Colors.borderLight}
+                    strokeWidth={2}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.iconHit}
+                  onPress={onCopyTranslation}
+                  disabled={!translatedText}
+                  activeOpacity={0.65}
+                  accessibilityLabel="Copy translation"
+                >
+                  <Copy
                     size={22}
                     color={translatedText ? iconMuted : Colors.borderLight}
                     strokeWidth={2}
@@ -362,6 +708,7 @@ function TranslatorScrollBody({
                   onPress={onShareTranslation}
                   disabled={!translatedText}
                   activeOpacity={0.65}
+                  accessibilityLabel="Share translation"
                 >
                   <Share2
                     size={22}
@@ -450,8 +797,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.text.secondary,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
     paddingHorizontal: 20,
+  },
+  langHintVoice: {
+    fontSize: 10,
+    color: Colors.text.light,
+    textAlign: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 16,
+    lineHeight: 14,
   },
   columns: {
     paddingHorizontal: 12,
@@ -516,6 +871,8 @@ const styles = StyleSheet.create({
   panelToolbar: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,

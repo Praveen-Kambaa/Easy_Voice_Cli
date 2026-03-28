@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NativeModules, DeviceEventEmitter, Platform, Alert } from 'react-native';
+import { formatTime } from '../utils/dateTimeFormat';
 
 const { FloatingMicModule } = NativeModules;
 
@@ -51,7 +52,7 @@ export const useSpeechDebug = () => {
   }, []);
 
   const addLog = (message, type = 'info') => {
-    const timestamp = new Date().toLocaleTimeString();
+    const timestamp = formatTime(new Date());
     setDebugLogs(prev => [...prev.slice(-19), { message, type, timestamp }]);
   };
 

@@ -15,19 +15,30 @@ import {
   FloatingSpeechHistoryService,
   FLOATING_SPEECH_UPDATED_EVENT,
 } from '../../services/FloatingSpeechHistoryService';
+import { formatDateTime } from '../../utils/dateTimeFormat';
 import { useAlert } from '../../context/AlertContext';
 import { Colors } from '../../theme/Colors';
 
+/**
+ * Speech history lists floating-mic transcriptions only (saved via FloatingSpeechHistorySync).
+ * Overlay start/stop events are no longer mixed in so this screen shows what users expect: spoken text.
+ */
 const FloatingMicHistoryScreen = ({ navigation }) => {
   const showAlert = useAlert();
-  const [entries, setEntries] = useState([]);
+  const [rows, setRows] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    console.log('🔄 FloatingMicHistoryScreen: Loading history...');
-    const entriesList = await FloatingSpeechHistoryService.getAll();
-    console.log('📋 FloatingMicHistoryScreen: Loaded entries:', entriesList.length);
-    setEntries(entriesList.slice().reverse());
+    const transcripts = await FloatingSpeechHistoryService.getAll();
+    const sorted = transcripts
+      .map((e) => ({
+        rowKey: `t_${e.id}`,
+        createdAt: e.createdAt,
+        id: e.id,
+        text: e.text,
+      }))
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    setRows(sorted);
   }, []);
 
   useFocusEffect(
@@ -37,9 +48,7 @@ const FloatingMicHistoryScreen = ({ navigation }) => {
   );
 
   useEffect(() => {
-    const sub = DeviceEventEmitter.addListener(FLOATING_SPEECH_UPDATED_EVENT, () => {
-      load();
-    });
+    const sub = DeviceEventEmitter.addListener(FLOATING_SPEECH_UPDATED_EVENT, load);
     return () => sub.remove();
   }, [load]);
 
@@ -49,16 +58,7 @@ const FloatingMicHistoryScreen = ({ navigation }) => {
     setRefreshing(false);
   };
 
-  const formatDate = (iso) =>
-    new Date(iso).toLocaleString('en-US', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-
-  const handleDelete = (item) => {
+  const handleDeleteTranscript = (item) => {
     showAlert('Delete entry', 'Remove this transcript from history?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -74,16 +74,21 @@ const FloatingMicHistoryScreen = ({ navigation }) => {
   };
 
   const renderItem = ({ item }) => (
-    <View style={styles.card}>
+    <View style={[styles.card, styles.transcriptCard]}>
       <View style={styles.cardTop}>
         <View style={styles.badgeRow}>
           <Radio size={12} color={Colors.text.light} strokeWidth={2} />
-          <Text style={styles.badgeText}>Floating mic</Text>
+          <Text style={styles.badgeText}>Transcript</Text>
         </View>
-        <Text style={styles.dateText}>{formatDate(item.createdAt)}</Text>
+        <Text style={styles.dateText}>{formatDateTime(item.createdAt)}</Text>
       </View>
       <Text style={styles.bodyText}>{item.text}</Text>
-      <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item)} hitSlop={8}>
+      <TouchableOpacity
+        style={styles.deleteBtn}
+        onPress={() => handleDeleteTranscript(item)}
+        hitSlop={8}
+        activeOpacity={0.75}
+      >
         <Trash2 size={16} color={Colors.recording.active} strokeWidth={2} />
         <Text style={styles.deleteLabel}>Delete</Text>
       </TouchableOpacity>
@@ -95,9 +100,10 @@ const FloatingMicHistoryScreen = ({ navigation }) => {
       <View style={styles.emptyIcon}>
         <MessageSquareText size={40} color="#FFFFFF" strokeWidth={1.4} />
       </View>
-      <Text style={styles.emptyTitle}>No speech history yet</Text>
+      <Text style={styles.emptyTitle}>No transcripts yet</Text>
       <Text style={styles.emptyDesc}>
-        When you use the floating mic and speech is converted to text, it will appear here.
+        When you finish speaking with the floating mic, the recognized text is saved here. Open the app once
+        after dictation so it can sync. Entries older than two days are removed automatically.
       </Text>
       <TouchableOpacity style={styles.emptyCta} onPress={() => navigation.navigate('FloatingMic')}>
         <Text style={styles.emptyCtaText}>Open Floating Mic</Text>
@@ -110,10 +116,10 @@ const FloatingMicHistoryScreen = ({ navigation }) => {
       <AppHeader title="Speech History" />
 
       <FlatList
-        data={entries}
-        keyExtractor={(item) => item.id}
+        data={rows}
+        keyExtractor={(item) => item.rowKey}
         renderItem={renderItem}
-        contentContainerStyle={entries.length === 0 ? styles.listEmpty : styles.list}
+        contentContainerStyle={rows.length === 0 ? styles.listEmpty : styles.list}
         ListEmptyComponent={empty}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
@@ -144,6 +150,10 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 12,
   },
+  transcriptCard: {
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.primary,
+  },
   cardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -167,10 +177,10 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
   },
   bodyText: {
-    fontSize: 15,
+    fontSize: 16,
     color: Colors.text.primary,
-    lineHeight: 22,
-    marginBottom: 12,
+    lineHeight: 24,
+    marginBottom: 10,
   },
   deleteBtn: {
     flexDirection: 'row',

@@ -5,11 +5,13 @@ import { Colors } from '../theme/Colors';
 
 import HomeScreen from '../screens/Home/HomeScreen';
 import VoiceRecorderScreen from '../screens/VoiceRecorder/VoiceRecorderScreen';
+import VoiceRecorderHistoryScreen from '../screens/VoiceRecorder/VoiceRecorderHistoryScreen';
 import RecordedAudioScreen from '../screens/Recordings/RecordedAudioScreen';
 import SettingsScreen from '../screens/Settings/SettingsScreen';
 import FloatingMicScreen from '../screens/FloatingMic/FloatingMicScreen';
 import FloatingMicHistoryScreen from '../screens/FloatingMic/FloatingMicHistoryScreen';
 import TranslatorStack from './TranslatorStack';
+import AskQuestionStack from './AskQuestionStack';
 
 const Drawer = createDrawerNavigator();
 
@@ -60,6 +62,14 @@ export const AppNavigator = () => {
         options={{ drawerLabel: 'Voice Command' }}
       />
       <Drawer.Screen
+        name="VoiceRecorderHistory"
+        component={VoiceRecorderHistoryScreen}
+        options={{
+          drawerLabel: () => null,
+          drawerItemStyle: { height: 0, margin: 0, padding: 0, overflow: 'hidden' },
+        }}
+      />
+      <Drawer.Screen
         name="FloatingMic"
         component={FloatingMicScreen}
         options={{ drawerLabel: 'Floating Mic' }}
@@ -74,6 +84,11 @@ export const AppNavigator = () => {
         name="FloatingMicHistory"
         component={FloatingMicHistoryScreen}
         options={{ drawerLabel: 'Speech History' }}
+      />
+      <Drawer.Screen
+        name="AskQuestion"
+        component={AskQuestionStack}
+        options={{ drawerLabel: 'Ask Question' }}
       />
       <Drawer.Screen
         name="Translator"

@@ -14,6 +14,8 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
+import java.text.Normalizer
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
@@ -173,8 +175,7 @@ class MyAccessibilityService : AccessibilityService() {
         
         val root = rootInActiveWindow
         if (root == null) {
-            Log.d(TAG, "Root is null - hiding mic")
-            hideFloatingMic()
+            // Transient during IME/app redraws; do not hide overlay (would kill mic/translate UX).
             return
         }
         
@@ -240,13 +241,30 @@ class MyAccessibilityService : AccessibilityService() {
     }
 
     /**
+     * Strip bidi / embedding controls WhatsApp & Telegram often embed in the visible "Message" text.
+     */
+    private fun stripBidiAndJoiners(s: String): String {
+        return buildString {
+            for (ch in s) {
+                val c = ch.code
+                if (c == 0xFEFF || c in 0x200C..0x200F || c in 0x202A..0x202E || c in 0x2066..0x2069) continue
+                append(ch)
+            }
+        }
+    }
+
+    private fun normalizeForHintCompare(s: String): String {
+        val stripped = stripBidiAndJoiners(s.trim())
+        return Normalizer.normalize(stripped, Normalizer.Form.NFKC).lowercase(Locale.US)
+    }
+
+    /**
      * If the field still shows a hint-style value (e.g. WhatsApp "Message"), treat it as empty
      * and replace with the transcript; otherwise append after real user text.
      */
     private fun isPlaceholderOrHintContent(raw: String): Boolean {
-        val s = raw.trim()
-        if (s.isEmpty()) return true
-        val t = s.lowercase(java.util.Locale.US)
+        val key = normalizeForHintCompare(raw)
+        if (key.isEmpty()) return true
         val hints = setOf(
             "message",
             "type a message",
@@ -258,81 +276,176 @@ class MyAccessibilityService : AccessibilityService() {
             "search messages",
             "add a caption",
             "caption",
-            "comment"
+            "comment",
+            // Telegram / localized composer hints
+            "nachricht",
+            "nachricht schreiben",
+            "schreiben",
+            "сообщение",
+            "написать сообщение",
+            "mensaje",
+            "escribir un mensaje",
+            "messaggio",
+            "scrivi un messaggio",
+            "écrire un message",
+            "bericht",
+            "bericht schrijven",
+            "پیام",
+            "پیام بنویسید",
+            "संदेश",
+            "एक संदेश लिखें",
+            "메시지 입력",
+            "メッセージを入力",
         )
-        if (t in hints) return true
-        val oneWord = t.split(Regex("\\s+")).filter { it.isNotEmpty() }
-        if (oneWord.size == 1 && oneWord[0] in setOf("message", "msg", "chat", "search")) {
+        if (key in hints) return true
+        val oneWord = key.split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (oneWord.size == 1 && oneWord[0] in setOf("message", "msg", "chat", "search", "nachricht", "mensaje", "messaggio", "bericht", "сообщение", "پیام", "संदेश")) {
             return true
         }
         return false
     }
 
-    private fun buildInjectedText(currentRaw: String, newText: String): String {
+    private fun isMessengerChatPackage(packageName: String): Boolean {
+        val p = packageName.lowercase(Locale.US)
+        return p.startsWith("com.whatsapp") ||
+            p.contains("telegram") ||
+            p.startsWith("org.thunderdog.challegram") // Telegram X
+    }
+
+    /**
+     * WhatsApp often exposes the hint word "Message" as real [text]. If the user dictates, we must
+     * replace the whole composer with the transcript only — never append after "Message …".
+     * Also fixes a previously bad injection like "Message no one else".
+     */
+    private fun messengerComposerIsPlaceholderOrLeak(packageName: String, cleaned: String): Boolean {
+        if (!isMessengerChatPackage(packageName)) return false
+        val key = normalizeForHintCompare(cleaned)
+        if (key.isEmpty()) return true
+        if (key == "message" || key == "msg") return true
+        if (key.startsWith("message ") || key.startsWith("msg ")) return true
+        return false
+    }
+
+    /**
+     * WhatsApp sometimes ignores a single SET_TEXT and keeps prefix text; clear then set.
+     */
+    private fun messengerPerformSetText(node: AccessibilityNodeInfo, text: String): Boolean {
+        val clear = Bundle().apply {
+            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "")
+        }
+        node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, clear)
+        val set = Bundle().apply {
+            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+        }
+        return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, set)
+    }
+
+    /**
+     * WhatsApp/Telegram sometimes report hint + transcript as "Message …" after a failed first pass;
+     * strip a leading English "Message" word before appending again.
+     */
+    private fun recoverMessengerPlaceholderPrefix(packageName: String, current: String): String {
+        if (!isMessengerChatPackage(packageName)) return current
+        val t = current.trim()
+        val m = Regex("^(?i)(message|msg)\\s+(.+)$").find(t) ?: return current
+        val body = m.groupValues[2].trim()
+        if (body.length < 2) return current
+        return body
+    }
+
+    /**
+     * True when the focused field content should be fully replaced (not appended to).
+     */
+    private fun shouldReplaceEntireField(node: AccessibilityNodeInfo, cleanedCurrent: String): Boolean {
+        if (cleanedCurrent.isEmpty()) return true
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val hintRaw = node.hintText?.toString().orEmpty()
+            if (hintRaw.isNotEmpty()) {
+                val hintNorm = normalizeForHintCompare(hintRaw)
+                val curNorm = normalizeForHintCompare(cleanedCurrent)
+                if (hintNorm.isNotEmpty() && curNorm == hintNorm) {
+                    Log.d(TAG, "Field text matches hintText — treating as empty")
+                    return true
+                }
+            }
+        }
+        if (isPlaceholderOrHintContent(cleanedCurrent)) return true
+        return false
+    }
+
+    private fun buildInjectedText(currentRaw: String, newText: String, node: AccessibilityNodeInfo, packageName: String): String {
         val newTrim = newText.trim()
-        if (newTrim.isEmpty()) return currentRaw.trim()
-        val current = currentRaw.trim()
-        if (isPlaceholderOrHintContent(current)) return newTrim
-        return if (current.isEmpty()) newTrim else "$current $newTrim"
+        val cleaned = stripBidiAndJoiners(currentRaw.trim()).let { recoverMessengerPlaceholderPrefix(packageName, it) }
+        if (newTrim.isEmpty()) return cleaned
+        if (cleaned.isEmpty()) return newTrim
+        if (messengerComposerIsPlaceholderOrLeak(packageName, cleaned)) {
+            Log.d(TAG, "Messenger: full replace (placeholder / Message-prefix leak)")
+            return newTrim
+        }
+        if (shouldReplaceEntireField(node, cleaned)) return newTrim
+        return "$cleaned $newTrim"
     }
 
     /**
      * Strict injection into the current focused EditText only.
      */
     private fun injectText(newText: String): Boolean {
-        val node = rootInActiveWindow
-            ?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-            ?: return false
-
+        val root = rootInActiveWindow ?: return false
         try {
-            if (
-                node.className != "android.widget.EditText" ||
-                !node.isEditable
-            ) return false
+            val node = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return false
+            val packageName = runCatching { root.packageName?.toString().orEmpty() }.getOrDefault("")
+            try {
+                if (
+                    node.className != "android.widget.EditText" ||
+                    !node.isEditable
+                ) return false
 
-            val currentRaw = node.text?.toString() ?: ""
-            val textToInject = buildInjectedText(currentRaw, newText)
+                val currentRaw = node.text?.toString() ?: ""
+                val textToInject = buildInjectedText(currentRaw, newText, node, packageName)
 
-            Log.d(
-                TAG,
-                "💉 Injection: existing='${currentRaw.trim()}', new='$newText', final='$textToInject'"
-            )
+                Log.d(
+                    TAG,
+                    "💉 Injection pkg=$packageName existing='${currentRaw.trim()}', new='$newText', final='$textToInject'"
+                )
 
-            val args = Bundle()
-            args.putCharSequence(
-                AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
-                textToInject
-            )
-
-            val ok = node.performAction(
-                AccessibilityNodeInfo.ACTION_SET_TEXT,
-                args
-            )
-
-            if (ok && textToInject.isNotEmpty()) {
-                val len = textToInject.length
-                val sel = Bundle().apply {
-                    putInt(ARG_SELECTION_START, len)
-                    putInt(ARG_SELECTION_END, len)
+                val ok = if (isMessengerChatPackage(packageName)) {
+                    messengerPerformSetText(node, textToInject)
+                } else {
+                    val args = Bundle()
+                    args.putCharSequence(
+                        AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
+                        textToInject
+                    )
+                    node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
                 }
-                val selOk = node.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, sel)
-                if (!selOk) {
-                    handler.postDelayed({
-                        val n2 = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-                        n2?.let {
-                            try {
-                                it.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, sel)
-                            } finally {
-                                it.recycle()
+
+                if (ok && textToInject.isNotEmpty()) {
+                    val len = textToInject.length
+                    val sel = Bundle().apply {
+                        putInt(ARG_SELECTION_START, len)
+                        putInt(ARG_SELECTION_END, len)
+                    }
+                    val selOk = node.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, sel)
+                    if (!selOk) {
+                        handler.postDelayed({
+                            val n2 = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                            n2?.let {
+                                try {
+                                    it.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, sel)
+                                } finally {
+                                    it.recycle()
+                                }
                             }
-                        }
-                    }, 80L)
+                        }, 80L)
+                    }
                 }
-            }
 
-            return ok
+                return ok
+            } finally {
+                node.recycle()
+            }
         } finally {
-            node.recycle()
+            root.recycle()
         }
     }
 

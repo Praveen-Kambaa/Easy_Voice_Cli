@@ -8,8 +8,6 @@ import {
   Platform,
   Switch,
   TextInput,
-  Modal,
-  Pressable,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { AppHeader } from '../../components/Header/AppHeader';
@@ -18,6 +16,7 @@ import { AppCard } from '../../components/common/AppCard';
 import { PrimaryButton } from '../../components/common/PrimaryButton';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import PermissionModal from '../../components/PermissionModal';
+import { LanguagePickerModal } from '../../components/LanguagePickerModal';
 import { usePermissionsManager } from '../../hooks/usePermissionsManager';
 import { useAndroidPermissions } from '../../hooks/useAndroidPermissions';
 import { useAlert } from '../../context/AlertContext';
@@ -31,25 +30,45 @@ import {
   ELEVENLABS_API_KEY_STORAGE,
   ELEVENLABS_API_KEY_PLACEHOLDER,
   setElevenLabsApiKey,
+  getOverlayMicEnabled,
+  getOverlayTranslationEnabled,
+  setOverlayMicEnabled,
+  setOverlayTranslationEnabled,
+  getInternalFloatingTranslationEnabled,
+  setInternalFloatingTranslationEnabled,
+  getOverlayAskQuestionEnabled,
+  setOverlayAskQuestionEnabled,
 } from '../../services/floatingMicConfig';
 import { ChevronDown } from 'lucide-react-native';
 import {
   TRANSLATION_LANGUAGES as languages,
   getLanguageName,
+  normalizeStoredLanguageCode,
 } from '../../constants/translationLanguages';
+import { logActivity, ActivityCategory } from '../../services/appActivityHistoryService';
 
 const SettingsScreen = () => {
   const showAlert = useAlert();
 
   const [internalTranscribe, setInternalTranscribe] = useState(true);
+  const [overlayMicEnabled, setOverlayMicEnabledState] = useState(true);
+  const [overlayTranslationEnabled, setOverlayTranslationEnabledState] = useState(true);
+  const [internalFloatingTranslation, setInternalFloatingTranslationState] = useState(false);
   const [elevenLabsKeyDraft, setElevenLabsKeyDraft] = useState('');
   const [elevenLabsKeySaving, setElevenLabsKeySaving] = useState(false);
+  const [overlayAskQuestionEnabled, setOverlayAskQuestionEnabledState] = useState(false);
+  const [aiProviderKeyDraft, setAiProviderKeyDraft] = useState('');
+  const [aiProviderKeySaving, setAiProviderKeySaving] = useState(false);
   /** null | 'from' | 'to' — which translation language picker is open */
   const [languagePickerFor, setLanguagePickerFor] = useState(null);
 
   useEffect(() => {
     (async () => {
       setInternalTranscribe(await getInternalTranscribeEnabled());
+      setOverlayMicEnabledState(await getOverlayMicEnabled());
+      setOverlayTranslationEnabledState(await getOverlayTranslationEnabled());
+      setInternalFloatingTranslationState(await getInternalFloatingTranslationEnabled());
+      setOverlayAskQuestionEnabledState(await getOverlayAskQuestionEnabled());
     })();
   }, []);
 
@@ -74,8 +93,84 @@ const SettingsScreen = () => {
     setInternalTranscribe(value);
     try {
       await setInternalTranscribeEnabled(value);
+      await logActivity(ActivityCategory.SETTINGS, 'internal_transcribe_toggled', {
+        label: value ? 'Internal transcribe on' : 'Internal transcribe off',
+      });
     } catch (e) {
       setInternalTranscribe(!value);
+      showAlert('Error', e?.message || 'Could not save setting');
+    }
+  };
+
+  const onOverlayMicToggle = async (value) => {
+    if (!value && !overlayTranslationEnabled && !overlayAskQuestionEnabled) {
+      showAlert(
+        'Overlay',
+        'Keep at least one action enabled. Turn on Translation or Ask Question, or leave Microphone on.',
+      );
+      return;
+    }
+    setOverlayMicEnabledState(value);
+    try {
+      await setOverlayMicEnabled(value);
+      await logActivity(ActivityCategory.SETTINGS, 'overlay_mic_toggled', {
+        label: value ? 'Overlay microphone on' : 'Overlay microphone off',
+      });
+    } catch (e) {
+      setOverlayMicEnabledState(!value);
+      showAlert('Error', e?.message || 'Could not save overlay setting');
+    }
+  };
+
+  const onOverlayTranslationToggle = async (value) => {
+    if (!value && !overlayMicEnabled && !overlayAskQuestionEnabled) {
+      showAlert(
+        'Overlay',
+        'Keep at least one action enabled. Turn on Microphone or Ask Question, or leave Translation on.',
+      );
+      return;
+    }
+    setOverlayTranslationEnabledState(value);
+    try {
+      await setOverlayTranslationEnabled(value);
+      await logActivity(ActivityCategory.SETTINGS, 'overlay_translation_toggled', {
+        label: value ? 'Overlay translation on' : 'Overlay translation off',
+      });
+    } catch (e) {
+      setOverlayTranslationEnabledState(!value);
+      showAlert('Error', e?.message || 'Could not save overlay setting');
+    }
+  };
+
+  const onOverlayAskQuestionToggle = async (value) => {
+    if (!value && !overlayMicEnabled && !overlayTranslationEnabled) {
+      showAlert(
+        'Overlay',
+        'Keep at least one action enabled. Turn on Microphone or Translation, or leave Ask Question on.',
+      );
+      return;
+    }
+    setOverlayAskQuestionEnabledState(value);
+    try {
+      await setOverlayAskQuestionEnabled(value);
+      await logActivity(ActivityCategory.SETTINGS, 'overlay_ask_question_toggled', {
+        label: value ? 'Overlay Ask Question on' : 'Overlay Ask Question off',
+      });
+    } catch (e) {
+      setOverlayAskQuestionEnabledState(!value);
+      showAlert('Error', e?.message || 'Could not save overlay setting');
+    }
+  };
+
+  const onInternalFloatingTranslationToggle = async (value) => {
+    setInternalFloatingTranslationState(value);
+    try {
+      await setInternalFloatingTranslationEnabled(value);
+      await logActivity(ActivityCategory.SETTINGS, 'internal_floating_translation_toggled', {
+        label: value ? 'Internal floating translation on' : 'Internal floating translation off',
+      });
+    } catch (e) {
+      setInternalFloatingTranslationState(!value);
       showAlert('Error', e?.message || 'Could not save setting');
     }
   };
@@ -84,6 +179,9 @@ const SettingsScreen = () => {
     try {
       setElevenLabsKeySaving(true);
       await setElevenLabsApiKey(elevenLabsKeyDraft);
+      await logActivity(ActivityCategory.SETTINGS, 'elevenlabs_key_saved', {
+        label: 'ElevenLabs API key saved',
+      });
       showAlert('Saved', 'ElevenLabs key updated for floating mic cloud transcribe.');
     } catch (e) {
       showAlert('Error', e?.message || 'Could not save API key');
@@ -98,7 +196,7 @@ const SettingsScreen = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   // ── Translation functions ────────────────────────────────────
-  
+
   // Load saved translation preference
   useEffect(() => {
     loadTranslationPreference();
@@ -108,8 +206,8 @@ const SettingsScreen = () => {
     try {
       const savedFrom = await AsyncStorage.getItem('@from_language');
       const savedTo = await AsyncStorage.getItem('@to_language');
-      if (savedFrom) setFromLanguage(savedFrom);
-      if (savedTo) setToLanguage(savedTo);
+      if (savedFrom) setFromLanguage(normalizeStoredLanguageCode(savedFrom, 'en'));
+      if (savedTo) setToLanguage(normalizeStoredLanguageCode(savedTo, 'es'));
     } catch (error) {
       console.error('Failed to load translation preference:', error);
     }
@@ -118,17 +216,23 @@ const SettingsScreen = () => {
   const saveTranslationPreference = async () => {
     try {
       setIsLoading(true);
-      
+
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       await AsyncStorage.setItem('@from_language', fromLanguage);
       await AsyncStorage.setItem('@to_language', toLanguage);
       await syncFloatingMicSettingsToNative();
 
+      const fromName = languages.find(l => l.code === fromLanguage)?.name;
+      const toName = languages.find(l => l.code === toLanguage)?.name;
+      await logActivity(ActivityCategory.SETTINGS, 'translation_languages_saved', {
+        label: 'Default translation languages saved',
+        meta: `${fromName} → ${toName}`,
+      });
       showAlert(
         'Translation Settings Saved',
-        `Translation from ${languages.find(l => l.code === fromLanguage)?.name} to ${languages.find(l => l.code === toLanguage)?.name}`
+        `Translation from ${fromName} to ${toName}`
       );
     } catch (error) {
       console.error('Failed to save translation preference:', error);
@@ -233,7 +337,7 @@ const SettingsScreen = () => {
   const handleCheckSys = async (permissionType) => {
     try {
       await checkSysPermission(permissionType);
-    } catch {}
+    } catch { }
   };
 
   const getSysBtnLabel = (permissionType) => {
@@ -324,24 +428,88 @@ const SettingsScreen = () => {
           <>
             <Text style={[styles.sectionLabel, { marginTop: 16 }]}>FLOATING MIC</Text>
             <AppCard style={styles.internalTranscribeCard}>
-              <View style={styles.toggleRow}>
+              <Text style={styles.translationTitle}>Overlay actions</Text>
+              <Text style={styles.translationDesc}>
+                Choose what the floating overlay can do. If more than one is on, tap the floating
+                button to open a menu. If only one is on, that icon is shown and starts that action
+                directly. At least one must stay on.
+              </Text>
+              <Text style={styles.overlayHint}>
+                Tip: Touch and hold the icon for one second, then drag to move the overlay.
+              </Text>
+              <View style={[styles.toggleRow, styles.overlayActionRow]}>
+                <View style={styles.toggleTextCol}>
+                  <Text style={styles.toggleLabel}>Microphone</Text>
+                  <Text style={styles.toggleSubLabel}>Dictate / transcribe</Text>
+                </View>
+                <Switch
+                  value={overlayMicEnabled}
+                  onValueChange={onOverlayMicToggle}
+                  trackColor={{ false: Colors.border, true: Colors.primary + '88' }}
+                  thumbColor={overlayMicEnabled ? Colors.primary : Colors.text.light}
+                />
+              </View>
+              <View style={[styles.toggleRow, styles.overlayActionRow]}>
+                <View style={styles.toggleTextCol}>
+                  <Text style={styles.toggleLabel}>Translation</Text>
+                  <Text style={styles.toggleSubLabel}>Speak → on-device translate</Text>
+                </View>
+                <Switch
+                  value={overlayTranslationEnabled}
+                  onValueChange={onOverlayTranslationToggle}
+                  trackColor={{ false: Colors.border, true: Colors.primary + '88' }}
+                  thumbColor={overlayTranslationEnabled ? Colors.primary : Colors.text.light}
+                />
+              </View>
+              <View style={[styles.toggleRow, styles.overlayActionRowLast]}>
+                <View style={styles.toggleTextCol}>
+                  <Text style={styles.toggleLabel}>Ask Question</Text>
+                  <Text style={styles.toggleSubLabel}>
+                    Voice → AI answer (injected as returned, no extra translation)
+                  </Text>
+                </View>
+                <Switch
+                  value={overlayAskQuestionEnabled}
+                  onValueChange={onOverlayAskQuestionToggle}
+                  trackColor={{ false: Colors.border, true: Colors.primary + '88' }}
+                  thumbColor={overlayAskQuestionEnabled ? Colors.primary : Colors.text.light}
+                />
+              </View>
+
+            </AppCard>
+            <AppCard style={styles.internalTranscribeCard}>
+              <View style={[styles.toggleRow, styles.internalMicDividerRow]}>
                 <View style={styles.toggleTextCol}>
                   <Text style={styles.translationTitle}>Internal Transcribe</Text>
-                  {/* <Text style={styles.translationDesc}>
-                    On: Android transcribes on this device and inserts text. Off: tap Stop to upload
-                    audio to your voice server, then the returned text is inserted. Server:{' '}
-                    {buildEasyVoiceUrl('')}
-                  </Text> */}
+                  <Text style={styles.toggleSubLabel}>
+                    Applies when overlay Microphone is on. Off while Microphone overlay is off.
+                  </Text>
                 </View>
                 <Switch
                   value={internalTranscribe}
                   onValueChange={onInternalTranscribeToggle}
+                  disabled={!overlayMicEnabled}
                   trackColor={{ false: Colors.border, true: Colors.primary + '88' }}
                   thumbColor={internalTranscribe ? Colors.primary : Colors.text.light}
                 />
               </View>
+              <View style={[styles.toggleRow, styles.internalTranslateRow]}>
+                <View style={styles.toggleTextCol}>
+                  <Text style={styles.internalTranslationTitle}>Internal translation</Text>
+                  <Text style={styles.toggleSubLabel}>
+                    Applies when overlay Translation is on. Off while Translation overlay is off.
+                  </Text>
+                </View>
+                <Switch
+                  value={internalFloatingTranslation}
+                  onValueChange={onInternalFloatingTranslationToggle}
+                  disabled={!overlayTranslationEnabled}
+                  trackColor={{ false: Colors.border, true: Colors.primary + '88' }}
+                  thumbColor={internalFloatingTranslation ? Colors.primary : Colors.text.light}
+                />
+              </View>
             </AppCard>
-            <AppCard style={styles.internalTranscribeCard}>
+            {/* <AppCard style={styles.internalTranscribeCard}>
               <Text style={styles.translationTitle}>ElevenLabs API key</Text>
               <Text style={styles.translationDesc}>
                 When Internal Transcribe is off, microphone mode sends your recording to ElevenLabs
@@ -365,7 +533,7 @@ const SettingsScreen = () => {
                 variant="outline"
                 style={styles.saveBtn}
               />
-            </AppCard>
+            </AppCard> */}
           </>
         )}
 
@@ -508,67 +676,23 @@ const SettingsScreen = () => {
         </View>
       </ScrollView>
 
-      <Modal
+      <LanguagePickerModal
         visible={languagePickerFor !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setLanguagePickerFor(null)}
-      >
-        <View style={styles.langModalRoot}>
-          <Pressable
-            style={[StyleSheet.absoluteFillObject, styles.langModalBackdrop]}
-            onPress={() => setLanguagePickerFor(null)}
-            accessibilityLabel="Close language picker"
-          />
-          <View style={styles.langModalCenter} pointerEvents="box-none">
-            <View style={styles.langModalSheet} pointerEvents="auto">
-              <Text style={styles.langModalTitle}>
-                {languagePickerFor === 'from' ? 'Translate from' : 'Translate to'}
-              </Text>
-              <ScrollView
-                style={styles.langModalList}
-                keyboardShouldPersistTaps="handled"
-                bounces={false}
-              >
-                {languages.map((lang) => {
-                  const selected =
-                    languagePickerFor === 'from'
-                      ? fromLanguage === lang.code
-                      : toLanguage === lang.code;
-                  return (
-                    <TouchableOpacity
-                      key={lang.code}
-                      style={[styles.langModalRow, selected && styles.langModalRowSelected]}
-                      onPress={() => {
-                        if (languagePickerFor === 'from') setFromLanguage(lang.code);
-                        else if (languagePickerFor === 'to') setToLanguage(lang.code);
-                        setLanguagePickerFor(null);
-                      }}
-                      activeOpacity={0.65}
-                    >
-                      <Text
-                        style={[
-                          styles.langModalRowText,
-                          selected && styles.langModalRowTextSelected,
-                        ]}
-                      >
-                        {lang.name}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-              <TouchableOpacity
-                style={styles.langModalCancel}
-                onPress={() => setLanguagePickerFor(null)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.langModalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setLanguagePickerFor(null)}
+        title={languagePickerFor === 'from' ? 'Translate from' : 'Translate to'}
+        languages={languages}
+        selectedCode={
+          languagePickerFor === 'from'
+            ? fromLanguage
+            : languagePickerFor === 'to'
+              ? toLanguage
+              : ''
+        }
+        onSelect={(code) => {
+          if (languagePickerFor === 'from') setFromLanguage(code);
+          else if (languagePickerFor === 'to') setToLanguage(code);
+        }}
+      />
 
       {/* Modals for system permissions */}
       {Object.values(SYS_NAMES).map((permissionType) => (
@@ -794,66 +918,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: Colors.text.primary,
   },
-  langModalRoot: {
-    flex: 1,
-  },
-  langModalBackdrop: {
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  langModalCenter: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  langModalSheet: {
-    backgroundColor: Colors.background,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    maxHeight: '72%',
-    overflow: 'hidden',
-  },
-  langModalTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  langModalList: {
-    maxHeight: 320,
-  },
-  langModalRow: {
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.borderLight,
-  },
-  langModalRowSelected: {
-    backgroundColor: Colors.backgroundAlt,
-  },
-  langModalRowText: {
-    fontSize: 16,
-    color: Colors.text.primary,
-  },
-  langModalRowTextSelected: {
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  langModalCancel: {
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-  },
-  langModalCancelText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text.secondary,
-  },
   saveBtn: {
     marginTop: 8,
   },
@@ -868,6 +932,52 @@ const styles = StyleSheet.create({
   toggleTextCol: {
     flex: 1,
     paddingRight: 8,
+  },
+  overlayActionRow: {
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+    alignItems: 'center',
+  },
+  overlayActionRowLast: {
+    paddingTop: 14,
+    paddingBottom: 2,
+    alignItems: 'center',
+  },
+  /** Divider between Internal Transcribe and Internal translation */
+  internalMicDividerRow: {
+    marginBottom: 14,
+    paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+    alignItems: 'flex-start',
+  },
+  internalTranslateRow: {
+    marginTop: 4,
+    alignItems: 'flex-start',
+  },
+  internalTranslationTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginBottom: 6,
+  },
+  overlayHint: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    lineHeight: 17,
+    marginBottom: 4,
+    fontWeight: '400',
+  },
+  toggleLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  toggleSubLabel: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    marginTop: 2,
   },
   apiKeyInput: {
     borderWidth: 1,

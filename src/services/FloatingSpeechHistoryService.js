@@ -1,6 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FileSystem, Dirs } from 'react-native-file-access';
 import { DeviceEventEmitter } from 'react-native';
+import {
+  LOCAL_HISTORY_RETENTION_MS,
+  filterEntriesWithinRetention,
+} from '../utils/localHistoryRetention';
 
 const STORAGE_KEY = '@floating_speech_history';
 const LEGACY_HISTORY_PATH = `${Dirs.DocumentDir}/floating_speech_history.json`;
@@ -22,9 +26,10 @@ async function migrateLegacyFileIfNeeded() {
     const raw = await FileSystem.readFile(LEGACY_HISTORY_PATH);
     const parsed = JSON.parse(raw);
     const arr = Array.isArray(parsed) ? parsed : [];
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+    const pruned = filterEntriesWithinRetention(arr, LOCAL_HISTORY_RETENTION_MS);
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(pruned));
     await FileSystem.unlink(LEGACY_HISTORY_PATH).catch(() => undefined);
-    return arr;
+    return pruned;
   } catch (e) {
     console.warn('[FloatingSpeechHistory] legacy migrate:', e);
     return [];
@@ -37,9 +42,13 @@ export const FloatingSpeechHistoryService = {
       const fromStorage = await AsyncStorage.getItem(STORAGE_KEY);
       if (fromStorage != null) {
         const parsed = JSON.parse(fromStorage);
-        const result = Array.isArray(parsed) ? parsed : [];
-        console.log('📚 FloatingSpeechHistoryService: Retrieved entries from storage:', result.length);
-        return result;
+        const arr = Array.isArray(parsed) ? parsed : [];
+        const pruned = filterEntriesWithinRetention(arr, LOCAL_HISTORY_RETENTION_MS);
+        if (pruned.length !== arr.length) {
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(pruned));
+        }
+        console.log('📚 FloatingSpeechHistoryService: Retrieved entries from storage:', pruned.length);
+        return pruned;
       }
       console.log('📚 FloatingSpeechHistoryService: No entries in storage, checking legacy...');
       return await migrateLegacyFileIfNeeded();
@@ -62,7 +71,8 @@ export const FloatingSpeechHistoryService = {
         createdAt: new Date().toISOString(),
         source: 'floating_mic',
       });
-      const trimmed = entries.slice(-MAX_ENTRIES);
+      const fresh = filterEntriesWithinRetention(entries, LOCAL_HISTORY_RETENTION_MS);
+      const trimmed = fresh.slice(-MAX_ENTRIES);
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
       console.log('💾 FloatingSpeechHistoryService: Saved successfully. Total entries:', trimmed.length);
       DeviceEventEmitter.emit(FLOATING_SPEECH_UPDATED_EVENT);

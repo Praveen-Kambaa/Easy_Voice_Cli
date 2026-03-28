@@ -13,6 +13,7 @@ import {
   Mic,
   MicOff,
   Music,
+  History,
   Circle,
   Square,
   Play,
@@ -31,6 +32,7 @@ import { AppCard } from '../../components/common/AppCard';
 import { PrimaryButton } from '../../components/common/PrimaryButton';
 import { useAlert } from '../../context/AlertContext';
 import { Colors } from '../../theme/Colors';
+import { logActivity, ActivityCategory } from '../../services/appActivityHistoryService';
 
 const VoiceRecorderScreen = ({ navigation }) => {
   const showAlert = useAlert();
@@ -102,6 +104,9 @@ const VoiceRecorderScreen = ({ navigation }) => {
       setIsPaused(false);
       setDuration(0);
       setFilePath(result.filePath);
+      await logActivity(ActivityCategory.VOICE_RECORDER, 'recording_started', {
+        label: 'Recording started',
+      });
     } else {
       showAlert('Recording Error', result.error || 'Failed to start recording');
     }
@@ -123,6 +128,10 @@ const VoiceRecorderScreen = ({ navigation }) => {
     }
     setLastRecording(result.recordingData);
     setDuration(result.duration || 0);
+    await logActivity(ActivityCategory.VOICE_RECORDER, 'recording_stopped', {
+      label: 'Recording saved',
+      meta: `Duration ${NativeAudioService.formatDuration(result.duration || 0)}`,
+    });
     await handleTranscription(result.filePath, result.recordingData);
   };
 
@@ -180,6 +189,10 @@ const VoiceRecorderScreen = ({ navigation }) => {
         setVoiceAssetId(assetId);
         setTranscriptError(null);
         setIsEditingTranscript(true);
+        await logActivity(ActivityCategory.VOICE_RECORDER, 'transcription_complete', {
+          label: 'Transcription received',
+          meta: finalTranscript.slice(0, 160),
+        });
       } else {
         throw new Error(result.error || 'Transcription failed');
       }
@@ -187,6 +200,10 @@ const VoiceRecorderScreen = ({ navigation }) => {
       const msg = error.message || 'Transcription failed';
       setTranscriptError(msg);
       setTranscript(null);
+      await logActivity(ActivityCategory.VOICE_RECORDER, 'transcription_failed', {
+        label: 'Transcription failed',
+        meta: msg.slice(0, 200),
+      });
       showAlert(
         'Upload / Transcription Failed',
         msg,
@@ -234,6 +251,10 @@ const VoiceRecorderScreen = ({ navigation }) => {
             setLastRecording(updated);
           }
           showAlert('Success', 'Transcript updated successfully!');
+          await logActivity(ActivityCategory.VOICE_RECORDER, 'transcript_updated', {
+            label: 'Transcript saved',
+            meta: editableTranscript.trim().slice(0, 160),
+          });
         } else {
           showAlert('Error', updateResult.error);
           return;
@@ -278,6 +299,10 @@ const VoiceRecorderScreen = ({ navigation }) => {
 
       if (executeResult.success) {
         setIsEditingTranscript(false);
+        await logActivity(ActivityCategory.VOICE_RECORDER, 'command_executed', {
+          label: 'Voice command sent',
+          meta: currentTranscript.slice(0, 160),
+        });
         showAlert(
           'Command Executed!',
           `Voice command processed successfully.\n\n${hasChanged ? '(Transcript was updated before execution)' : '(Original transcript used)'}`,
@@ -307,14 +332,22 @@ const VoiceRecorderScreen = ({ navigation }) => {
       <AppHeader
         title="Voice Command"
         rightComponent={
-          hasRecording ? (
+          <View style={styles.headerActions}>
             <TouchableOpacity
-              onPress={() => navigation.navigate('RecordedAudio')}
+              onPress={() => navigation.navigate('VoiceRecorderHistory')}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Music size={22} color={Colors.text.primary} strokeWidth={1.8} />
+              <History size={22} color={Colors.text.primary} strokeWidth={1.8} />
             </TouchableOpacity>
-          ) : null
+            {hasRecording ? (
+              <TouchableOpacity
+                onPress={() => navigation.navigate('RecordedAudio')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Music size={22} color={Colors.text.primary} strokeWidth={1.8} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
         }
       />
 
@@ -673,6 +706,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.text.secondary,
     flex: 1,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
   },
 });
 

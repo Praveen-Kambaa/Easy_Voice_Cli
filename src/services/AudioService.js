@@ -1,6 +1,7 @@
 import { Platform, PermissionsAndroid } from 'react-native';
 import { FileSystem, Dirs } from 'react-native-file-access';
 import VoiceRecorder from 'react-native-voice-recorder';
+import { formatDateTime } from '../utils/dateTimeFormat';
 
 // In-memory storage - declared BEFORE class so it's available from the start
 let recordings = [];
@@ -108,7 +109,7 @@ class AudioService {
 
       const recordingData = {
         id: Date.now().toString(),
-        name: `Recording ${new Date().toLocaleString()}`,
+        name: `Recording ${formatDateTime(new Date())}`,
         filePath: savedPath,
         duration,
         createdAt: new Date().toISOString(),
@@ -258,16 +259,6 @@ class AudioService {
     const minutes = Math.floor(totalSec / 60);
     const seconds = totalSec % 60;
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  }
-
-  formatDate(dateString) {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
   }
 
   async forceCleanup() {
