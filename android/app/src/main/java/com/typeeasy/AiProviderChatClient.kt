@@ -56,12 +56,18 @@ object AiProviderChatClient {
 
         return try {
             val body = bodyJson.toRequestBody(jsonMedia)
-            val request = Request.Builder()
+            val reqBuilder = Request.Builder()
                 .url("$baseUrl/chat/completions")
                 .post(body)
                 .header("Authorization", "Bearer $key")
                 .header("Content-Type", "application/json")
-                .build()
+            // Match JS aiService.js: OpenRouter often returns "User not found" without attribution headers.
+            if (baseUrl.contains("openrouter.ai", ignoreCase = true)) {
+                reqBuilder
+                    .header("HTTP-Referer", "https://typeeasy.app")
+                    .header("X-OpenRouter-Title", "TypeEasy")
+            }
+            val request = reqBuilder.build()
 
             val response = client.newCall(request).execute()
             val bodyString = response.body?.string().orEmpty()

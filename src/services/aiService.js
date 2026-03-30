@@ -28,13 +28,20 @@ export async function askQuestion(question) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 60_000);
 
+  const headers = {
+    Authorization: `Bearer ${apiKey.trim()}`,
+    'Content-Type': 'application/json',
+  };
+  // OpenRouter expects these for attribution; omitting them often yields "User not found" on chat calls.
+  if (/openrouter\.ai/i.test(AI_CHAT_API_BASE_URL)) {
+    headers['HTTP-Referer'] = 'https://typeeasy.app';
+    headers['X-OpenRouter-Title'] = 'TypeEasy';
+  }
+
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey.trim()}`,
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         model: AI_CHAT_MODEL,
         messages: [

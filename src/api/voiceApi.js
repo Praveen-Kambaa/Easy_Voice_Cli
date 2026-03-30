@@ -14,11 +14,10 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
 import { FileSystem } from 'react-native-file-access';
-import { createResponse } from '../utils/apiResponse';
+import { apiUtils } from './apiClient';
 import apiClient from './apiClient';
-import { VOICE_ENDPOINTS, buildEasyVoiceUrl } from '../config/api';
-import { getInternalTranscribeEnabled } from '../services/floatingMicConfig';
-import { transcribeWithElevenLabs } from '../services/elevenlabsService';
+import { VOICE_ENDPOINTS } from './endpoints';
+import { buildEasyVoiceUrl } from '../config/api';
 
 // Dedicated axios instance for multipart audio upload with better error handling
 const uploadClient = axios.create({
@@ -90,6 +89,11 @@ const getMimeType = (filePath) => {
     ogg: 'audio/ogg',
   };
   return map[ext] || 'audio/mp4';
+};
+
+// ─── Standardised response factory ────────────────────────────────────────────
+const createResponse = (success = false, data = null, error = null) => {
+  return { success, data, error };
 };
 
 // ─── Core upload function ─────────────────────────────────────────────────────
@@ -181,46 +185,29 @@ const uploadAudio = async (filePath, options = {}) => {
 /**
  * Transcribe an audio file.
  * Returns a standardised { success, data: { rawTranscript, refinedTranscript, voiceAssetId } }
- * Uses ElevenLabs when internal transcribe is OFF, otherwise uses backend API
  */
 export const transcribeAudio = async (fileUri, options = {}) => {
   if (!fileUri) {
     return createResponse(false, null, 'Audio file path is required');
   }
 
-  try {
-    const useInternalTranscribe = await getInternalTranscribeEnabled();
+  const result = await uploadAudio(fileUri, options);
 
-    if (!useInternalTranscribe) {
-      // Use ElevenLabs for transcription when internal transcribe is OFF
-      console.log('Using ElevenLabs for transcription (internal transcribe is OFF)');
-      return await transcribeWithElevenLabs(fileUri, options);
-    } else {
-      // Use backend API for transcription when internal transcribe is ON
-      console.log('Using backend API for transcription (internal transcribe is ON)');
-      const result = await uploadAudio(fileUri, options);
-
-      if (!result.success) {
-        return createResponse(false, null, result.error);
-      }
-
-      // Normalise response – handle different backend shapes
-      const data = result.data || {};
-
-      const normalizedData = {
-        rawTranscript: data.rawTranscript || data.transcript || data.text || '',
-        refinedTranscript: data.refinedTranscript || data.rawTranscript || data.transcript || data.text || '',
-        voiceAssetId: data.voiceAssetId || data.id || null,
-        timestamp: new Date().toISOString(),
-        provider: 'backend',
-      };
-
-      return createResponse(true, normalizedData);
-    }
-  } catch (error) {
-    console.error('Transcription error:', error);
-    return createResponse(false, null, error.message || 'Transcription failed');
+  if (!result.success) {
+    return createResponse(false, null, result.error);
   }
+
+  // Normalise response – handle different backend shapes
+  const data = result.data || {};
+
+  const normalizedData = {
+    rawTranscript: data.rawTranscript || data.transcript || data.text || '',
+    refinedTranscript: data.refinedTranscript || data.rawTranscript || data.transcript || data.text || '',
+    voiceAssetId: data.voiceAssetId || data.id || null,
+    timestamp: new Date().toISOString(),
+  };
+
+  return createResponse(true, normalizedData);
 };
 
 // ─── Other voice API endpoints ────────────────────────────────────────────────
