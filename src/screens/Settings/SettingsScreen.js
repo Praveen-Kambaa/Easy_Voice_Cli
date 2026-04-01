@@ -242,7 +242,7 @@ const SettingsScreen = () => {
     }
   };
 
-  // ── Standard permissions (Microphone, Phone Call, SMS) ────────────────────
+  // ── Standard permissions (Microphone) ───────────────────────────────────────
   const {
     permissionStatuses,
     loading: stdLoading,
@@ -549,7 +549,7 @@ const SettingsScreen = () => {
         </View>
 
         {/* ── Section 1: Standard Permissions ────────────────────────────── */}
-        <Text style={styles.sectionLabel}>MICROPHONE & COMMUNICATION</Text>
+        <Text style={styles.sectionLabel}>MICROPHONE</Text>
 
         {Object.keys(STD_NAMES).map((key) => {
           const name = STD_NAMES[key];

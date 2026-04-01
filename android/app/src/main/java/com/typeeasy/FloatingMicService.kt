@@ -112,6 +112,11 @@ class FloatingMicService : Service() {
         private const val NOTIFICATION_CHANNEL_ID = "floating_mic_channel"
         private const val NOTIFICATION_ID = 1001
         private const val ACTION_STOP_SERVICE = "com.typeeasy.STOP_FLOATING_MIC"
+
+        /** True while a [FloatingMicService] instance is alive (after onCreate, cleared in onDestroy). */
+        @Volatile
+        @JvmStatic
+        var isInstanceRunning: Boolean = false
         
         // Smart mic control actions
         const val ACTION_SHOW_MIC = "com.typeeasy.SHOW_MIC"
@@ -149,6 +154,7 @@ class FloatingMicService : Service() {
         showFloatingOverlay()
         
         isServiceReady = true
+        isInstanceRunning = true
         Log.d(TAG, "✅ FloatingMicService created and ready with mic overlay visible")
     }
 
@@ -1252,6 +1258,7 @@ class FloatingMicService : Service() {
     }
     
     override fun onDestroy() {
+        isInstanceRunning = false
         super.onDestroy()
         isServiceReady = false
         

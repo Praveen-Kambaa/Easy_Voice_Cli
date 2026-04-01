@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import AlertModal from '../components/common/AlertModal';
 import { setGlobalAlert, resetGlobalAlert } from '../utils/alertPresenter';
+import { setGlobalAlertModalVisible } from '../utils/alertModalState';
 
 const AlertContext = createContext(null);
 
@@ -29,6 +30,10 @@ export const AlertProvider = ({ children }) => {
     setGlobalAlert(showAlert);
     return () => resetGlobalAlert();
   }, [showAlert]);
+
+  useEffect(() => {
+    setGlobalAlertModalVisible(alertState.visible);
+  }, [alertState.visible]);
 
   return (
     <AlertContext.Provider value={showAlert}>

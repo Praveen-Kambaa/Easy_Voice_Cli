@@ -8,25 +8,17 @@ import {
   openSettings,
 } from 'react-native-permissions';
 
-// Permission types we need to manage
 const PERMISSION_TYPES = {
   MICROPHONE: Platform.OS === 'ios' ? PERMISSIONS.IOS.MICROPHONE : PERMISSIONS.ANDROID.RECORD_AUDIO,
-  PHONE_CALL: Platform.OS === 'ios' ? PERMISSIONS.IOS.PHONE_CALL : PERMISSIONS.ANDROID.CALL_PHONE,
-  SMS: Platform.OS === 'ios' ? PERMISSIONS.IOS.SMS : PERMISSIONS.ANDROID.SEND_SMS,
 };
 
-// Permission names for UI display
 const PERMISSION_NAMES = {
   MICROPHONE: 'Microphone',
-  PHONE_CALL: 'Phone Call',
-  SMS: 'SMS',
 };
 
 export const usePermissionsManager = () => {
   const [permissionStatuses, setPermissionStatuses] = useState({
     [PERMISSION_NAMES.MICROPHONE]: RESULTS.UNAVAILABLE,
-    [PERMISSION_NAMES.PHONE_CALL]: RESULTS.UNAVAILABLE,
-    [PERMISSION_NAMES.SMS]: RESULTS.UNAVAILABLE,
   });
 
   const [loading, setLoading] = useState(false);

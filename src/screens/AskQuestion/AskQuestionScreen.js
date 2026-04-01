@@ -7,22 +7,53 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { History, Bookmark } from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
+import AskQuestionAccessBlocked from '../../components/AskQuestion/AskQuestionAccessBlocked';
 import { Colors } from '../../theme/Colors';
-import { syncFloatingMicSettingsToNative } from '../../services/floatingMicConfig';
+import {
+  canAccessAskQuestionFeature,
+  syncFloatingMicSettingsToNative,
+} from '../../services/floatingMicConfig';
 
 const AskQuestionScreen = ({ navigation }) => {
   const [answerField, setAnswerField] = useState('');
+  const [accessAllowed, setAccessAllowed] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
-      syncFloatingMicSettingsToNative();
+      let cancelled = false;
+      (async () => {
+        await syncFloatingMicSettingsToNative();
+        const ok = await canAccessAskQuestionFeature();
+        if (!cancelled) {
+          setAccessAllowed(ok);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
     }, []),
   );
+
+  if (accessAllowed === null) {
+    return (
+      <ScreenContainer>
+        <AppHeader title="Ask Question" />
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  if (!accessAllowed) {
+    return <AskQuestionAccessBlocked navigation={navigation} />;
+  }
 
   const historyBtn = (
     <TouchableOpacity
@@ -89,6 +120,11 @@ const AskQuestionScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  loadingWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   flex: {
     flex: 1,
   },

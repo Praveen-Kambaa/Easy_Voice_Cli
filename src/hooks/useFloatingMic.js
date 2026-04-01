@@ -39,7 +39,13 @@ export const useFloatingMic = () => {
 
   useEffect(() => {
     checkPermissions();
-    
+
+    if (Platform.OS === 'android' && typeof FloatingMicModule?.isFloatingMicServiceRunning === 'function') {
+      FloatingMicModule.isFloatingMicServiceRunning()
+        .then((running) => setIsServiceActive(!!running))
+        .catch(() => {});
+    }
+
     // Set up event listeners
     const recordingStartedListener = DeviceEventEmitter.addListener(
       'FloatingMicService_onRecordingStarted',

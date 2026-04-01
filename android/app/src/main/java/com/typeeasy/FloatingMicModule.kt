@@ -87,6 +87,15 @@ class FloatingMicModule(reactContext: ReactApplicationContext) : ReactContextBas
     }
 
     @ReactMethod
+    fun isFloatingMicServiceRunning(promise: Promise) {
+        try {
+            promise.resolve(FloatingMicService.isInstanceRunning)
+        } catch (e: Exception) {
+            promise.reject("SERVICE_STATE_ERROR", "Failed to read floating mic service state: ${e.message}")
+        }
+    }
+
+    @ReactMethod
     fun checkPermissions(promise: Promise) {
         try {
             val context = reactApplicationContext

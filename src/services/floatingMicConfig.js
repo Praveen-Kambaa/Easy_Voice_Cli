@@ -121,6 +121,34 @@ export async function setOverlayAskQuestionEnabled(enabled) {
   await syncFloatingMicSettingsToNative();
 }
 
+/** @returns {Promise<boolean>} Whether the Android floating mic foreground service is running. */
+export async function isFloatingMicServiceRunning() {
+  if (Platform.OS !== 'android' || typeof FloatingMicModule?.isFloatingMicServiceRunning !== 'function') {
+    return false;
+  }
+  try {
+    return await FloatingMicModule.isFloatingMicServiceRunning();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * In-app Ask Question (Android): requires the floating mic foreground service to be running (Floating Mic screen → Start)
+ * and the Ask Question overlay toggle under Settings → FLOATING MIC → Overlay actions.
+ * iOS: no floating service; allow the screen.
+ */
+export async function canAccessAskQuestionFeature() {
+  if (Platform.OS !== 'android') {
+    return true;
+  }
+  const [askQuestionOverlay, serviceRunning] = await Promise.all([
+    getOverlayAskQuestionEnabled(),
+    isFloatingMicServiceRunning(),
+  ]);
+  return askQuestionOverlay && serviceRunning;
+}
+
 /** API key from `src/config/aiProvider.js` (synced to Android for floating Ask Question). */
 export async function getAiProviderApiKey() {
   return (AI_PROVIDER_API_KEY ?? '').trim();
