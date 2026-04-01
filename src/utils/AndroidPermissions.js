@@ -1,4 +1,5 @@
-import { Platform, Alert, Linking, NativeModules } from 'react-native';
+import { Platform, Linking, NativeModules } from 'react-native';
+import { showGlobalAlert } from './alertPresenter';
 
 const { AndroidPermissionsModule } = NativeModules;
 
@@ -173,21 +174,10 @@ export const showPermissionDeniedDialog = (permissionName, openSettingsCallback)
     ? getOverlayExplanation() 
     : getAccessibilityExplanation();
 
-  Alert.alert(
-    `${permissionName} Permission Required`,
-    explanation.join('\n\n'),
-    [
-      {
-        text: 'Cancel',
-        style: 'cancel',
-      },
-      {
-        text: 'Open Settings',
-        onPress: openSettingsCallback,
-      },
-    ],
-    { cancelable: false }
-  );
+  showGlobalAlert(`${permissionName} Permission Required`, explanation.join('\n\n'), [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Open Settings', onPress: openSettingsCallback },
+  ]);
 };
 
 /**
@@ -205,7 +195,7 @@ export const shouldShowPermissionRationale = (permissionType) => {
  */
 export const requestOverlayPermission = async () => {
   if (!supportsOverlayPermission()) {
-    Alert.alert(
+    showGlobalAlert(
       'Not Supported',
       'Overlay permission is not supported on this Android version.'
     );
@@ -236,7 +226,7 @@ export const requestOverlayPermission = async () => {
  */
 export const requestAccessibilityPermission = async () => {
   if (!supportsAccessibilityService()) {
-    Alert.alert(
+    showGlobalAlert(
       'Not Supported',
       'Accessibility services are not supported on this platform.'
     );

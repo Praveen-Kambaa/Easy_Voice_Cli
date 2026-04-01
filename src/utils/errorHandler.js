@@ -3,6 +3,10 @@
  * Provides consistent error handling across the application
  */
 
+import React from 'react';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { showGlobalAlert } from './alertPresenter';
+
 // Error categories for better handling
 export const ERROR_CATEGORIES = {
   NETWORK: 'NETWORK',
@@ -289,10 +293,7 @@ export const handleError = (error, context = {}, options = {}) => {
       },
     }));
 
-    // Import Alert dynamically to avoid circular dependencies
-    import('react-native').then(({ Alert }) => {
-      Alert.alert(title, message, buttons, { cancelable: true });
-    });
+    showGlobalAlert(title, message, buttons.length ? buttons : [{ text: 'OK' }]);
   }
 
   return loggedError;

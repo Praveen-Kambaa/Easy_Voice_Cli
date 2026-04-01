@@ -9,30 +9,29 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Mail, Eye, EyeOff, User, Lock, Phone, MapPin } from 'lucide-react-native';
 import { useAuth } from '../../context/AuthContext';
+import { useAlert } from '../../context/AlertContext';
+import {
+  validateEmail,
+  validateIndianMobile10Digits,
+  normalizePhoneToE164India,
+  validatePersonName,
+  validateCityOrState,
+  validateOtp6,
+  passwordMeetsRules,
+  passwordRuleMessage,
+  sanitizeLettersAndSpaces,
+  sanitizeIndianMobileInput,
+} from '../../utils/authValidation';
 
 /** Match API contract; use `mobile` if your backend expects it. */
 const REGISTRATION_SOURCE = 'web';
 
-const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-
-const normalizePhone = (input) => {
-  const t = input.trim();
-  if (t.startsWith('+')) return t;
-  const digits = t.replace(/\D/g, '');
-  if (digits.length === 10) return `+91${digits}`;
-  if (digits.length >= 10) return `+${digits}`;
-  return t;
-};
-
-const passwordMeetsRules = (password) =>
-  password.length >= 8 && /[A-Z]/.test(password) && /\d/.test(password);
-
 const RegisterScreen = ({ navigation }) => {
+  const showAlert = useAlert();
   const { sendRegistrationOtp, verifyRegistrationOtp, completeRegistration } = useAuth();
   const [step, setStep] = useState(1);
   const [email, setEmail] = useState('');
@@ -49,31 +48,34 @@ const RegisterScreen = ({ navigation }) => {
   const clearError = () => setError('');
 
   const handleSendOtp = async () => {
-    if (!isValidEmail(email)) {
-      setError('Please enter a valid email address.');
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.ok) {
+      setError(emailCheck.message);
       return;
     }
     setError('');
     setIsLoading(true);
-    const result = await sendRegistrationOtp(email);
+    const result = await sendRegistrationOtp(emailCheck.value);
     setIsLoading(false);
     if (!result.success) {
       setError(result.error);
       return;
     }
+    setEmail(emailCheck.value);
     setStep(2);
     setOtp('');
   };
 
   const handleVerifyOtp = async () => {
-    const code = otp.trim();
-    if (code.length < 6) {
-      setError('Enter the 6-digit OTP sent to your email.');
+    const otpCheck = validateOtp6(otp);
+    if (!otpCheck.ok) {
+      setError(otpCheck.message);
       return;
     }
+    const code = otpCheck.value;
     setError('');
     setIsLoading(true);
-    const result = await verifyRegistrationOtp(email, code);
+    const result = await verifyRegistrationOtp(email.trim(), code);
     setIsLoading(false);
     if (!result.success) {
       setError(result.error);
@@ -83,24 +85,28 @@ const RegisterScreen = ({ navigation }) => {
   };
 
   const handleCompleteRegistration = async () => {
-    if (!name.trim()) {
-      setError('Please enter your full name.');
+    const nameCheck = validatePersonName(name, 'Full name');
+    if (!nameCheck.ok) {
+      setError(nameCheck.message);
       return;
     }
-    if (!phone.trim()) {
-      setError('Please enter your phone number.');
+    const phoneCheck = validateIndianMobile10Digits(phone);
+    if (!phoneCheck.ok) {
+      setError(phoneCheck.message);
       return;
     }
-    if (!city.trim()) {
-      setError('Please enter your city.');
+    const cityCheck = validateCityOrState(city, 'City');
+    if (!cityCheck.ok) {
+      setError(cityCheck.message);
       return;
     }
-    if (!stateRegion.trim()) {
-      setError('Please enter your state.');
+    const stateCheck = validateCityOrState(stateRegion, 'State');
+    if (!stateCheck.ok) {
+      setError(stateCheck.message);
       return;
     }
     if (!passwordMeetsRules(password)) {
-      setError('Password: min 8 characters, 1 uppercase letter, 1 number.');
+      setError(passwordRuleMessage());
       return;
     }
 
@@ -108,10 +114,10 @@ const RegisterScreen = ({ navigation }) => {
     setIsLoading(true);
     const result = await completeRegistration({
       email: email.trim(),
-      name: name.trim(),
-      phone: normalizePhone(phone),
-      city: city.trim(),
-      state: stateRegion.trim(),
+      name: nameCheck.value,
+      phone: normalizePhoneToE164India(phoneCheck.digits),
+      city: cityCheck.value,
+      state: stateCheck.value,
       password,
       source: REGISTRATION_SOURCE,
     });
@@ -126,7 +132,7 @@ const RegisterScreen = ({ navigation }) => {
       return;
     }
 
-    Alert.alert('Success', result.message || 'Registration completed. Please sign in.', [
+    showAlert('Success', result.message || 'Registration completed. Please sign in.', [
       { text: 'OK', onPress: () => navigation.navigate('Login') },
     ]);
   };
@@ -214,7 +220,7 @@ const RegisterScreen = ({ navigation }) => {
             placeholderTextColor="#64748b"
             value={otp}
             onChangeText={(t) => {
-              setOtp(t.replace(/\D/g, '').slice(0, 8));
+              setOtp(t.replace(/\D/g, '').slice(0, 6));
               clearError();
             }}
             keyboardType="number-pad"
@@ -266,7 +272,7 @@ const RegisterScreen = ({ navigation }) => {
             placeholderTextColor="#64748b"
             value={name}
             onChangeText={(t) => {
-              setName(t);
+              setName(sanitizeLettersAndSpaces(t));
               clearError();
             }}
             autoCapitalize="words"
@@ -281,14 +287,16 @@ const RegisterScreen = ({ navigation }) => {
           <Phone size={18} color={iconMuted} strokeWidth={2} style={styles.inputIcon} />
           <TextInput
             style={styles.input}
-            placeholder="Phone Number (10 digits)"
+            placeholder="10 digits, starts with 6–9"
             placeholderTextColor="#64748b"
             value={phone}
             onChangeText={(t) => {
-              setPhone(t);
+              setPhone(sanitizeIndianMobileInput(t));
               clearError();
             }}
-            keyboardType="phone-pad"
+            keyboardType="number-pad"
+            maxLength={10}
+            textContentType="telephoneNumber"
             returnKeyType="next"
           />
         </View>
@@ -305,7 +313,7 @@ const RegisterScreen = ({ navigation }) => {
               placeholderTextColor="#64748b"
               value={city}
               onChangeText={(t) => {
-                setCity(t);
+                setCity(sanitizeLettersAndSpaces(t));
                 clearError();
               }}
               autoCapitalize="words"
@@ -322,7 +330,7 @@ const RegisterScreen = ({ navigation }) => {
               placeholderTextColor="#64748b"
               value={stateRegion}
               onChangeText={(t) => {
-                setStateRegion(t);
+                setStateRegion(sanitizeLettersAndSpaces(t));
                 clearError();
               }}
               autoCapitalize="characters"

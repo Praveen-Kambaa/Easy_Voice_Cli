@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { NativeModules, DeviceEventEmitter, Platform, Alert } from 'react-native';
+import { NativeModules, DeviceEventEmitter, Platform } from 'react-native';
 import { formatTime } from '../utils/dateTimeFormat';
+import { useAlert } from '../context/AlertContext';
 
 const { FloatingMicModule } = NativeModules;
 
 export const useSpeechDebug = () => {
+  const showAlert = useAlert();
   const [debugLogs, setDebugLogs] = useState([]);
   const [isListening, setIsListening] = useState(false);
   const [lastTranscription, setLastTranscription] = useState('');
@@ -72,21 +74,21 @@ export const useSpeechDebug = () => {
       
       if (!permissions.recordAudio) {
         addLog('❌ RECORD_AUDIO: Not granted', 'error');
-        Alert.alert('Permission Required', 'Please grant microphone permission');
+        showAlert('Permission Required', 'Please grant microphone permission');
         return;
       }
       addLog('✅ RECORD_AUDIO: Granted', 'success');
 
       if (!permissions.overlay) {
         addLog('❌ OVERLAY: Not granted', 'error');
-        Alert.alert('Permission Required', 'Please grant overlay permission');
+        showAlert('Permission Required', 'Please grant overlay permission');
         return;
       }
       addLog('✅ OVERLAY: Granted', 'success');
 
       if (!permissions.accessibility) {
         addLog('❌ ACCESSIBILITY: Not enabled', 'error');
-        Alert.alert('Service Required', 'Please enable accessibility service');
+        showAlert('Service Required', 'Please enable accessibility service');
         return;
       }
       addLog('✅ ACCESSIBILITY: Enabled', 'success');

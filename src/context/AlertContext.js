@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import AlertModal from '../components/common/AlertModal';
+import { setGlobalAlert, resetGlobalAlert } from '../utils/alertPresenter';
 
 const AlertContext = createContext(null);
 
@@ -23,6 +24,11 @@ export const AlertProvider = ({ children }) => {
   const dismissAlert = useCallback(() => {
     setAlertState(prev => ({ ...prev, visible: false }));
   }, []);
+
+  useEffect(() => {
+    setGlobalAlert(showAlert);
+    return () => resetGlobalAlert();
+  }, [showAlert]);
 
   return (
     <AlertContext.Provider value={showAlert}>

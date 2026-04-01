@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { NativeModules, DeviceEventEmitter, Platform, Alert, Linking } from 'react-native';
+import { NativeModules, DeviceEventEmitter, Platform } from 'react-native';
+import { showGlobalAlert } from '../utils/alertPresenter';
 
 const { FloatingMicModule } = NativeModules;
 
@@ -189,7 +190,7 @@ export const useFloatingMic = () => {
       console.log('Floating mic started:', result);
     } catch (error) {
       console.error('Failed to start floating mic:', error);
-      Alert.alert('Error', error.message || 'Failed to start floating microphone');
+      showGlobalAlert('Error', error.message || 'Failed to start floating microphone');
     }
   };
 
@@ -209,7 +210,7 @@ export const useFloatingMic = () => {
       console.log('Floating mic stopped:', result);
     } catch (error) {
       console.error('Failed to stop floating mic:', error);
-      Alert.alert('Error', error.message || 'Failed to stop floating microphone');
+      showGlobalAlert('Error', error.message || 'Failed to stop floating microphone');
     }
   };
 
@@ -227,7 +228,7 @@ export const useFloatingMic = () => {
     }
 
     if (missingPermissions.length > 0) {
-      Alert.alert(
+      showGlobalAlert(
         'Permissions Required',
         `The following permissions are required:\n${missingPermissions.map(p => `• ${p}`).join('\n')}`,
         [
@@ -248,13 +249,13 @@ export const useFloatingMic = () => {
     try {
       if (!permissions.overlay) {
         await FloatingMicModule.openOverlaySettings();
-        Alert.alert(
+        showGlobalAlert(
           'Overlay Permission',
           'Please enable "Display over other apps" permission for this app, then return to the app.'
         );
       } else if (!permissions.accessibility) {
         await FloatingMicModule.openAccessibilitySettings();
-        Alert.alert(
+        showGlobalAlert(
           'Accessibility Service',
           'Please enable the accessibility service for this app, then return to the app.'
         );

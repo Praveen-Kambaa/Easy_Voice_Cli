@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DeviceEventEmitter } from 'react-native';
 import {
   LOCAL_HISTORY_RETENTION_MS,
   filterEntriesWithinRetention,
@@ -39,6 +40,7 @@ export async function deleteAiQaHistoryEntry(id) {
     const list = await getAiQaHistory();
     const next = list.filter((item) => item.id !== id);
     await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+    DeviceEventEmitter.emit(AI_QA_HISTORY_UPDATED_EVENT);
     return { success: true };
   } catch (e) {
     console.warn('[aiQaStorage] deleteAiQaHistoryEntry', e);
@@ -63,6 +65,7 @@ export async function addAiQaHistory({ question, answer }) {
     const pruned = filterEntriesWithinRetention(merged, LOCAL_HISTORY_RETENTION_MS);
     const next = pruned.slice(0, MAX_HISTORY);
     await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+    DeviceEventEmitter.emit(AI_QA_HISTORY_UPDATED_EVENT);
   } catch (e) {
     console.warn('[aiQaStorage] addAiQaHistory', e);
   }

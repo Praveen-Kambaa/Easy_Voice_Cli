@@ -1,8 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DeviceEventEmitter } from 'react-native';
 import {
   LOCAL_HISTORY_RETENTION_MS,
   filterEntriesWithinRetention,
 } from '../utils/localHistoryRetention';
+
+export const TRANSLATION_HISTORY_UPDATED_EVENT = 'TranslationTextHistoryUpdated';
 
 const HISTORY_KEY = '@translator_text_history';
 const SAVED_KEY = '@translator_text_saved';
@@ -39,6 +42,7 @@ export async function deleteTranslationHistoryEntry(id) {
     const list = await getTranslationHistory();
     const next = list.filter((item) => item.id !== id);
     await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+    DeviceEventEmitter.emit(TRANSLATION_HISTORY_UPDATED_EVENT);
     return { success: true };
   } catch (e) {
     console.warn('[translationTextStorage] deleteTranslationHistoryEntry', e);
@@ -62,6 +66,7 @@ export async function addTranslationHistory(entry) {
     const pruned = filterEntriesWithinRetention(merged, LOCAL_HISTORY_RETENTION_MS);
     const next = pruned.slice(0, MAX_HISTORY);
     await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+    DeviceEventEmitter.emit(TRANSLATION_HISTORY_UPDATED_EVENT);
   } catch (e) {
     console.warn('[translationTextStorage] addTranslationHistory', e);
   }

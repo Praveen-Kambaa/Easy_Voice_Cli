@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Platform, Alert } from 'react-native';
-import { NativeModules, PermissionsAndroid } from 'react-native';
+import { Platform, NativeModules, PermissionsAndroid } from 'react-native';
+import { useAlert } from '../context/AlertContext';
 
 const { VoiceAssistantModule } = NativeModules;
 
@@ -9,6 +9,7 @@ const { VoiceAssistantModule } = NativeModules;
  * Manages floating overlay and permissions for voice assistant feature
  */
 export const useVoiceAssistant = () => {
+  const showAlert = useAlert();
   const [permissions, setPermissions] = useState({
     overlay: false,
     accessibility: false,
@@ -37,60 +38,80 @@ export const useVoiceAssistant = () => {
       setPermissions(result);
     } catch (error) {
       console.error('Error checking permissions:', error);
-      Alert.alert('Error', 'Failed to check permissions');
+      showAlert('Error', 'Failed to check permissions');
     } finally {
       setLoading(prev => ({ ...prev, permissions: false }));
     }
-  }, []);
+  }, [showAlert]);
+
+  /**
+   * Request record audio permission
+   */
+  const requestRecordAudioPermission = useCallback(async () => {
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO
+      );
+
+      if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+        checkPermissions();
+      } else {
+        showAlert('Permission Denied', 'Microphone permission is required for voice input');
+      }
+    } catch (error) {
+      console.error('Error requesting audio permission:', error);
+      showAlert('Error', 'Failed to request microphone permission');
+    }
+  }, [checkPermissions, showAlert]);
 
   /**
    * Start floating overlay service
    */
   const startOverlay = useCallback(async () => {
     if (Platform.OS !== 'android') {
-      Alert.alert('Error', 'Voice assistant is only available on Android');
+      showAlert('Error', 'Voice assistant is only available on Android');
       return;
     }
 
     setLoading(prev => ({ ...prev, overlay: true }));
-    
+
     try {
       await VoiceAssistantModule.startFloatingOverlay();
       setIsOverlayActive(true);
     } catch (error) {
       console.error('Error starting overlay:', error);
-      
+
       if (error.message.includes('OVERLAY_PERMISSION_DENIED')) {
-        Alert.alert(
+        showAlert(
           'Overlay Permission Required',
           'Please enable overlay permission to use voice assistant.',
           [
             { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Open Settings', 
-              onPress: () => VoiceAssistantModule.openOverlaySettings() 
+            {
+              text: 'Open Settings',
+              onPress: () => VoiceAssistantModule.openOverlaySettings(),
             },
           ]
         );
       } else if (error.message.includes('AUDIO_PERMISSION_DENIED')) {
-        Alert.alert(
+        showAlert(
           'Microphone Permission Required',
           'Please enable microphone permission to use voice assistant.',
           [
             { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Open Settings', 
-              onPress: () => requestRecordAudioPermission() 
+            {
+              text: 'Open Settings',
+              onPress: () => requestRecordAudioPermission(),
             },
           ]
         );
       } else {
-        Alert.alert('Error', 'Failed to start voice assistant');
+        showAlert('Error', 'Failed to start voice assistant');
       }
     } finally {
       setLoading(prev => ({ ...prev, overlay: false }));
     }
-  }, []);
+  }, [showAlert, requestRecordAudioPermission]);
 
   /**
    * Stop floating overlay service
@@ -107,32 +128,11 @@ export const useVoiceAssistant = () => {
       setIsOverlayActive(false);
     } catch (error) {
       console.error('Error stopping overlay:', error);
-      Alert.alert('Error', 'Failed to stop voice assistant');
+      showAlert('Error', 'Failed to stop voice assistant');
     } finally {
       setLoading(prev => ({ ...prev, overlay: false }));
     }
-  }, []);
-
-  /**
-   * Request record audio permission
-   */
-  const requestRecordAudioPermission = useCallback(async () => {
-    try {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONSPECORD_AUDIO
-      );
-      
-      if (granted) {
-        // Permission granted, check all permissions again
-        checkPermissions();
-      } else {
-        Alert.alert('Permission Denied', 'Microphone permission is required for voice input');
-      }
-    } catch (error) {
-      console.error('Error requesting audio permission:', error);
-      Alert.alert('Error', 'Failed to request microphone permission');
-    }
-  }, [checkPermissions]);
+  }, [showAlert]);
 
   /**
    * Open overlay permission settings

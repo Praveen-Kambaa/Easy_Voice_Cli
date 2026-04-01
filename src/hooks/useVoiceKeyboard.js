@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Platform, NativeModules, Alert } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
+import { useAlert } from '../context/AlertContext';
 
 const { VoiceKeyboard } = NativeModules;
 
@@ -8,6 +9,7 @@ const { VoiceKeyboard } = NativeModules;
  * Provides reliable text insertion via InputMethodService
  */
 export const useVoiceKeyboard = () => {
+  const showAlert = useAlert();
   const [keyboardState, setKeyboardState] = useState({
     active: false,
     current: false,
@@ -109,25 +111,16 @@ export const useVoiceKeyboard = () => {
    * Show keyboard selection dialog with user guidance
    */
   const showKeyboardSelectionDialog = useCallback(() => {
-    Alert.alert(
+    showAlert(
       'Voice Keyboard Required',
       'To insert text reliably, please select "Voice Keyboard" from the keyboard selector.',
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Select Keyboard',
-          onPress: showKeyboardSelector,
-        },
-        {
-          text: 'Keyboard Settings',
-          onPress: openKeyboardSettings,
-        },
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Select Keyboard', onPress: showKeyboardSelector },
+        { text: 'Keyboard Settings', onPress: openKeyboardSettings },
       ]
     );
-  }, [showKeyboardSelector, openKeyboardSettings]);
+  }, [showAlert, showKeyboardSelector, openKeyboardSettings]);
 
   /**
    * Auto-check status on mount

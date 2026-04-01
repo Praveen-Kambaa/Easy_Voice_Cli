@@ -1,4 +1,5 @@
-import { NativeModules, Platform, Alert, Linking } from 'react-native';
+import { NativeModules, Platform, Linking } from 'react-native';
+import { showGlobalAlert } from '../utils/alertPresenter';
 
 const { FloatingMicModule } = NativeModules;
 
@@ -21,7 +22,7 @@ export const debugFloatingOverlay = async () => {
     // 1. Overlay Permission Check
     if (!permissions.overlay) {
       console.error('❌ OVERLAY PERMISSION NOT GRANTED');
-      Alert.alert(
+      showGlobalAlert(
         'Overlay Permission Required',
         'Please enable "Display over other apps" permission:\n\n1. Go to Settings\n2. Apps -> Your App\n3. Permissions -> Display over other apps\n4. Enable it',
         [
@@ -40,7 +41,7 @@ export const debugFloatingOverlay = async () => {
     // 2. Record Audio Permission Check
     if (!permissions.recordAudio) {
       console.error('❌ RECORD AUDIO PERMISSION NOT GRANTED');
-      Alert.alert(
+      showGlobalAlert(
         'Microphone Permission Required',
         'Please enable microphone permission for voice recording.',
         [
@@ -59,7 +60,7 @@ export const debugFloatingOverlay = async () => {
     // 3. Accessibility Service Check
     if (!permissions.accessibility) {
       console.error('❌ ACCESSIBILITY SERVICE NOT ENABLED');
-      Alert.alert(
+      showGlobalAlert(
         'Accessibility Service Required',
         'Please enable accessibility service:\n\n1. Go to Settings\n2. Accessibility\n3. Your App Service\n4. Enable it',
         [
@@ -82,7 +83,7 @@ export const debugFloatingOverlay = async () => {
       const result = await FloatingMicModule.startFloatingMic();
       console.log('✅ Service started successfully:', result);
       
-      Alert.alert(
+      showGlobalAlert(
         'Service Started',
         'Floating mic service started successfully!\n\nIf you still cannot see the floating icon:\n\n1. Check notification panel for service notification\n2. Try restarting your phone\n3. Check battery optimization settings\n4. Make sure no other overlay apps are blocking',
         [{ text: 'OK' }]
@@ -106,7 +107,7 @@ export const debugFloatingOverlay = async () => {
         suggestions.push('Check battery optimization');
       }
       
-      Alert.alert(
+      showGlobalAlert(
         'Service Start Failed',
         `Error: ${errorMessage}\n\nSuggestions:\n${suggestions.map(s => `• ${s}`).join('\n')}`,
         [{ text: 'OK' }]
@@ -115,7 +116,7 @@ export const debugFloatingOverlay = async () => {
     
   } catch (error) {
     console.error('❌ Debug failed:', error);
-    Alert.alert('Debug Error', error.message);
+    showGlobalAlert('Debug Error', error.message);
   }
   
   console.log('=== END DEBUG ===');
@@ -125,7 +126,7 @@ export const checkBatteryOptimization = async () => {
   console.log('=== BATTERY OPTIMIZATION CHECK ===');
   
   // This would need to be implemented in native module
-  Alert.alert(
+  showGlobalAlert(
     'Battery Optimization',
     'For reliable floating overlay service:\n\n1. Go to Settings\n2. Battery -> Battery Optimization\n3. Apps -> Your App\n4. Set to "Not optimized"\n5. Also check Background activity',
     [
@@ -161,7 +162,7 @@ export const checkAndroidVersionIssues = () => {
   }
   
   if (issues.length > 0) {
-    Alert.alert(
+    showGlobalAlert(
       'Android Version Specific Issues',
       `Issues:\n${issues.map(i => `• ${i}`).join('\n')}\n\nSolutions:\n${solutions.map(s => `• ${s}`).join('\n')}`,
       [{ text: 'OK' }]

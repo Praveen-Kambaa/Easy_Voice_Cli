@@ -7,48 +7,78 @@ import {
   TouchableOpacity,
   RefreshControl,
   DeviceEventEmitter,
+  Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Mic, Music, Radio, Settings, Circle, ChevronRight, History, Languages } from 'lucide-react-native';
+import { Mic, Music, Radio, Settings, Circle, ChevronRight, History, Languages, CircleHelp } from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { Colors } from '../../theme/Colors';
 import { TIME_LABELS, USER } from '../../constants';
-import NativeAudioService, { VOICE_RECORDINGS_UPDATED_EVENT } from '../../services/NativeAudioService';
+import { getLanguageName } from '../../constants/translationLanguages';
 import {
   FloatingSpeechHistoryService,
   FLOATING_SPEECH_UPDATED_EVENT,
 } from '../../services/FloatingSpeechHistoryService';
-import { formatTime, formatCompactDateTime } from '../../utils/dateTimeFormat';
-import {
-  getAllRecent,
-  ACTIVITY_HISTORY_UPDATED_EVENT,
-} from '../../services/appActivityHistoryService';
+import { getTranslationHistory, TRANSLATION_HISTORY_UPDATED_EVENT } from '../../services/translationTextStorage';
+import { getAiQaHistory, AI_QA_HISTORY_UPDATED_EVENT } from '../../services/aiQaStorage';
+import { formatCompactDateTime } from '../../utils/dateTimeFormat';
+import { useFloatingMic } from '../../hooks/useFloatingMic';
 
-const CATEGORY_SHORT = {
-  floating_mic: 'Floating mic',
-  voice_recorder: 'Voice',
-  recordings: 'Recordings',
-  translator: 'Translate',
-  settings: 'Settings',
-};
+const RECENT_FEED_LIMIT = 14;
+
+function mergeRecentFeed(speechAll, translations, qaList) {
+  const rows = [];
+  for (const e of speechAll || []) {
+    rows.push({
+      kind: 'speech',
+      key: `sp_${e.id}`,
+      sortAt: Date.parse(e.createdAt) || 0,
+      data: e,
+    });
+  }
+  for (const e of translations || []) {
+    rows.push({
+      kind: 'translation',
+      key: `tr_${e.id}`,
+      sortAt: Date.parse(e.createdAt) || 0,
+      data: e,
+    });
+  }
+  for (const e of qaList || []) {
+    rows.push({
+      kind: 'qa',
+      key: `qa_${e.id}`,
+      sortAt: Date.parse(e.createdAt) || 0,
+      data: e,
+    });
+  }
+  rows.sort((a, b) => b.sortAt - a.sortAt);
+  return rows.slice(0, RECENT_FEED_LIMIT);
+}
 
 const HomeScreen = ({ navigation }) => {
-  const [recordings, setRecordings] = useState([]);
-  const [speechPreview, setSpeechPreview] = useState([]);
-  const [appActivityPreview, setAppActivityPreview] = useState([]);
+  const [recentFeed, setRecentFeed] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+
+  const {
+    isServiceActive,
+    checkPermissions,
+    handleMissingPermissions,
+    needsPermissions,
+    startFloatingMic,
+    stopFloatingMic,
+  } = useFloatingMic();
 
   const loadDashboard = useCallback(async () => {
     try {
-      const [all, speechAll, recentActs] = await Promise.all([
-        NativeAudioService.getAllRecordings(),
+      const [speechAll, translations, qaList] = await Promise.all([
         FloatingSpeechHistoryService.getAll(),
-        getAllRecent(12),
+        getTranslationHistory(),
+        getAiQaHistory(),
       ]);
-      setRecordings(all.slice().reverse().slice(0, 5));
-      setSpeechPreview(speechAll.slice().reverse().slice(0, 4));
-      setAppActivityPreview(recentActs.slice(0, 8));
+      const speechNewestFirst = (speechAll || []).slice().reverse();
+      setRecentFeed(mergeRecentFeed(speechNewestFirst, translations, qaList));
     } catch {
       // Non-critical
     }
@@ -61,13 +91,16 @@ const HomeScreen = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       loadDashboard();
-    }, [loadDashboard]),
+      if (Platform.OS === 'android') {
+        checkPermissions();
+      }
+    }, [loadDashboard, checkPermissions]),
   );
 
   useEffect(() => {
     const a = DeviceEventEmitter.addListener(FLOATING_SPEECH_UPDATED_EVENT, loadDashboard);
-    const b = DeviceEventEmitter.addListener(VOICE_RECORDINGS_UPDATED_EVENT, loadDashboard);
-    const c = DeviceEventEmitter.addListener(ACTIVITY_HISTORY_UPDATED_EVENT, loadDashboard);
+    const b = DeviceEventEmitter.addListener(TRANSLATION_HISTORY_UPDATED_EVENT, loadDashboard);
+    const c = DeviceEventEmitter.addListener(AI_QA_HISTORY_UPDATED_EVENT, loadDashboard);
     return () => {
       a.remove();
       b.remove();
@@ -81,10 +114,14 @@ const HomeScreen = ({ navigation }) => {
     setRefreshing(false);
   };
 
-  const formatDuration = (ms) => {
-    if (!ms) return '0:00';
-    const s = Math.floor(ms / 1000);
-    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  const openFeedDestination = (kind) => {
+    if (kind === 'speech') {
+      navigation.navigate('FloatingMicHistory');
+    } else if (kind === 'translation') {
+      navigation.navigate('Translator', { screen: 'TranslatorHistory' });
+    } else {
+      navigation.navigate('AskQuestion', { screen: 'AiQaHistory' });
+    }
   };
 
   const greeting = `${TIME_LABELS.getGreeting()}, ${USER.DEFAULT_NAME}`;
@@ -118,7 +155,7 @@ const HomeScreen = ({ navigation }) => {
               <Mic size={26} color="#FFFFFF" strokeWidth={1.8} />
             </View>
           </View>
-          <View style={styles.heroStats}>
+          {/* <View style={styles.heroStats}>
             <View style={styles.heroStatItem}>
               <Text style={styles.heroStatValue}>{recordings.length}</Text>
               <Text style={styles.heroStatLabel}>Total Recordings</Text>
@@ -132,7 +169,7 @@ const HomeScreen = ({ navigation }) => {
               </Text>
               <Text style={styles.heroStatLabel}>Total Duration</Text>
             </View>
-          </View>
+          </View> */}
         </View>
 
         {/* Start Recording CTA */}
@@ -144,6 +181,36 @@ const HomeScreen = ({ navigation }) => {
           <Circle size={18} color="#FFFFFF" strokeWidth={2.5} />
           <Text style={styles.ctaBtnText}>Start Voice Command</Text>
         </TouchableOpacity>
+        {/* Floating mic overlay — one-line toggle (Android); same behavior as Floating Mic screen */}
+        {Platform.OS === 'android' ? (
+          <TouchableOpacity
+            style={[styles.floatingMicBtn, needsPermissions && styles.floatingMicBtnMuted]}
+            onPress={() => {
+              if (needsPermissions) {
+                handleMissingPermissions();
+                return;
+              }
+              if (isServiceActive) {
+                stopFloatingMic();
+              } else {
+                startFloatingMic();
+              }
+            }}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.floatingMicBtnText} numberOfLines={1}>
+              {needsPermissions
+                ? 'Floating mic — tap to set up permissions'
+                : isServiceActive
+                  ? 'Floating Mic: On'
+                  : 'Floating Mic: Off'}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <Text style={styles.floatingMicIosNote} numberOfLines={1}>
+            Floating mic overlay is available on Android.
+          </Text>
+        )}
 
         {/* Quick Actions */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -163,109 +230,72 @@ const HomeScreen = ({ navigation }) => {
           ))}
         </View>
 
-        {appActivityPreview.length > 0 ? (
-          <>
-            <Text style={styles.sectionTitleActivity}>Latest actions</Text>
-            <View style={styles.activityFeedCard}>
-              {appActivityPreview.map((e) => (
-                <View key={e.id} style={styles.activityFeedRow}>
-                  <View style={styles.activityFeedDot} />
-                  <View style={styles.activityFeedBody}>
-                    <Text style={styles.activityFeedCategory}>
-                      {CATEGORY_SHORT[e.category] || e.category}
-                    </Text>
-                    <Text style={styles.activityFeedLabel} numberOfLines={2}>
-                      {e.label}
-                    </Text>
-                    {e.meta ? (
-                      <Text style={styles.activityFeedMeta} numberOfLines={1}>
-                        {e.meta}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <Text style={styles.activityFeedTime}>{formatCompactDateTime(e.createdAt)}</Text>
-                </View>
-              ))}
-            </View>
-          </>
-        ) : null}
+        <Text style={[styles.sectionTitle, styles.recentFeedSectionTitle]}>Recent transcripts</Text>
+        <Text style={styles.recentFeedIntro}>
+          What you spoke (floating mic), translations, and question &amp; answers — newest first.
+        </Text>
 
-        {/* Floating mic transcripts (AsyncStorage via FloatingSpeechHistoryService) */}
-        <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>Recent transcripts</Text>
-          {speechPreview.length > 0 && (
-            <TouchableOpacity onPress={() => navigation.navigate('FloatingMicHistory')}>
-              <Text style={styles.viewAllText}>View all →</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {speechPreview.length === 0 ? (
+        {recentFeed.length === 0 ? (
           <View style={styles.transcriptHintCard}>
             <Text style={styles.transcriptHintText}>
-              Dictations from the floating mic are saved automatically and listed here.
+              Use the floating mic, Translator, or Ask Question; your text will show up here automatically.
             </Text>
           </View>
         ) : (
-          speechPreview.map((entry) => (
-            <TouchableOpacity
-              key={entry.id}
-              style={styles.transcriptPreviewRow}
-              onPress={() => navigation.navigate('FloatingMicHistory')}
-              activeOpacity={0.7}
-            >
-              <View style={styles.transcriptPreviewIcon}>
-                <History size={17} color={Colors.primary} strokeWidth={2} />
-              </View>
-              <View style={styles.transcriptPreviewBody}>
-                <Text style={styles.transcriptPreviewTitle} numberOfLines={2}>
-                  {entry.text}
-                </Text>
-                <Text style={styles.activityMeta}>{formatCompactDateTime(entry.createdAt)}</Text>
-              </View>
-              <ChevronRight size={16} color={Colors.text.light} strokeWidth={2} />
-            </TouchableOpacity>
-          ))
-        )}
+          recentFeed.map((item) => {
+            const RowIcon =
+              item.kind === 'speech' ? Mic : item.kind === 'translation' ? Languages : CircleHelp;
+            const kindLabel =
+              item.kind === 'speech' ? 'Speech' : item.kind === 'translation' ? 'Translation' : 'Q & A';
 
-        {/* Recent Activity */}
-        <View style={styles.sectionRowRecent}>
-          <Text style={styles.sectionTitle}>Recent Activity</Text>
-          {recordings.length > 0 && (
-            <TouchableOpacity onPress={() => navigation.navigate('RecordedAudio')}>
-              <Text style={styles.viewAllText}>View all →</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+            let title = '';
+            let subtitle = '';
+            let metaTime = '';
 
-        {recordings.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyEmoji}>🎤</Text>
-            <Text style={styles.emptyTitle}>No recordings yet</Text>
-            <Text style={styles.emptyDesc}>Your recent recordings will appear here.</Text>
-          </View>
-        ) : (
-          recordings.map((rec, idx) => (
-            <TouchableOpacity
-              key={rec.id || idx}
-              style={styles.activityItem}
-              onPress={() => navigation.navigate('RecordedAudio')}
-              activeOpacity={0.7}
-            >
-              <View style={styles.activityIconWrap}>
-                <Music size={17} color={Colors.text.secondary} strokeWidth={1.8} />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle} numberOfLines={1}>
-                  {rec.refinedTranscript || rec.rawTranscript || `Recording ${String(rec.id || '').slice(-6)}`}
-                </Text>
-                <Text style={styles.activityMeta}>
-                  {formatTime(rec.createdAt)} · {formatDuration(rec.duration)}
-                </Text>
-              </View>
-              <ChevronRight size={16} color={Colors.text.light} strokeWidth={2} />
-            </TouchableOpacity>
-          ))
+            if (item.kind === 'speech') {
+              title = item.data.text || '';
+              subtitle = 'Floating mic';
+              metaTime = formatCompactDateTime(item.data.createdAt);
+            } else if (item.kind === 'translation') {
+              const d = item.data;
+              title = d.translatedText || '';
+              const fromN = getLanguageName(d.fromCode);
+              const toN = getLanguageName(d.toCode);
+              subtitle = `${fromN} → ${toN}: ${d.sourceText || ''}`.trim();
+              metaTime = formatCompactDateTime(d.createdAt);
+            } else {
+              const d = item.data;
+              title = `Q: ${d.question || ''}`;
+              subtitle = `A: ${d.answer || ''}`;
+              metaTime = formatCompactDateTime(d.createdAt);
+            }
+
+            return (
+              <TouchableOpacity
+                key={item.key}
+                style={styles.transcriptPreviewRow}
+                onPress={() => openFeedDestination(item.kind)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.transcriptPreviewIcon}>
+                  <RowIcon size={17} color={Colors.primary} strokeWidth={2} />
+                </View>
+                <View style={styles.transcriptPreviewBody}>
+                  <Text style={styles.feedKindTag}>{kindLabel}</Text>
+                  <Text style={styles.transcriptPreviewTitle} numberOfLines={item.kind === 'qa' ? 2 : 3}>
+                    {title}
+                  </Text>
+                  {subtitle ? (
+                    <Text style={styles.transcriptPreviewSubtitle} numberOfLines={item.kind === 'qa' ? 3 : 2}>
+                      {subtitle}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.activityMeta}>{metaTime}</Text>
+                </View>
+                <ChevronRight size={16} color={Colors.text.light} strokeWidth={2} />
+              </TouchableOpacity>
+            );
+          })
         )}
       </ScrollView>
     </ScreenContainer>
@@ -339,6 +369,34 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
   },
 
+  floatingMicBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 14,
+  },
+  floatingMicBtnMuted: {
+    borderColor: Colors.primary + '55',
+    backgroundColor: Colors.backgroundAlt,
+  },
+  floatingMicBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    textAlign: 'center',
+  },
+  floatingMicIosNote: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginBottom: 14,
+    textAlign: 'center',
+  },
+
   // CTA button
   ctaBtn: {
     flexDirection: 'row',
@@ -348,7 +406,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 16,
     gap: 10,
-    marginBottom: 28,
+    marginBottom: 14,
     shadowColor: Colors.recording.active,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -372,12 +430,15 @@ const styles = StyleSheet.create({
     color: Colors.text.primary,
     marginBottom: 12,
   },
-  sectionTitleActivity: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.text.primary,
+  recentFeedSectionTitle: {
+    marginTop: 4,
+  },
+  recentFeedIntro: {
+    fontSize: 13,
+    color: Colors.text.secondary,
+    lineHeight: 19,
     marginBottom: 12,
-    marginTop: 6,
+    marginTop: -4,
   },
   quickGrid: {
     flexDirection: 'row',
@@ -414,79 +475,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  activityFeedCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 24,
-  },
-  activityFeedRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 10,
-    gap: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  activityFeedDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.primary,
-    marginTop: 5,
-    flexShrink: 0,
-  },
-  activityFeedBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  activityFeedCategory: {
+  feedKindTag: {
     fontSize: 10,
     fontWeight: '700',
-    color: Colors.text.light,
+    color: Colors.primary,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  activityFeedLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text.primary,
-  },
-  activityFeedMeta: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-    marginTop: 2,
-  },
-  activityFeedTime: {
-    fontSize: 11,
-    color: Colors.text.light,
-    flexShrink: 0,
-    maxWidth: '32%',
-    textAlign: 'right',
-  },
-
-  // Section header row
-  sectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  sectionRowRecent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    marginTop: 20,
-  },
-  viewAllText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: Colors.text.secondary,
+    letterSpacing: 0.6,
+    marginBottom: 4,
   },
 
   transcriptHintCard: {
@@ -526,66 +521,18 @@ const styles = StyleSheet.create({
   },
   transcriptPreviewTitle: {
     fontSize: 14,
-    fontWeight: '500',
-    color: Colors.text.primary,
-    marginBottom: 2,
-    lineHeight: 20,
-  },
-
-  // Empty state
-  emptyCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 28,
-    alignItems: 'center',
-  },
-  emptyEmoji: {
-    fontSize: 36,
-    marginBottom: 10,
-  },
-  emptyTitle: {
-    fontSize: 15,
     fontWeight: '600',
     color: Colors.text.primary,
     marginBottom: 4,
+    lineHeight: 20,
   },
-  emptyDesc: {
+  transcriptPreviewSubtitle: {
     fontSize: 13,
     color: Colors.text.secondary,
-    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 4,
   },
 
-  // Activity items
-  activityItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 14,
-    marginBottom: 8,
-  },
-  activityIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: Colors.backgroundAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  activityContent: {
-    flex: 1,
-  },
-  activityTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.text.primary,
-    marginBottom: 2,
-  },
   activityMeta: {
     fontSize: 12,
     color: Colors.text.secondary,

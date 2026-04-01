@@ -1,9 +1,9 @@
 <resources>
-    <string name="app_name">Easy Voice</string>
+    <string name="app_name">TypeEasy</string>
     
     <!-- Accessibility Service Descriptions -->
-    <string name="accessibility_service_description">Easy Voice Assistant - Injects transcribed voice text into any app\'s text fields</string>
-    <string name="text_insertion_service_description">Easy Voice Text Insertion - Automatically inserts recognized text into text fields</string>
+    <string name="accessibility_service_description">Type Easy</string>
+    <string name="text_insertion_service_description">Type Easy</string>
     
     <!-- Floating Mic Service -->
     <string name="floating_mic_channel_name">Voice Assistant</string>

@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Mail, Eye, EyeOff, Lock } from 'lucide-react-native';
 import { useAuth } from '../../context/AuthContext';
 import ForgotPasswordModal from '../../components/ForgotPasswordModal';
+import { validateEmail } from '../../utils/authValidation';
 
 const iconMuted = '#94a3b8';
 
@@ -29,8 +30,9 @@ const LoginScreen = ({ navigation }) => {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   const handleLogin = async () => {
-    if (!email.trim()) {
-      setError('Please enter your email.');
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.ok) {
+      setError(emailCheck.message);
       return;
     }
     if (!password) {
@@ -39,7 +41,7 @@ const LoginScreen = ({ navigation }) => {
     }
     setError('');
     setIsLoading(true);
-    const result = await login(email, password);
+    const result = await login(emailCheck.value, password);
     setIsLoading(false);
     if (!result.success) {
       setError(result.error);

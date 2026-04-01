@@ -13,6 +13,7 @@ import {
 import { Mail, X } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import AlertModal from './common/AlertModal';
+import { validateEmail } from '../utils/authValidation';
 
 const ForgotPasswordModal = ({ visible, onClose }) => {
   const { requestPasswordReset } = useAuth();
@@ -30,15 +31,16 @@ const ForgotPasswordModal = ({ visible, onClose }) => {
   }, [visible]);
 
   const handleSubmit = async () => {
-    if (!email.trim()) {
-      setError('Please enter your email address.');
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.ok) {
+      setError(emailCheck.message);
       return;
     }
 
     setError('');
     setIsLoading(true);
 
-    const result = await requestPasswordReset(email);
+    const result = await requestPasswordReset(emailCheck.value);
     setIsLoading(false);
 
     if (result.success) {

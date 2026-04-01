@@ -1,11 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
-import { NativeModules, DeviceEventEmitter, Platform, Alert, Linking } from 'react-native';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { NativeModules, DeviceEventEmitter, Platform } from 'react-native';
 import { syncFloatingMicSettingsToNative } from '../services/floatingMicConfig';
 import { logActivity, ActivityCategory } from '../services/appActivityHistoryService';
+import { useAlert } from '../context/AlertContext';
 
 const { FloatingMicModule } = NativeModules;
 
 export const useFloatingMic = () => {
+  const showAlert = useAlert();
   const [isServiceActive, setIsServiceActive] = useState(false);
   const [permissions, setPermissions] = useState({
     overlay: false,
@@ -20,6 +22,20 @@ export const useFloatingMic = () => {
   });
 
   const eventListeners = useRef([]);
+
+  const checkPermissions = useCallback(async () => {
+    try {
+      if (Platform.OS !== 'android') {
+        console.warn('FloatingMic is only available on Android');
+        return;
+      }
+
+      const perms = await FloatingMicModule.checkPermissions();
+      setPermissions(perms);
+    } catch (error) {
+      console.error('Failed to check permissions:', error);
+    }
+  }, []);
 
   useEffect(() => {
     checkPermissions();
@@ -109,21 +125,7 @@ export const useFloatingMic = () => {
     return () => {
       eventListeners.current.forEach(listener => listener.remove());
     };
-  }, []);
-
-  const checkPermissions = async () => {
-    try {
-      if (Platform.OS !== 'android') {
-        console.warn('FloatingMic is only available on Android');
-        return;
-      }
-      
-      const perms = await FloatingMicModule.checkPermissions();
-      setPermissions(perms);
-    } catch (error) {
-      console.error('Failed to check permissions:', error);
-    }
-  };
+  }, [checkPermissions]);
 
   const startFloatingMic = async () => {
     try {
@@ -148,7 +150,7 @@ export const useFloatingMic = () => {
       });
     } catch (error) {
       console.error('Failed to start floating mic:', error);
-      Alert.alert('Error', error.message || 'Failed to start floating microphone');
+      showAlert('Error', error.message || 'Failed to start floating microphone');
     }
   };
 
@@ -171,7 +173,7 @@ export const useFloatingMic = () => {
       });
     } catch (error) {
       console.error('Failed to stop floating mic:', error);
-      Alert.alert('Error', error.message || 'Failed to stop floating microphone');
+      showAlert('Error', error.message || 'Failed to stop floating microphone');
     }
   };
 
@@ -189,18 +191,12 @@ export const useFloatingMic = () => {
     }
 
     if (missingPermissions.length > 0) {
-      Alert.alert(
+      showAlert(
         'Permissions Required',
         `The following permissions are required:\n${missingPermissions.map(p => `• ${p}`).join('\n')}`,
         [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Open Settings',
-            onPress: () => openRequiredSettings(),
-          },
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => openRequiredSettings() },
         ]
       );
     }
@@ -210,13 +206,13 @@ export const useFloatingMic = () => {
     try {
       if (!permissions.overlay) {
         await FloatingMicModule.openOverlaySettings();
-        Alert.alert(
+        showAlert(
           'Overlay Permission',
           'Please enable "Display over other apps" permission for this app, then return to the app.'
         );
       } else if (!permissions.accessibility) {
         await FloatingMicModule.openAccessibilitySettings();
-        Alert.alert(
+        showAlert(
           'Accessibility Service',
           'Please enable the accessibility service for this app, then return to the app.'
         );
