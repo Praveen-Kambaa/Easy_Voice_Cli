@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -31,6 +32,7 @@ import { AppCard } from '../../components/common/AppCard';
 import { PrimaryButton } from '../../components/common/PrimaryButton';
 import { useAlert } from '../../context/AlertContext';
 import { Colors } from '../../theme/Colors';
+import { isGlobalAlertModalVisible } from '../../utils/alertModalState';
 
 const VoiceCommandScreen = ({ navigation }) => {
   const showAlert = useAlert();
@@ -90,6 +92,43 @@ const VoiceCommandScreen = ({ navigation }) => {
       NativeAudioService.forceCleanup();
     };
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      const refreshIfAllowed = () => {
+        if (isGlobalAlertModalVisible()) {
+          return;
+        }
+        if (!isRecording && !isTranscribing) {
+          setLastRecording(null);
+          setFilePath('');
+          setDuration(0);
+          setTranscript(null);
+          setTranscriptError(null);
+          setEditableTranscript('');
+          setIsEditingTranscript(false);
+          setVoiceAssetId(null);
+          setIsExecuting(false);
+          setIsPlaying(false);
+          recordingStartTime.current = null;
+        }
+      };
+
+      let raf2;
+      const raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(refreshIfAllowed);
+      });
+
+      return () => {
+        cancelAnimationFrame(raf1);
+        if (raf2 != null) {
+          cancelAnimationFrame(raf2);
+        }
+        NativeAudioService.stopPlayback().catch(() => {});
+        setIsPlaying(false);
+      };
+    }, [isRecording, isTranscribing]),
+  );
 
   // ── Recording controls ──────────────────────────────────────────────────────
   const handleStart = async () => {

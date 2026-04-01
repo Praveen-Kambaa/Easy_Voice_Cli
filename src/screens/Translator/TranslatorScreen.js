@@ -124,10 +124,35 @@ const TranslatorScreen = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       loadLanguages();
+      let raf2;
+      const raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => {
+          if (
+            !translating &&
+            !transcribingVoice &&
+            !recordingVoice &&
+            !recordingAskVoice &&
+            !askBusyPhase
+          ) {
+            setTranslateError('');
+          }
+        });
+      });
       return () => {
+        cancelAnimationFrame(raf1);
+        if (raf2 != null) {
+          cancelAnimationFrame(raf2);
+        }
         stopTranslationSpeech();
       };
-    }, [loadLanguages]),
+    }, [
+      loadLanguages,
+      translating,
+      transcribingVoice,
+      recordingVoice,
+      recordingAskVoice,
+      askBusyPhase,
+    ]),
   );
 
   const runTranslation = useCallback(

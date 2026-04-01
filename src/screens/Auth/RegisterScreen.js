@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -26,6 +27,7 @@ import {
   sanitizeLettersAndSpaces,
   sanitizeIndianMobileInput,
 } from '../../utils/authValidation';
+import { isGlobalAlertModalVisible } from '../../utils/alertModalState';
 
 /** Match API contract; use `mobile` if your backend expects it. */
 const REGISTRATION_SOURCE = 'web';
@@ -44,6 +46,25 @@ const RegisterScreen = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      let raf2;
+      const raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => {
+          if (!isGlobalAlertModalVisible()) {
+            setError('');
+          }
+        });
+      });
+      return () => {
+        cancelAnimationFrame(raf1);
+        if (raf2 != null) {
+          cancelAnimationFrame(raf2);
+        }
+      };
+    }, []),
+  );
 
   const clearError = () => setError('');
 

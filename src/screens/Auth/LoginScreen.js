@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -16,6 +17,7 @@ import { Mail, Eye, EyeOff, Lock } from 'lucide-react-native';
 import { useAuth } from '../../context/AuthContext';
 import ForgotPasswordModal from '../../components/ForgotPasswordModal';
 import { validateEmail } from '../../utils/authValidation';
+import { isGlobalAlertModalVisible } from '../../utils/alertModalState';
 
 const iconMuted = '#94a3b8';
 
@@ -28,6 +30,25 @@ const LoginScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      let raf2;
+      const raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => {
+          if (!isGlobalAlertModalVisible()) {
+            setError('');
+          }
+        });
+      });
+      return () => {
+        cancelAnimationFrame(raf1);
+        if (raf2 != null) {
+          cancelAnimationFrame(raf2);
+        }
+      };
+    }, []),
+  );
 
   const handleLogin = async () => {
     const emailCheck = validateEmail(email);

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -23,6 +24,7 @@ import {
   getByCategory,
   ACTIVITY_HISTORY_UPDATED_EVENT,
 } from '../../services/appActivityHistoryService';
+import { isGlobalAlertModalVisible } from '../../utils/alertModalState';
 
 const RecordedAudioScreen = ({ navigation }) => {
   const showAlert = useAlert();
@@ -34,9 +36,43 @@ const RecordedAudioScreen = ({ navigation }) => {
   const [transcriptText, setTranscriptText] = useState('');
   const [executingStates, setExecutingStates] = useState({});
 
-  useEffect(() => {
-    loadRecordings();
+  const loadRecordings = useCallback(async () => {
+    try {
+      const [stored, acts] = await Promise.all([
+        NativeAudioService.getAllRecordings(),
+        getByCategory(ActivityCategory.RECORDINGS, 30),
+      ]);
+      setRecordings(stored.reverse());
+      setRecentActivities(acts);
+    } catch (error) {
+      console.error('Error loading recordings:', error);
+    }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      let raf2;
+      const raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => {
+          loadRecordings();
+          if (!isGlobalAlertModalVisible()) {
+            setPlayingStates({});
+            setEditingTranscript(null);
+            setTranscriptText('');
+            setExecutingStates({});
+          }
+        });
+      });
+      return () => {
+        cancelAnimationFrame(raf1);
+        if (raf2 != null) {
+          cancelAnimationFrame(raf2);
+        }
+        NativeAudioService.stopPlayback().catch(() => {});
+        setPlayingStates({});
+      };
+    }, [loadRecordings]),
+  );
 
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener(VOICE_RECORDINGS_UPDATED_EVENT, () => {
@@ -49,20 +85,7 @@ const RecordedAudioScreen = ({ navigation }) => {
       sub.remove();
       subAct.remove();
     };
-  }, []);
-
-  const loadRecordings = async () => {
-    try {
-      const [stored, acts] = await Promise.all([
-        NativeAudioService.getAllRecordings(),
-        getByCategory(ActivityCategory.RECORDINGS, 30),
-      ]);
-      setRecordings(stored.reverse());
-      setRecentActivities(acts);
-    } catch (error) {
-      console.error('Error loading recordings:', error);
-    }
-  };
+  }, [loadRecordings]);
 
   const onRefresh = async () => {
     setRefreshing(true);

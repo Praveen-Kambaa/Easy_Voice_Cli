@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -17,6 +18,7 @@ import { PrimaryButton } from '../../components/common/PrimaryButton';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { useFloatingMic } from '../../hooks/useFloatingMic';
 import { Colors } from '../../theme/Colors';
+import { isGlobalAlertModalVisible } from '../../utils/alertModalState';
 
 const { FloatingMicModule } = NativeModules;
 
@@ -29,9 +31,30 @@ const FloatingMicScreen = ({ navigation }) => {
     recordingState,
     toggleFloatingMic,
     checkPermissions,
+    refreshFloatingMicSnapshot,
     handleMissingPermissions,
     needsPermissions,
   } = useFloatingMic();
+
+  useFocusEffect(
+    useCallback(() => {
+      let raf2;
+      const raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => {
+          refreshFloatingMicSnapshot();
+          if (!isGlobalAlertModalVisible()) {
+            setLastTranscription('');
+          }
+        });
+      });
+      return () => {
+        cancelAnimationFrame(raf1);
+        if (raf2 != null) {
+          cancelAnimationFrame(raf2);
+        }
+      };
+    }, [refreshFloatingMicSnapshot]),
+  );
 
   useEffect(() => {
     const listeners = [

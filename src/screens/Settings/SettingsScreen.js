@@ -83,12 +83,6 @@ const SettingsScreen = () => {
     })();
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      syncFloatingMicSettingsToNative();
-    }, []),
-  );
-
   const onInternalTranscribeToggle = async (value) => {
     setInternalTranscribe(value);
     try {
@@ -197,12 +191,7 @@ const SettingsScreen = () => {
 
   // ── Translation functions ────────────────────────────────────
 
-  // Load saved translation preference
-  useEffect(() => {
-    loadTranslationPreference();
-  }, []);
-
-  const loadTranslationPreference = async () => {
+  const loadTranslationPreference = useCallback(async () => {
     try {
       const savedFrom = await AsyncStorage.getItem('@from_language');
       const savedTo = await AsyncStorage.getItem('@to_language');
@@ -211,7 +200,12 @@ const SettingsScreen = () => {
     } catch (error) {
       console.error('Failed to load translation preference:', error);
     }
-  };
+  }, []);
+
+  // Load saved translation preference
+  useEffect(() => {
+    loadTranslationPreference();
+  }, [loadTranslationPreference]);
 
   const saveTranslationPreference = async () => {
     try {
@@ -275,6 +269,28 @@ const SettingsScreen = () => {
     clearPermissionError,
     PERMISSION_NAMES: SYS_NAMES,
   } = useAndroidPermissions();
+
+  useFocusEffect(
+    useCallback(() => {
+      syncFloatingMicSettingsToNative();
+      checkStdPermissions();
+      checkSysPermissions();
+      loadTranslationPreference();
+      (async () => {
+        try {
+          setInternalTranscribe(await getInternalTranscribeEnabled());
+          setOverlayMicEnabledState(await getOverlayMicEnabled());
+          setOverlayTranslationEnabledState(await getOverlayTranslationEnabled());
+          setInternalFloatingTranslationState(await getInternalFloatingTranslationEnabled());
+          setOverlayAskQuestionEnabledState(await getOverlayAskQuestionEnabled());
+          const raw = await AsyncStorage.getItem(ELEVENLABS_API_KEY_STORAGE);
+          setElevenLabsKeyDraft(raw ?? '');
+        } catch {
+          // ignore
+        }
+      })();
+    }, [checkStdPermissions, checkSysPermissions, loadTranslationPreference]),
+  );
 
   // ── Standard permission handlers ──────────────────────────────────────────
 

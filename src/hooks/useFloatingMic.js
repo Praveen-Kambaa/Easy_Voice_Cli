@@ -37,14 +37,20 @@ export const useFloatingMic = () => {
     }
   }, []);
 
-  useEffect(() => {
-    checkPermissions();
-
+  const refreshFloatingMicSnapshot = useCallback(async () => {
+    await checkPermissions();
     if (Platform.OS === 'android' && typeof FloatingMicModule?.isFloatingMicServiceRunning === 'function') {
-      FloatingMicModule.isFloatingMicServiceRunning()
-        .then((running) => setIsServiceActive(!!running))
-        .catch(() => {});
+      try {
+        const running = await FloatingMicModule.isFloatingMicServiceRunning();
+        setIsServiceActive(!!running);
+      } catch {
+        // ignore
+      }
     }
+  }, [checkPermissions]);
+
+  useEffect(() => {
+    refreshFloatingMicSnapshot();
 
     // Set up event listeners
     const recordingStartedListener = DeviceEventEmitter.addListener(
@@ -131,7 +137,7 @@ export const useFloatingMic = () => {
     return () => {
       eventListeners.current.forEach(listener => listener.remove());
     };
-  }, [checkPermissions]);
+  }, [refreshFloatingMicSnapshot]);
 
   const startFloatingMic = async () => {
     try {
@@ -267,6 +273,7 @@ export const useFloatingMic = () => {
     startRecording,
     stopRecording,
     checkPermissions,
+    refreshFloatingMicSnapshot,
     handleMissingPermissions,
     openRequiredSettings,
     
