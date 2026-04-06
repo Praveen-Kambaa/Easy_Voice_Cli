@@ -278,7 +278,7 @@ class VoiceAssistantModule(reactContext: ReactApplicationContext) : ReactContext
                     putExtra("transcribed_text", text)
                     putExtra("timestamp", System.currentTimeMillis())
                 }
-                reactApplicationContext.sendBroadcast(accessibilityIntent)
+                reactApplicationContext.sendAppScopedBroadcast(accessibilityIntent)
                 
                 android.util.Log.d("VoiceAssistant", "✓ Accessibility fallback triggered")
                 val result = Arguments.createMap()

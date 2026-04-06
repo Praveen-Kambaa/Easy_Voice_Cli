@@ -1021,7 +1021,7 @@ class FloatingMicService : Service() {
                 putExtra("transcribed_text", newText)
                 putExtra("timestamp", System.currentTimeMillis())
             }
-            sendBroadcast(intent)
+             sendAppScopedBroadcast(intent)
             Log.d(TAG, "💉 Text sent to accessibility service: $newText")
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to inject text", e)
@@ -1050,7 +1050,7 @@ class FloatingMicService : Service() {
     private fun resetInjectionGate() {
         try {
             val intent = Intent("com.typeeasy.RESET_INJECTION")
-            sendBroadcast(intent)
+            sendAppScopedBroadcast(intent)
             Log.d(TAG, "🔄 Injection gate reset for new recording session")
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to reset injection gate", e)

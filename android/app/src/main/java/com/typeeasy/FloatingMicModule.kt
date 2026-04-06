@@ -55,7 +55,7 @@ class FloatingMicModule(reactContext: ReactApplicationContext) : ReactContextBas
             
             // Start recording via broadcast to service
             val intent = Intent("com.typeeasy.START_RECORDING")
-            context.sendBroadcast(intent)
+            context.sendAppScopedBroadcast(intent)
             promise.resolve("Recording started")
         } catch (e: Exception) {
             promise.reject("RECORDING_START_ERROR", "Failed to start recording: ${e.message}")
@@ -69,7 +69,7 @@ class FloatingMicModule(reactContext: ReactApplicationContext) : ReactContextBas
             
             // Stop recording via broadcast to service
             val intent = Intent("com.typeeasy.STOP_RECORDING")
-            context.sendBroadcast(intent)
+            context.sendAppScopedBroadcast(intent)
             promise.resolve("Recording stop requested")
         } catch (e: Exception) {
             promise.reject("RECORDING_STOP_ERROR", "Failed to stop recording: ${e.message}")
@@ -187,7 +187,7 @@ class FloatingMicModule(reactContext: ReactApplicationContext) : ReactContextBas
                 aiChatApiBaseUrl,
                 aiChatModel,
             )
-            reactApplicationContext.sendBroadcast(Intent("com.typeeasy.FLOATING_MIC_CONFIG_UPDATED"))
+            reactApplicationContext.sendAppScopedBroadcast(Intent("com.typeeasy.FLOATING_MIC_CONFIG_UPDATED"))
             promise.resolve(true)
         } catch (e: Exception) {
             promise.reject("FLOATING_MIC_SYNC_ERROR", e.message, e)
@@ -202,7 +202,7 @@ class FloatingMicModule(reactContext: ReactApplicationContext) : ReactContextBas
                 putExtra("transcribed_text", text)
                 putExtra("timestamp", System.currentTimeMillis())
             }
-            context.sendBroadcast(intent)
+            context.sendAppScopedBroadcast(intent)
             promise.resolve("Text injected successfully")
         } catch (e: Exception) {
             promise.reject("INJECTION_ERROR", "Failed to inject text: ${e.message}")

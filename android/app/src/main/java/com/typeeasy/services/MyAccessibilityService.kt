@@ -28,6 +28,7 @@ import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.abs
+import com.typeeasy.sendAppScopedBroadcast
 
 /**
  * CENTRAL INJECTION CONTROLLER
@@ -806,7 +807,7 @@ class MyAccessibilityService : AccessibilityService() {
     private fun showFloatingMic() {
         try {
             val intent = Intent(ACTION_SHOW_MIC)
-            sendBroadcast(intent)
+            sendAppScopedBroadcast(intent)
             isMicVisible = true
             Log.d(TAG, "🎤 Showed floating mic")
         } catch (e: Exception) {
@@ -820,7 +821,7 @@ class MyAccessibilityService : AccessibilityService() {
     private fun hideFloatingMic() {
         try {
             val intent = Intent(ACTION_HIDE_MIC)
-            sendBroadcast(intent)
+            sendAppScopedBroadcast(intent)
             isMicVisible = false
             Log.d(TAG, "🔇 Hid floating mic")
         } catch (e: Exception) {

@@ -1,5 +1,6 @@
 package com.typeeasy.speech
 
+import com.typeeasy.sendAppScopedBroadcast
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -218,7 +219,7 @@ class SpeechToTextService(private val context: Context) {
                 putExtra("text", text)
                 putExtra("timestamp", System.currentTimeMillis())
             }
-            context.sendBroadcast(intent)
+            context.sendAppScopedBroadcast(intent)
             Log.d(TAG, "Sent text to accessibility service: $text")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send text to accessibility service", e)
