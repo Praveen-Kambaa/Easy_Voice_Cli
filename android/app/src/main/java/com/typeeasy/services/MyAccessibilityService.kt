@@ -13,11 +13,21 @@ import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.widget.Toast
+import android.view.Gravity
+import android.view.LayoutInflater
+import android.view.View
+import android.view.WindowManager
+import android.graphics.PixelFormat
+import android.widget.TextView
 import java.text.Normalizer
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.math.abs
 
 /**
  * CENTRAL INJECTION CONTROLLER
@@ -37,6 +47,11 @@ class MyAccessibilityService : AccessibilityService() {
     private var voiceResultReceiver: BroadcastReceiver? = null
     private val handler = Handler(Looper.getMainLooper())
     private var isServiceReady = false
+
+    // On Android 14/15+, rootInActiveWindow / window focus queries can be flaky during transitions.
+    // Cache the last focused editable node so we can still inject into the exact field the user tapped.
+    private var lastFocusedEditable: AccessibilityNodeInfo? = null
+    private var lastFocusedAtMs: Long = 0L
     
     // ─── FLOATING MIC CONTROL ───────────────────────────────────────────────
     private var isMicVisible = false
@@ -162,7 +177,14 @@ class MyAccessibilityService : AccessibilityService() {
             addAction("com.typeeasy.INSERT_TEXT")
             addAction(ACTION_RESET_INJECTION)
         }
-        registerReceiver(voiceResultReceiver, filter)
+        // Android 13+ requires explicitly specifying whether a dynamically registered receiver
+        // is exported or not (unless it's exclusively for system broadcasts).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(voiceResultReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(voiceResultReceiver, filter)
+        }
         Log.d(TAG, "✅ Broadcast receiver registered")
     }
 
@@ -172,6 +194,24 @@ class MyAccessibilityService : AccessibilityService() {
         // Only handle focus-related events
         if (event?.eventType != AccessibilityEvent.TYPE_VIEW_FOCUSED &&
             event?.eventType != AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED) return
+
+        // Cache last focused editable field from the event source (best signal).
+        // This dramatically improves injection reliability on Android 14/15 where findFocus() can return null.
+        runCatching {
+            val src = event.source
+            if (src != null) {
+                try {
+                    if (src.isEditable && src.isEnabled && src.isVisibleToUser) {
+                        // Replace previous cached node
+                        lastFocusedEditable?.recycle()
+                        lastFocusedEditable = AccessibilityNodeInfo.obtain(src)
+                        lastFocusedAtMs = System.currentTimeMillis()
+                    }
+                } finally {
+                    src.recycle()
+                }
+            }
+        }
         
         val root = rootInActiveWindow
         if (root == null) {
@@ -392,32 +432,28 @@ class MyAccessibilityService : AccessibilityService() {
     private fun injectText(newText: String): Boolean {
         val root = rootInActiveWindow ?: return false
         try {
-            val node = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return false
             val packageName = runCatching { root.packageName?.toString().orEmpty() }.getOrDefault("")
+
+            // 0) Best: use cached focused editable node if it's recent and still valid.
+            val cached = obtainRecentFocusedEditable()
+            val node = cached ?: findBestEditableTarget(root)
+                ?: run {
+                    Log.w(TAG, "❌ No focused/editable target found (pkg=$packageName)")
+                    return false
+                }
             try {
-                if (
-                    node.className != "android.widget.EditText" ||
-                    !node.isEditable
-                ) return false
+                if (!node.isEditable) return false
 
                 val currentRaw = node.text?.toString() ?: ""
                 val textToInject = buildInjectedText(currentRaw, newText, node, packageName)
 
                 Log.d(
                     TAG,
-                    "💉 Injection pkg=$packageName existing='${currentRaw.trim()}', new='$newText', final='$textToInject'"
+                    "💉 Injection pkg=$packageName class=${node.className} editable=${node.isEditable} " +
+                        "existing='${currentRaw.trim()}', new='$newText', final='$textToInject'"
                 )
 
-                val ok = if (isMessengerChatPackage(packageName)) {
-                    messengerPerformSetText(node, textToInject)
-                } else {
-                    val args = Bundle()
-                    args.putCharSequence(
-                        AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
-                        textToInject
-                    )
-                    node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
-                }
+                val ok = performSetTextOrPaste(node, textToInject, packageName)
 
                 if (ok && textToInject.isNotEmpty()) {
                     val len = textToInject.length
@@ -446,6 +482,284 @@ class MyAccessibilityService : AccessibilityService() {
             }
         } finally {
             root.recycle()
+        }
+    }
+
+    /**
+     * Returns a copy of the last focused editable node if it's recent and appears usable.
+     * Caller must recycle the returned node.
+     */
+    private fun obtainRecentFocusedEditable(): AccessibilityNodeInfo? {
+        val n = lastFocusedEditable ?: return null
+        val age = System.currentTimeMillis() - lastFocusedAtMs
+        if (age > 10_000L) return null
+
+        return runCatching {
+            // Take a snapshot so we don't hand out the cached instance directly.
+            val copy = AccessibilityNodeInfo.obtain(n)
+            val ok = copy.isEditable && copy.isEnabled && copy.isVisibleToUser &&
+                (copy.isFocused || copy.isAccessibilityFocused || age < 2_000L)
+            if (!ok) {
+                copy.recycle()
+                null
+            } else {
+                normalizeInjectionTarget(copy)
+            }
+        }.getOrNull()
+    }
+
+    private fun supportsAction(node: AccessibilityNodeInfo, actionId: Int): Boolean {
+        val inMask = (node.actions and actionId) == actionId
+        if (inMask) return true
+        return node.actionList?.any { it.id == actionId } == true
+    }
+
+    /**
+     * Find the best editable input target. Some apps (including Gmail and RN) won't always return a
+     * FOCUS_INPUT node; so we fallback to a tree scan for the currently focused editable node.
+     */
+    private fun findBestEditableTarget(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        // 0) Best effort: scan all windows (some apps don't report the focused input in rootInActiveWindow)
+        // Prefer non-TypeEasy windows to avoid our own overlay/UI.
+        try {
+            val wins = windows
+            if (!wins.isNullOrEmpty()) {
+                val candidates = ArrayList<AccessibilityNodeInfo>(wins.size)
+                for (w in wins) {
+                    val r = w.root ?: continue
+                    val pkg = r.packageName?.toString().orEmpty()
+                    if (pkg == packageName) continue
+                    // Try focus within this window root.
+                    val focused = r.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                    if (focused != null) {
+                        if (focused.isEditable) return normalizeInjectionTarget(focused)
+                        focused.recycle()
+                    }
+                    // Snapshot root for deeper scan (recycled below)
+                    candidates.add(r)
+                }
+                // Deep scan across window roots for a *focused* editable node only
+                for (r in candidates) {
+                    val found = findFocusedEditableInTree(r)
+                    if (found != null) {
+                        // Recycle any unused roots
+                        for (rr in candidates) if (rr != r) rr.recycle()
+                        return normalizeInjectionTarget(found)
+                    }
+                }
+                for (rr in candidates) rr.recycle()
+            }
+        } catch (_: Exception) {
+            // ignore window scanning failures
+        }
+
+        // 1) Primary: framework focus query
+        root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.let { n ->
+            if (n.isEditable) return normalizeInjectionTarget(n)
+            n.recycle()
+        }
+
+        // 2) Fallback: scan tree for focused editable nodes (do NOT inject into arbitrary editables)
+        return findFocusedEditableInTree(root)?.let { normalizeInjectionTarget(it) }
+    }
+
+    /**
+     * Some apps wrap the real text editor inside a parent that actually implements SET_TEXT/PASTE.
+     * Given a focused editable node, climb a few levels to find the closest node that can accept input.
+     */
+    private fun normalizeInjectionTarget(focusedEditable: AccessibilityNodeInfo): AccessibilityNodeInfo {
+        // If the focused node already supports input actions, use it as-is.
+        if (supportsAction(focusedEditable, AccessibilityNodeInfo.ACTION_SET_TEXT) ||
+            supportsAction(focusedEditable, AccessibilityNodeInfo.ACTION_PASTE)
+        ) {
+            return focusedEditable
+        }
+
+        var parent = focusedEditable.parent
+        var hops = 0
+        while (parent != null && hops < 4) {
+            val canInput = parent.isEditable &&
+                (supportsAction(parent, AccessibilityNodeInfo.ACTION_SET_TEXT) ||
+                    supportsAction(parent, AccessibilityNodeInfo.ACTION_PASTE))
+            if (canInput) {
+                // Return a copy; caller will recycle returned target, so recycle focusedEditable here.
+                val target = AccessibilityNodeInfo.obtain(parent)
+                focusedEditable.recycle()
+                // Recycle the chain node we copied from + climb further safely
+                var p: AccessibilityNodeInfo? = parent
+                while (p != null) {
+                    val next = p.parent
+                    p.recycle()
+                    p = next
+                    // stop after recycling one extra level; the rest of the chain will be GC'd by framework
+                    break
+                }
+                return target
+            }
+            val next = parent.parent
+            parent.recycle()
+            parent = next
+            hops++
+        }
+        return focusedEditable
+    }
+
+    private fun findFocusedEditableInTree(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        var bestFocused: AccessibilityNodeInfo? = null
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(AccessibilityNodeInfo.obtain(root))
+        var visited = 0
+        while (queue.isNotEmpty() && visited < 1200) {
+            val cur = queue.removeFirst()
+            visited++
+            try {
+                val isEditable = cur.isEditable && cur.isEnabled && cur.isVisibleToUser
+                val supportsInput =
+                    supportsAction(cur, AccessibilityNodeInfo.ACTION_SET_TEXT) ||
+                        supportsAction(cur, AccessibilityNodeInfo.ACTION_PASTE)
+
+                if (isEditable && supportsInput) {
+                    // Prefer genuinely focused nodes first.
+                    if (cur.isFocused || cur.isAccessibilityFocused) {
+                        bestFocused?.recycle()
+                        bestFocused = AccessibilityNodeInfo.obtain(cur)
+                        return bestFocused
+                    }
+                }
+
+                for (i in 0 until cur.childCount) {
+                    val child = cur.getChild(i) ?: continue
+                    queue.add(child)
+                }
+            } finally {
+                cur.recycle()
+            }
+        }
+        bestFocused?.recycle()
+        return null
+    }
+
+    private fun performSetTextOrPaste(node: AccessibilityNodeInfo, textToInject: String, packageName: String): Boolean {
+        // Make sure the node is focused if possible (some apps ignore SET_TEXT unless focused).
+        if (!node.isFocused && supportsAction(node, AccessibilityNodeInfo.ACTION_FOCUS)) {
+            runCatching { node.performAction(AccessibilityNodeInfo.ACTION_FOCUS) }
+        }
+        if (!node.isFocused && supportsAction(node, AccessibilityNodeInfo.ACTION_CLICK)) {
+            runCatching { node.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
+        }
+
+        // Prefer SET_TEXT when available.
+        val canSetText = supportsAction(node, AccessibilityNodeInfo.ACTION_SET_TEXT)
+        if (canSetText) {
+            val ok = if (isMessengerChatPackage(packageName)) {
+                messengerPerformSetText(node, textToInject)
+            } else {
+                val args = Bundle().apply {
+                    putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, textToInject)
+                }
+                node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+            }
+            if (ok) return true
+
+            // Parent fallback: some inputs expose SET_TEXT on a parent wrapper
+            var parent = node.parent
+            var hops = 0
+            while (parent != null && hops < 3) {
+                try {
+                    if (supportsAction(parent, AccessibilityNodeInfo.ACTION_SET_TEXT)) {
+                        val args = Bundle().apply {
+                            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, textToInject)
+                        }
+                        if (parent.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) return true
+                    }
+                } finally {
+                    val next = parent.parent
+                    parent.recycle()
+                    parent = next
+                    hops++
+                }
+            }
+        }
+
+        // Fallback: clipboard + ACTION_PASTE
+        val canPaste = supportsAction(node, AccessibilityNodeInfo.ACTION_PASTE)
+        if (canPaste) {
+            return try {
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("voice", textToInject))
+                node.performAction(AccessibilityNodeInfo.ACTION_PASTE, null)
+            } catch (e: Exception) {
+                Log.e(TAG, "Clipboard paste failed", e)
+                false
+            }
+        }
+
+        Log.w(TAG, "❌ Target does not support SET_TEXT or PASTE (class=${node.className})")
+        return false
+    }
+
+    // ─── USER-FEEDBACK OVERLAY (REPLACES SYSTEM TOAST WHEN SUPPRESSED) ────────────
+
+    private var toastView: View? = null
+    private var toastHandler: android.os.Handler? = null
+
+    private fun showToast(message: String) {
+        // Try system Toast first; if OEM suppresses, also show an overlay toast
+        handler.post {
+            runCatching { Toast.makeText(this, message, Toast.LENGTH_SHORT).show() }
+            showOverlayToast(message)
+        }
+    }
+
+    private fun showOverlayToast(text: String) {
+        try {
+            val wm = getSystemService(WINDOW_SERVICE) as WindowManager
+            // Reuse single view instance
+            val view = toastView ?: run {
+                val tv = TextView(this).apply {
+                    setTextColor(0xFFFFFFFF.toInt())
+                    setBackgroundColor(0xCC000000.toInt())
+                    setPadding(24, 16, 24, 16)
+                    textSize = 14f
+                }
+                toastView = tv
+                tv
+            }
+            (view as TextView).text = text
+
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                else
+                    @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                y = (48 * resources.displayMetrics.density).toInt()
+            }
+
+            // If already attached, update; else add
+            runCatching { wm.updateViewLayout(view, params) }
+                .onFailure { wm.addView(view, params) }
+
+            // Auto-remove after 1.5s
+            if (toastHandler == null) {
+                toastHandler = android.os.Handler(android.os.Looper.getMainLooper())
+            }
+            toastHandler?.removeCallbacksAndMessages(null)
+            toastHandler?.postDelayed({
+                try {
+                    wm.removeViewImmediate(view)
+                } catch (_: Exception) {
+                }
+            }, 1500)
+        } catch (e: Exception) {
+            Log.e(TAG, "Overlay toast failed", e)
         }
     }
 
@@ -486,13 +800,6 @@ class MyAccessibilityService : AccessibilityService() {
 
     // ─── UTILITY ─────────────────────────────────────────────────────────────
 
-    private fun showToast(message: String) {
-        handler.post {
-            runCatching { Toast.makeText(this, message, Toast.LENGTH_SHORT).show() }
-        }
-    }
-    
-    
     /**
      * Show the floating mic overlay
      */

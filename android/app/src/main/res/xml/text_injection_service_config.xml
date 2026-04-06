@@ -9,4 +9,4 @@
     android:canRetrieveWindowContent="true"
     android:settingsActivity=".MainActivity"
     android:canPerformGestures="false"
-    android:isAccessibilityTool="false" />
+    android:isAccessibilityTool="true" />

@@ -17,7 +17,8 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     GoogleSignin.configure({
       webClientId: 'YOUR_WEB_CLIENT_ID', // Replace with your actual web client ID
-      androidClientId: 'YOUR_ANDROID_CLIENT_ID', // Replace with your Android client ID
+      // NOTE: `androidClientId` is not a valid config option on Android for this library.
+      // Use `webClientId` (OAuth client type "Web application") instead.
       offlineAccess: true,
     });
   }, []);

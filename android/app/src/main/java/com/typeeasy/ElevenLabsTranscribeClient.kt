@@ -81,6 +81,9 @@ object ElevenLabsTranscribeClient {
 
             val text = extractTranscript(bodyString)
             return if (text.isBlank()) {
+                // Successful response but no transcript fields recognized. Keep a short snippet for debugging.
+                val snippet = bodyString.replace("\n", " ").take(400)
+                Log.e(TAG, "Empty transcript. Response snippet: $snippet")
                 Result.failure(IllegalStateException("Empty transcript from ElevenLabs"))
             } else {
                 Result.success(text.trim())
@@ -122,19 +125,33 @@ object ElevenLabsTranscribeClient {
         if (json.isBlank()) return ""
         return try {
             val root = JSONObject(json)
+            val data = if (root.has("data")) root.optJSONObject("data") else null
+            val obj = data ?: root
             if (root.has("transcripts")) {
                 val arr = root.optJSONArray("transcripts")
                 if (arr != null && arr.length() > 0) {
                     val first = arr.optJSONObject(0)
                     first?.optString("text").orEmpty()
+                        .ifBlank { first?.optString("transcript").orEmpty() }
                 } else {
                     ""
                 }
             } else {
-                root.optString("text")
+                firstNonBlank(
+                    obj.optString("text"),
+                    obj.optString("transcript"),
+                    obj.optString("transcription"),
+                )
             }
         } catch (_: Exception) {
             ""
         }
+    }
+
+    private fun firstNonBlank(vararg values: String): String {
+        for (v in values) {
+            if (v.isNotBlank()) return v
+        }
+        return ""
     }
 }

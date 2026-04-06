@@ -808,11 +808,23 @@ class FloatingMicService : Service() {
                 )
                 else -> {
                     if (FloatingMicConfigStore.shouldUseElevenLabsForMicTranscribe(this@FloatingMicService)) {
-                        ElevenLabsTranscribeClient.transcribeFile(
+                        val eleven = ElevenLabsTranscribeClient.transcribeFile(
                             FloatingMicConfigStore.getElevenLabsApiKey(this@FloatingMicService),
                             file,
-                            FloatingMicConfigStore.getTranslateSourceLang(this@FloatingMicService),
+                            // For microphone STT, omit language unless explicitly set (ElevenLabs can auto-detect;
+                            // passing "auto" or locale-like "en-US" can lead to empty transcripts on some setups).
+                            FloatingMicConfigStore.getTranslateSourceLang(this@FloatingMicService)
+                                .trim()
+                                .takeIf { it.isNotEmpty() && it.lowercase() != "auto" }
+                                ?.let { lang -> lang.substringBefore('-') },
                         )
+                        // Fallback: if ElevenLabs succeeds but returns empty transcript (or fails),
+                        // and a base URL is configured, try the local /voice/transcribe server.
+                        if (eleven.isFailure && baseUrl.isNotBlank()) {
+                            VoiceTranscribeClient.transcribeFile(baseUrl, file)
+                        } else {
+                            eleven
+                        }
                     } else {
                         VoiceTranscribeClient.transcribeFile(baseUrl, file)
                     }
@@ -825,7 +837,7 @@ class FloatingMicService : Service() {
                     Log.d(TAG, "✅ Server text injected: $text")
                     injectText(text)
                     sendEventToReactNative("onTranscriptionComplete", text)
-                    showToast(getString(R.string.voice_injected))
+                    showToast(getString(R.string.voice_injected)+" 2 ")
                 } else {
                     val err = result.exceptionOrNull()
                     val msg = err?.message ?: if (mode == SessionMode.TRANSLATOR) {
@@ -925,7 +937,7 @@ class FloatingMicService : Service() {
                                             put("answer", t)
                                         }.toString()
                                         sendEventToReactNative("onAskQuestionComplete", qaPayload)
-                                        showToast(getString(R.string.voice_injected))
+                                        showToast(getString(R.string.voice_injected)+" sdssdsd ")
                                     }
                                     else -> {
                                         val msg = ai.exceptionOrNull()?.message ?: "AI request failed"
@@ -1022,7 +1034,7 @@ class FloatingMicService : Service() {
             val t = result.getOrNull().orEmpty()
             injectText(t)
             sendEventToReactNative("onTranscriptionComplete", t)
-            showToast(getString(R.string.voice_injected))
+            showToast(getString(R.string.voice_injected) +" sdsd ")
         } else {
             val msg = result.exceptionOrNull()?.message ?: "Translation failed"
             Log.e(TAG, "On-device translation failed: $msg")
@@ -1168,8 +1180,25 @@ class FloatingMicService : Service() {
 
     private fun sendEventToReactNative(eventName: String, data: String?) {
         try {
-            val reactApplication = application as ReactApplication
-            val reactContext = reactApplication.reactNativeHost.reactInstanceManager.currentReactContext
+            val reactApplication = application as? ReactApplication
+            val reactContext = reactApplication?.let { app ->
+                val host = runCatching { app.reactHost }.getOrNull()
+                // New Architecture: prefer ReactHost (ReactNativeHost access throws at runtime)
+                runCatching {
+                    host?.currentReactContext
+                }.getOrNull()
+                    ?: runCatching {
+                        // Compatibility: some RN versions expose currentReactContext via a getter only
+                        val method = host?.javaClass?.getMethod("getCurrentReactContext")
+                        method?.invoke(host) as? com.facebook.react.bridge.ReactContext
+                    }.getOrNull()
+                    ?: runCatching {
+                        // Old Architecture fallback (may throw on new arch; kept for older builds)
+                        @Suppress("DEPRECATION")
+                        app.reactNativeHost.reactInstanceManager.currentReactContext
+                    }.getOrNull()
+            }
+
             reactContext?.let { context ->
                 context
                     .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
@@ -1223,7 +1252,14 @@ class FloatingMicService : Service() {
             addAction(ACTION_STOP_RECORDING)
             addAction(ACTION_CONFIG_UPDATED)
         }
-        registerReceiver(micControlReceiver, filter)
+        // Android 13+ requires explicitly specifying whether a dynamically registered receiver
+        // is exported or not (unless it's exclusively for system broadcasts).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(micControlReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(micControlReceiver, filter)
+        }
         Log.d(TAG, "✅ Mic and recording control receiver registered")
     }
     
