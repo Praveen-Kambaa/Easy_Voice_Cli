@@ -14,6 +14,7 @@ import {
   History,
   Languages,
   MessageCircle,
+  Phone,
 } from 'lucide-react-native';
 import { Colors } from '../../theme/Colors';
 import { APP_NAME, APP_TAGLINE } from '../../constants';
@@ -25,6 +26,7 @@ const MENU_ITEMS = [
   { title: 'Home', description: 'Dashboard & overview', Icon: Home, screen: 'Home' },
   { title: 'Voice Command', description: 'Record your voice', Icon: Mic, screen: 'VoiceRecorder' },
   { title: 'Floating Mic', description: 'Background recording', Icon: Radio, screen: 'FloatingMic' },
+  { title: 'Calls', description: 'Call log & recordings', Icon: Phone, screen: 'CallLogs' },
   { title: 'My Recordings', description: 'View saved audio', Icon: Music, screen: 'RecordedAudio' },
   { title: 'Speech History', description: 'Floating mic transcripts', Icon: History, screen: 'FloatingMicHistory' },
   { title: 'Ask Question', description: 'Voice Q&A — answer pastes here', Icon: MessageCircle, screen: 'AskQuestion' },

@@ -11,6 +11,7 @@ import com.typeeasy.VoiceAssistantPackage
 import com.typeeasy.FloatingMicPackage
 import com.typeeasy.VoiceKeyboardPackage
 import com.typeeasy.AudioRecorderPackage
+import com.typeeasy.PhoneCallsPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -27,6 +28,7 @@ class MainApplication : Application(), ReactApplication {
           add(FloatingMicPackage())
           add(VoiceKeyboardPackage())
           add(AudioRecorderPackage())
+          add(PhoneCallsPackage())
         },
     )
   }

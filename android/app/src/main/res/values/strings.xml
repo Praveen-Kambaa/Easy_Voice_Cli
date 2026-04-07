@@ -45,4 +45,12 @@
     <string name="voice_keyboard_disabled">Voice Keyboard disabled</string>
     <string name="voice_keyboard_not_selected">Select Voice Keyboard to enable paste</string>
     <string name="voice_keyboard_settings">Open Keyboard Settings</string>
+
+    <!-- Call recording foreground service -->
+    <string name="call_recording_channel_name">Call recording</string>
+    <string name="call_recording_channel_description">Records phone calls while active</string>
+    <string name="call_recording_notification_title">Call recording</string>
+    <string name="call_recording_notification_text_listening">Listening for calls…</string>
+    <string name="call_recording_notification_text_incoming">Incoming call…</string>
+    <string name="call_recording_notification_text_recording">Recording call…</string>
 </resources>

@@ -1,4 +1,4 @@
-import { NativeModules, DeviceEventEmitter } from 'react-native';
+import { NativeModules, DeviceEventEmitter, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FileSystem, Dirs } from 'react-native-file-access';
 import { formatDateTime } from '../utils/dateTimeFormat';
@@ -147,8 +147,14 @@ class NativeAudioService {
 
       this._playbackCompleteCallback = onComplete || null;
 
-      // Call native method with Promise (resolves when playback STARTS)
-      await AudioRecorderModule.startPlayback(filePath);
+      const pathForNative =
+        Platform.OS === 'android' &&
+        typeof filePath === 'string' &&
+        filePath.startsWith('file://')
+          ? filePath.replace(/^file:\/\//, '')
+          : filePath;
+
+      await AudioRecorderModule.startPlayback(pathForNative);
 
       this.isPlaying = true;
       this.currentPlaybackFile = filePath;

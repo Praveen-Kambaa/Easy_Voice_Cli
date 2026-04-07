@@ -63,7 +63,7 @@ const OUTPUT_TINT = 'rgba(14, 165, 233, 0.08)';
 const TranslatorScreen = ({ navigation }) => {
   const showAlert = useAlert();
   const [fromCode, setFromCode] = useState('en');
-  const [toCode, setToCode] = useState('es');
+  const [toCode, setToCode] = useState('ta');
   const [sourceText, setSourceText] = useState('');
   const [translatedText, setTranslatedText] = useState('');
   const [translateError, setTranslateError] = useState('');
@@ -92,7 +92,7 @@ const TranslatorScreen = ({ navigation }) => {
       const f = await AsyncStorage.getItem('@from_language');
       const t = await AsyncStorage.getItem('@to_language');
       if (f) setFromCode(normalizeStoredLanguageCode(f, 'en'));
-      if (t) setToCode(normalizeStoredLanguageCode(t, 'es'));
+      if (t) setToCode(normalizeStoredLanguageCode(t, 'ta'));
       if (Platform.OS === 'android') {
         setAskFeatureEnabled(await getOverlayAskQuestionEnabled());
       } else {

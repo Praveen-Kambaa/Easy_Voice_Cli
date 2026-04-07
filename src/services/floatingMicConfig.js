@@ -164,7 +164,7 @@ export async function syncFloatingMicSettingsToNative() {
     const internal = await getInternalTranscribeEnabled();
     const baseUrl = buildEasyVoiceUrl('');
     const fromLang = (await AsyncStorage.getItem('@from_language')) || 'en';
-    const toLang = (await AsyncStorage.getItem('@to_language')) || 'es';
+    const toLang = (await AsyncStorage.getItem('@to_language')) || 'ta';
     const elevenLabsKey = await getElevenLabsApiKey();
     let overlayMic = await getOverlayMicEnabled();
     let overlayTranslation = await getOverlayTranslationEnabled();

@@ -186,7 +186,7 @@ const SettingsScreen = () => {
 
   // Translation state
   const [fromLanguage, setFromLanguage] = useState('en');
-  const [toLanguage, setToLanguage] = useState('es');
+  const [toLanguage, setToLanguage] = useState('ta');
   const [isLoading, setIsLoading] = useState(false);
 
   // ── Translation functions ────────────────────────────────────
@@ -196,7 +196,7 @@ const SettingsScreen = () => {
       const savedFrom = await AsyncStorage.getItem('@from_language');
       const savedTo = await AsyncStorage.getItem('@to_language');
       if (savedFrom) setFromLanguage(normalizeStoredLanguageCode(savedFrom, 'en'));
-      if (savedTo) setToLanguage(normalizeStoredLanguageCode(savedTo, 'es'));
+      if (savedTo) setToLanguage(normalizeStoredLanguageCode(savedTo, 'ta'));
     } catch (error) {
       console.error('Failed to load translation preference:', error);
     }

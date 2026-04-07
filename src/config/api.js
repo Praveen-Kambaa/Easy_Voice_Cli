@@ -27,6 +27,12 @@ export const API_ENDPOINTS = {
     /** Text translation (POST). Body/response shape can be adjusted when your API is ready. */
     TEXT_TRANSLATE: '/voice/translate-text',
   },
+  /** Call features — implement on your Easy Voice server (JSON body shapes below). */
+  CALLS: {
+    RECORDINGS: '/calls/recordings',
+    /** POST JSON: { entries: [{ id, phoneNumber, contactName, callType, timestamp, durationSec }] } */
+    CALL_LOGS: '/calls/logs',
+  },
   USER: {
     PROFILE: '/user/profile',
     UPDATE: '/user/update',

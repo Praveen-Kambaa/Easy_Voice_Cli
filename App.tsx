@@ -5,6 +5,7 @@
 
 import React, { useEffect } from 'react';
 import { StatusBar, useColorScheme } from 'react-native';
+import { subscribeCallRecordingServiceOnAppActive } from './src/services/callRecordingServiceRunner';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import AuthNavigator from './src/navigation/AuthNavigator';
@@ -24,6 +25,10 @@ function FloatingMicNativeSync() {
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
+
+  useEffect(() => {
+    return subscribeCallRecordingServiceOnAppActive();
+  }, []);
 
   return (
     <SafeAreaProvider>

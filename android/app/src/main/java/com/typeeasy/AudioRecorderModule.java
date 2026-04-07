@@ -1,9 +1,15 @@
 package com.typeeasy;
 
+import android.content.Context;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
 import android.media.MediaRecorder;
 import android.media.MediaPlayer;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
+import android.os.PowerManager;
 import android.util.Log;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
@@ -27,13 +33,71 @@ public class AudioRecorderModule extends ReactContextBaseJavaModule {
     private boolean isPaused = false;
     private boolean isPlaying = false;
 
+    private final AudioManager.OnAudioFocusChangeListener playbackFocusListener = focusChange ->
+        Log.d(TAG, "playback audio focus change=" + focusChange);
+
+    private AudioFocusRequest audioFocusRequest;
+
     public AudioRecorderModule(ReactApplicationContext reactContext) {
         super(reactContext);
+    }
+
+    private AudioManager getSysAudioManager() {
+        return (AudioManager) getReactApplicationContext().getSystemService(Context.AUDIO_SERVICE);
+    }
+
+    /** Leave in-call / communication routing so MediaPlayer is audible on the main speaker. */
+    private void requestPlaybackAudioFocus() {
+        AudioManager am = getSysAudioManager();
+        am.setMode(AudioManager.MODE_NORMAL);
+        //noinspection deprecation
+        am.setSpeakerphoneOn(false);
+        int result;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            AudioAttributes attr = new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build();
+            audioFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(attr)
+                .setOnAudioFocusChangeListener(playbackFocusListener)
+                .setWillPauseWhenDucked(false)
+                .build();
+            result = am.requestAudioFocus(audioFocusRequest);
+        } else {
+            result = am.requestAudioFocus(playbackFocusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+        }
+        Log.d(TAG, "requestPlaybackAudioFocus result=" + result);
+    }
+
+    private void abandonPlaybackAudioFocus() {
+        AudioManager am = getSysAudioManager();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (audioFocusRequest != null) {
+                am.abandonAudioFocusRequest(audioFocusRequest);
+                audioFocusRequest = null;
+            }
+        } else {
+            am.abandonAudioFocus(playbackFocusListener);
+        }
+        am.setMode(AudioManager.MODE_NORMAL);
     }
 
     @Override
     public String getName() {
         return "AudioRecorderModule";
+    }
+
+    /** Strip file:// so MediaPlayer always gets a filesystem path. */
+    private static String normalizePlaybackPath(String filePath) {
+        if (filePath == null) {
+            return "";
+        }
+        String p = filePath.trim();
+        if (p.startsWith("file://")) {
+            p = p.substring(7);
+        }
+        return p;
     }
 
     private void sendEvent(String eventName, @Nullable WritableMap params) {
@@ -212,6 +276,8 @@ public class AudioRecorderModule extends ReactContextBaseJavaModule {
                 mediaPlayer = null;
             }
 
+            abandonPlaybackAudioFocus();
+
             isRecording = false;
             isPaused = false;
             isPlaying = false;
@@ -227,6 +293,7 @@ public class AudioRecorderModule extends ReactContextBaseJavaModule {
             isPlaying = false;
             mediaRecorder = null;
             mediaPlayer = null;
+            abandonPlaybackAudioFocus();
             promise.resolve("Force stop completed (with errors)");
         }
     }
@@ -239,37 +306,110 @@ public class AudioRecorderModule extends ReactContextBaseJavaModule {
                 return;
             }
 
-            File audioFile = new File(filePath);
-            if (!audioFile.exists()) {
-                promise.reject("FILE_NOT_FOUND", "Audio file not found: " + filePath);
-                return;
+            String path = normalizePlaybackPath(filePath);
+            final boolean isContentUri = path.startsWith("content://");
+            File audioFile = isContentUri ? null : new File(path);
+            long fileLen = -1L;
+            if (!isContentUri) {
+                if (!audioFile.exists()) {
+                    promise.reject("FILE_NOT_FOUND", "Audio file not found: " + path);
+                    return;
+                }
+                fileLen = audioFile.length();
+                if (fileLen < 64) {
+                    promise.reject("FILE_TOO_SMALL", "Audio file is empty or corrupt (size=" + fileLen + ")");
+                    return;
+                }
             }
 
             mediaPlayer = new MediaPlayer();
-            mediaPlayer.setDataSource(filePath);
-            mediaPlayer.prepare();
-            mediaPlayer.start();
 
-            isPlaying = true;
+            // Session id must be set before setDataSource; omit if allocation failed (0).
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                int sessionId = getSysAudioManager().generateAudioSessionId();
+                if (sessionId != 0) {
+                    mediaPlayer.setAudioSessionId(sessionId);
+                }
+            }
 
-            // Set completion listener
+            // Route through media / music stream so playback is audible after phone calls (not in-call / voice-call stream).
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                AudioAttributes attrs = new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build();
+                mediaPlayer.setAudioAttributes(attrs);
+            } else {
+                mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+            }
+
+            mediaPlayer.setVolume(1.0f, 1.0f);
+
             mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
                 @Override
                 public void onCompletion(MediaPlayer mp) {
                     isPlaying = false;
-                    mp.release();
+                    try {
+                        mp.release();
+                    } catch (Exception ignored) {
+                    }
                     mediaPlayer = null;
+                    abandonPlaybackAudioFocus();
                     Log.d(TAG, "Playback completed");
                     sendEvent("onPlaybackComplete", null);
                 }
             });
 
-            Log.d(TAG, "Playback started: " + filePath);
+            mediaPlayer.setOnErrorListener(new MediaPlayer.OnErrorListener() {
+                @Override
+                public boolean onError(MediaPlayer mp, int what, int extra) {
+                    Log.e(TAG, "MediaPlayer error what=" + what + " extra=" + extra + " path=" + path);
+                    isPlaying = false;
+                    try {
+                        mp.release();
+                    } catch (Exception ignored) {
+                    }
+                    mediaPlayer = null;
+                    abandonPlaybackAudioFocus();
+                    return true;
+                }
+            });
+
+            requestPlaybackAudioFocus();
+
+            // Log media volume — on many OEMs "Silent" / DND still allows 0 volume here → audible silence.
+            AudioManager amVol = getSysAudioManager();
+            int curVol = amVol.getStreamVolume(AudioManager.STREAM_MUSIC);
+            int maxVol = amVol.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+            Log.i(TAG, "STREAM_MUSIC volume " + curVol + "/" + maxVol + " (raise volume or turn off Silent mode if you hear nothing)");
+            if (curVol == 0) {
+                Log.w(TAG, "Media volume is 0 — playback may be silent until user raises volume.");
+            }
+
+            try {
+                mediaPlayer.setWakeMode(getReactApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
+            } catch (Exception e) {
+                Log.w(TAG, "setWakeMode: " + e.getMessage());
+            }
+
+            // Prefer Context+Uri — fewer OEM path bugs than raw string path.
+            if (isContentUri) {
+                mediaPlayer.setDataSource(getReactApplicationContext(), Uri.parse(path));
+            } else {
+                mediaPlayer.setDataSource(getReactApplicationContext(), Uri.fromFile(audioFile));
+            }
+            mediaPlayer.prepare();
+            mediaPlayer.start();
+
+            isPlaying = true;
+
+            Log.d(TAG, "Playback started: " + path + " size=" + fileLen);
             promise.resolve("Playback started");
 
         } catch (Exception e) {
             Log.e(TAG, "Error starting playback", e);
             isPlaying = false;
+            abandonPlaybackAudioFocus();
             if (mediaPlayer != null) {
                 try {
                     mediaPlayer.release();
@@ -319,6 +459,7 @@ public class AudioRecorderModule extends ReactContextBaseJavaModule {
             mediaPlayer.release();
             mediaPlayer = null;
             isPlaying = false;
+            abandonPlaybackAudioFocus();
 
             Log.d(TAG, "Playback stopped");
             promise.resolve("Playback stopped");
@@ -335,6 +476,7 @@ public class AudioRecorderModule extends ReactContextBaseJavaModule {
                 mediaPlayer = null;
             }
             isPlaying = false;
+            abandonPlaybackAudioFocus();
             promise.reject("STOP_ERROR", "Error stopping playback: " + e.getMessage());
         }
     }

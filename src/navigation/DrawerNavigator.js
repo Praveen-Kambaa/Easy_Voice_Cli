@@ -12,6 +12,7 @@ import FloatingMicScreen from '../screens/FloatingMic/FloatingMicScreen';
 import FloatingMicHistoryScreen from '../screens/FloatingMic/FloatingMicHistoryScreen';
 import TranslatorStack from './TranslatorStack';
 import AskQuestionStack from './AskQuestionStack';
+import CallLogsScreen from '../screens/CallLogs/CallLogsScreen';
 
 const Drawer = createDrawerNavigator();
 
@@ -89,6 +90,11 @@ export const AppNavigator = () => {
         name="AskQuestion"
         component={AskQuestionStack}
         options={{ drawerLabel: 'Ask Question' }}
+      />
+      <Drawer.Screen
+        name="CallLogs"
+        component={CallLogsScreen}
+        options={{ drawerLabel: 'Calls' }}
       />
       <Drawer.Screen
         name="Translator"
