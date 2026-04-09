@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { Trash2, Star } from 'lucide-react-native';
+import { Trash2, Star, Bookmark } from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import {
   getAiQaHistory,
@@ -65,12 +65,12 @@ const AiQaHistoryScreen = () => {
             accessibilityRole="button"
             accessibilityLabel={isSaved ? 'Remove from saved' : 'Save Q and A'}
           >
-            <Star
-              size={20}
+
+            <Bookmark size={20}
               color={isSaved ? Colors.primary : Colors.text.secondary}
               fill={isSaved ? Colors.primary : 'transparent'}
-              strokeWidth={2}
-            />
+              strokeWidth={2} />
+
           </TouchableOpacity>
         </View>
         <Text style={styles.label}>Question</Text>
@@ -93,10 +93,10 @@ const AiQaHistoryScreen = () => {
 
   return (
     <View style={styles.screen}>
-      <AppHeader title="Q&A history" onBack={() => navigation.goBack()} />
+      <AppHeader title="Q&A History" onBack={() => navigation.goBack()} />
       {items.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>No Q&A yet</Text>
+          <Text style={styles.emptyTitle}>No Q&A Yet</Text>
           <Text style={styles.emptySub}>
             Pairs from the floating Ask Question action (and from Translator Ask) appear here. Entries older than
             two days are removed automatically unless you tap the star to save them under Saved.

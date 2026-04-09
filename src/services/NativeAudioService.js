@@ -1,9 +1,9 @@
-import { NativeModules, DeviceEventEmitter, Platform } from 'react-native';
+import { NativeModules, DeviceEventEmitter, Platform, Alert, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FileSystem, Dirs } from 'react-native-file-access';
 import { formatDateTime } from '../utils/dateTimeFormat';
 
-const { AudioRecorderModule } = NativeModules;
+const { AudioRecorderModule, AndroidPermissionsModule } = NativeModules;
 
 const RECORDINGS_STORAGE_KEY = '@typeeasy_voice_recordings';
 const LEGACY_RECORDINGS_PATH = `${Dirs.DocumentDir}/recordings.json`;
@@ -64,6 +64,77 @@ class NativeAudioService {
   async requestAudioPermission() {
     // For Android, we'll handle permissions in the native module
     return true;
+  }
+
+  /**
+   * Android-only: check whether Accessibility Service is enabled.
+   * Some OEMs are more permissive about long-running background features when a user-enabled
+   * accessibility service is active (this does not grant call-audio tap permissions).
+   */
+  async isAccessibilityEnabled() {
+    if (Platform.OS !== 'android') {
+      return true;
+    }
+    try {
+      if (typeof AndroidPermissionsModule?.checkAccessibilityPermission === 'function') {
+        return Boolean(await AndroidPermissionsModule.checkAccessibilityPermission());
+      }
+      return false;
+    } catch (e) {
+      console.warn('[NativeAudioService] isAccessibilityEnabled:', e?.message || e);
+      return false;
+    }
+  }
+
+  /** Android-only: open Accessibility settings screen. */
+  async openAccessibilitySettings() {
+    if (Platform.OS !== 'android') {
+      return false;
+    }
+    if (typeof AndroidPermissionsModule?.openAccessibilitySettings !== 'function') {
+      return false;
+    }
+    try {
+      await AndroidPermissionsModule.openAccessibilitySettings();
+      return true;
+    } catch (e) {
+      console.warn('[NativeAudioService] openAccessibilitySettings:', e?.message || e);
+      return false;
+    }
+  }
+
+  /**
+   * Android-only: if Accessibility is disabled, guide the user.\n
+   * Some OEMs require enabling “Restricted settings” in App Info before the accessibility service
+   * can be turned on. This does not grant call-audio tap permissions, but it helps keep background
+   * features stable on stricter Android builds.
+   */
+  async ensureAccessibilityEnabledOrPrompt() {
+    if (Platform.OS !== 'android') {
+      return true;
+    }
+    const ok = await this.isAccessibilityEnabled();
+    if (ok) {
+      return true;
+    }
+
+    Alert.alert(
+      'Enable Accessibility',
+      "Two-way call recording on newer Android versions requires the app's Accessibility Service to be enabled.\n\n" +
+        "If the toggle is blocked, open App info → (⋮) Allow restricted settings, then enable Accessibility again.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Open Accessibility settings',
+          onPress: () => this.openAccessibilitySettings(),
+        },
+        {
+          text: 'Open App info',
+          onPress: () => Linking.openSettings().catch(() => {}),
+        },
+      ],
+    );
+    return false;
   }
 
   async startRecording() {

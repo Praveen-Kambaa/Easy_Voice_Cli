@@ -3,6 +3,9 @@ package com.typeeasy
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.AutomaticGainControl
+import android.media.audiofx.NoiseSuppressor
 import android.os.Build
 import android.os.Process
 import android.util.Log
@@ -13,6 +16,7 @@ import java.nio.ByteOrder
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.sqrt
 
 /**
  * Records PCM via [AudioRecord] into a WAV file.
@@ -76,14 +80,20 @@ class CallWavRecorder {
         return false
     }
 
+    @Suppress("DEPRECATION")
     private fun buildAudioSourceList(): IntArray {
         val list = ArrayList<Int>()
+        list.add(MediaRecorder.AudioSource.VOICE_RECOGNITION)
+        list.add(MediaRecorder.AudioSource.MIC)
         list.add(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+        // Deprecated API 29+; still worth trying — a few devices expose remote (downlink) or local (uplink) only.
+        list.add(MediaRecorder.AudioSource.VOICE_DOWNLINK)
+        list.add(MediaRecorder.AudioSource.VOICE_UPLINK)
+        // Often silent on Android 10+ for non-privileged apps, but keep as a fallback attempt.
         list.add(MediaRecorder.AudioSource.VOICE_CALL)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             list.add(MediaRecorder.AudioSource.VOICE_PERFORMANCE)
         }
-        list.add(MediaRecorder.AudioSource.MIC)
         list.add(MediaRecorder.AudioSource.DEFAULT)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             list.add(MediaRecorder.AudioSource.UNPROCESSED)
@@ -129,7 +139,29 @@ class CallWavRecorder {
             captureThread = Thread({
                 Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
                 var openedCapture = false
+                val effects = ArrayList<android.media.audiofx.AudioEffect>(3)
+                fun tryEnableFx(name: String, factory: () -> android.media.audiofx.AudioEffect?) {
+                    try {
+                        val fx = factory() ?: return
+                        fx.enabled = true
+                        effects.add(fx)
+                        Log.i(TAG, "$name enabled sessionId=${arRef.audioSessionId}")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "$name: ${e.message}")
+                    }
+                }
                 try {
+                    // Best-effort: hardware DSP on the AudioRecord session (AEC/NS/AGC).
+                    val sessionId = arRef.audioSessionId
+                    if (AcousticEchoCanceler.isAvailable()) {
+                        tryEnableFx("AcousticEchoCanceler") { AcousticEchoCanceler.create(sessionId) }
+                    }
+                    if (NoiseSuppressor.isAvailable()) {
+                        tryEnableFx("NoiseSuppressor") { NoiseSuppressor.create(sessionId) }
+                    }
+                    if (AutomaticGainControl.isAvailable()) {
+                        tryEnableFx("AutomaticGainControl") { AutomaticGainControl.create(sessionId) }
+                    }
                     arRef.startRecording()
                     if (arRef.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
                         Log.w(TAG, "startRecording did not enter RECORDING state rate=$sampleRate source=$source")
@@ -141,6 +173,14 @@ class CallWavRecorder {
                     while (!stopRequested.get()) {
                         val n = arRef.read(buf, 0, buf.size)
                         if (n > 0) {
+                            val byteCount = n - (n and 1)
+                            if (byteCount > 0) {
+                                val rms = computeRms16Le(buf, byteCount)
+                                val gain = if (rms < RMS_WEAK_THRESHOLD) WEAK_GAIN else 1.0f
+                                if (gain != 1.0f) {
+                                    applyGain16LeInPlace(buf, byteCount, gain)
+                                }
+                            }
                             synchronized(outRef) {
                                 outRef.write(buf, 0, n)
                                 pcmBytesWritten += n.toLong()
@@ -153,6 +193,17 @@ class CallWavRecorder {
                 } catch (e: Exception) {
                     Log.e(TAG, "Read loop failed: rate=$sampleRate source=$source", e)
                 } finally {
+                    try {
+                        for (i in effects.indices.reversed()) {
+                            try {
+                                effects[i].enabled = false
+                                effects[i].release()
+                            } catch (_: Exception) {
+                            }
+                        }
+                    } catch (_: Exception) {
+                    }
+                    effects.clear()
                     if (!openedCapture) {
                         initDone.countDown()
                     }
@@ -343,6 +394,43 @@ class CallWavRecorder {
         private const val PEAK_SCAN_MAX_BYTES = 96_000
         /** Below this max |sample| (16-bit), treat as silent / blocked capture for UX + metadata. */
         const val SILENCE_PEAK_THRESHOLD = 250
+
+        /** Chunk RMS below this is treated as \"weak\" and boosted (receiver/junior on speaker). */
+        private const val RMS_WEAK_THRESHOLD = 1400.0
+        /** Weak-segment gain multiplier. */
+        private const val WEAK_GAIN = 3.5f
+
+        private fun computeRms16Le(buf: ByteArray, byteCount: Int): Double {
+            val samples = byteCount / 2
+            if (samples <= 0) return 0.0
+            var sumSq = 0.0
+            var i = 0
+            while (i + 1 < byteCount) {
+                val lo = buf[i].toInt() and 0xFF
+                val hi = buf[i + 1].toInt()
+                var s = (hi shl 8) or lo
+                if (s > 32767) s -= 65536
+                sumSq += (s * s).toDouble()
+                i += 2
+            }
+            return sqrt(sumSq / samples)
+        }
+
+        private fun applyGain16LeInPlace(buf: ByteArray, byteCount: Int, gain: Float) {
+            var i = 0
+            while (i + 1 < byteCount) {
+                val lo = buf[i].toInt() and 0xFF
+                val hi = buf[i + 1].toInt()
+                var s = (hi shl 8) or lo
+                if (s > 32767) s -= 65536
+                var out = (s * gain).toInt()
+                if (out > 32767) out = 32767
+                if (out < -32768) out = -32768
+                buf[i] = (out and 0xFF).toByte()
+                buf[i + 1] = ((out shr 8) and 0xFF).toByte()
+                i += 2
+            }
+        }
 
         fun writeWavHeader(raf: RandomAccessFile, pcmDataLen: Int, sampleRate: Int, channels: Short, bitsPerSample: Short) {
             val byteRate = sampleRate * channels * bitsPerSample / 8

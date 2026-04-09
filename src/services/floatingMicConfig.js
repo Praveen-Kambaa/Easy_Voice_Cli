@@ -90,14 +90,14 @@ export async function setOverlayTranslationEnabled(enabled) {
   await syncFloatingMicSettingsToNative();
 }
 
-/** @returns {Promise<boolean>} true = floating translator uses ML Kit on Android (no audio upload) */
+/** @returns {Promise<boolean>} true = floating translator uses ML Kit on Android (no audio upload). Default ON. */
 export async function getInternalFloatingTranslationEnabled() {
   try {
     const raw = await AsyncStorage.getItem(INTERNAL_FLOATING_TRANSLATION_STORAGE);
-    if (raw === null) return false;
+    if (raw === null) return true;
     return raw === 'true';
   } catch {
-    return false;
+    return true;
   }
 }
 

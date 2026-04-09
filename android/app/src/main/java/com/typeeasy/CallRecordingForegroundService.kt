@@ -32,6 +32,15 @@ import org.json.JSONObject
  * Listens for active calls and records audio to app storage while a call is off-hook.
  * Uses [CallWavRecorder] (PCM/WAV via [android.media.AudioRecord]) — more reliable than
  * [android.media.MediaRecorder] for audible capture during calls on many OEMs.
+ *
+ * ## How this relates to “other call recording apps”
+ * - **Built-in Phone / OEM dialer recorders** are usually **system or privileged** apps. They can use
+ *   manufacturer-only audio paths. A normal store-distributed app **cannot** call the same native stack.
+ * - **Third-party recorders that still work** on some devices use the **same public APIs** as here:
+ *   [android.media.AudioRecord] / [MediaRecorder] with sources such as `VOICE_CALL`, `VOICE_DOWNLINK`,
+ *   `VOICE_UPLINK`, `VOICE_COMMUNICATION`, `MIC`, etc. There is no separate “secret” Play Store API.
+ * - On **Android 10+**, many devices return **valid recordings that are silent** for those sources
+ *   (policy / HAL). The portable workaround is **speakerphone + microphone** (see user toggle).
  */
 class CallRecordingForegroundService : Service() {
 
@@ -72,6 +81,9 @@ class CallRecordingForegroundService : Service() {
     /** Dedupe when both [TelephonyCallback] and broadcast fire for the same transition. */
     private var lastDedupeState: Int = Int.MIN_VALUE
     private var lastDedupeAt: Long = 0L
+
+    /** True if this service turned speakerphone on (must reset on IDLE / destroy). */
+    private var speakerBoostApplied: Boolean = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -127,10 +139,71 @@ class CallRecordingForegroundService : Service() {
     }
 
     private fun resetAudioRouting() {
+        resetSpeakerphoneBoost()
         try {
             audioManager?.mode = AudioManager.MODE_NORMAL
         } catch (_: Exception) {
         }
+    }
+
+    private fun isSpeakerphoneBoostWanted(): Boolean {
+        return getSharedPreferences(PhoneCallsModule.CALL_RECORDING_PREFS, Context.MODE_PRIVATE)
+            .getBoolean(PhoneCallsModule.CALL_RECORDING_SPEAKERPHONE_BOOST_KEY, false)
+    }
+
+    /**
+     * Many OEMs block [VOICE_CALL] for third-party apps (file has size but silence).
+     * Android 10+ requires routing audio to the loudspeaker so the MIC can pick it up.
+     */
+    private fun applySpeakerphoneIfPreferred() {
+        if (!isSpeakerphoneBoostWanted()) {
+            return
+        }
+        try {
+            val am = audioManager ?: return
+            // Prefer the property setter when available; keep deprecated call for OEM compatibility.
+            try {
+                am.isSpeakerphoneOn = true
+            } catch (_: Exception) {
+                @Suppress("DEPRECATION")
+                am.setSpeakerphoneOn(true)
+            }
+            // "High-gain" strategy: turn call/media streams up so the MIC can physically pick up the remote voice.
+            // This is intentionally aggressive; users can toggle speaker boost off in the UI.
+            try {
+                val callMax = am.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
+                if (callMax > 0) {
+                    am.setStreamVolume(AudioManager.STREAM_VOICE_CALL, callMax, 0)
+                }
+            } catch (_: Exception) {
+            }
+            try {
+                val musicMax = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                if (musicMax > 0) {
+                    am.setStreamVolume(AudioManager.STREAM_MUSIC, musicMax, 0)
+                }
+            } catch (_: Exception) {
+            }
+            speakerBoostApplied = true
+            Log.i(tag, "Speakerphone forced ON for call capture (Android 10+ workaround)")
+        } catch (e: Exception) {
+            Log.w(tag, "applySpeakerphoneIfPreferred: ${e.message}")
+        }
+    }
+
+    private fun resetSpeakerphoneBoost() {
+        if (!speakerBoostApplied) return
+        try {
+            try {
+                audioManager?.isSpeakerphoneOn = false
+            } catch (_: Exception) {
+                @Suppress("DEPRECATION")
+                audioManager?.setSpeakerphoneOn(false)
+            }
+            Log.d(tag, "Speakerphone OFF after call capture")
+        } catch (_: Exception) {
+        }
+        speakerBoostApplied = false
     }
 
     private fun createChannel() {
@@ -305,7 +378,6 @@ class CallRecordingForegroundService : Service() {
      */
     private fun scheduleStartRecording() {
         cancelPendingStartRecording()
-        applyInCallAudioRouting()
         val run = Runnable {
             pendingStartRecording = null
             startRecordingWithRouting()
@@ -317,7 +389,13 @@ class CallRecordingForegroundService : Service() {
     private fun startRecordingWithRouting() {
         if (wavRecorder != null || mediaRecorder != null) return
         applyInCallAudioRouting()
+        applySpeakerphoneIfPreferred()
         startRecording()
+        if (wavRecorder != null || mediaRecorder != null) {
+            if (speakerBoostApplied) {
+                updateNotification(getString(R.string.call_recording_notification_text_recording_speaker))
+            }
+        }
     }
 
     private fun newMediaRecorder(): MediaRecorder {
@@ -335,11 +413,18 @@ class CallRecordingForegroundService : Service() {
      */
     private fun tryStartMediaRecorder(path: String): Boolean {
         applyInCallAudioRouting()
-        val sources = intArrayOf(
-            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-            MediaRecorder.AudioSource.VOICE_CALL,
-            MediaRecorder.AudioSource.MIC,
-        )
+        @Suppress("DEPRECATION")
+        val sources = buildList {
+            add(MediaRecorder.AudioSource.VOICE_RECOGNITION)
+            add(MediaRecorder.AudioSource.MIC)
+            add(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+            add(MediaRecorder.AudioSource.VOICE_DOWNLINK)
+            add(MediaRecorder.AudioSource.VOICE_UPLINK)
+            add(MediaRecorder.AudioSource.VOICE_CALL)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                add(MediaRecorder.AudioSource.VOICE_PERFORMANCE)
+            }
+        }.toIntArray()
         for (source in sources) {
             val recorder = newMediaRecorder()
             val ok = try {
@@ -397,6 +482,7 @@ class CallRecordingForegroundService : Service() {
             return
         }
         Log.e(tag, "startRecording failed: neither WAV nor MediaRecorder could start")
+        resetSpeakerphoneBoost()
     }
 
     private fun stopRecordingInternal(sendBroadcast: Boolean) {
@@ -549,7 +635,7 @@ class CallRecordingForegroundService : Service() {
         const val NOTIFICATION_ID = 7102
         const val ACTION_RECORDING_DONE = "com.typeeasy.CALL_RECORDING_DONE"
         /** Wait after OFFHOOK before opening the mic (ms). Too long misses very short calls. */
-        private const val START_DELAY_MS = 700L
+        private const val START_DELAY_MS = 2000L
         /** Minimum size for AAC container to count as a real recording. */
         private const val MIN_M4A_BYTES = 2048L
     }

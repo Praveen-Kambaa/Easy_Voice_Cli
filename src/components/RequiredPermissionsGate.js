@@ -22,7 +22,10 @@ import {
 import { Colors } from '../theme/Colors';
 import PermissionModal from './PermissionModal';
 import { PERMISSION_NAMES } from '../utils/AndroidPermissions';
-import { getAndroidBootstrapPermissionList } from '../utils/androidRuntimePermissions';
+import {
+  getAndroidBootstrapPermissionList,
+  getAndroidRuntimeCategories,
+} from '../utils/androidRuntimePermissions';
 
 const { FloatingMicModule } = NativeModules;
 
@@ -67,7 +70,9 @@ async function resolveAndroidBootstrapPermissions(permList, forceRequest) {
   }
 
   const blocked = permList.some((p) => statuses[p] === RESULTS.BLOCKED);
-  return { runtimeOk, blocked };
+
+  const missing = permList.filter((p) => !satisfied(p, statuses[p]));
+  return { runtimeOk, blocked, statuses, missing };
 }
 
 async function checkIosMicrophone() {
@@ -84,6 +89,7 @@ export default function RequiredPermissionsGate({ children }) {
   const [loading, setLoading] = useState(true);
   const [runtimeComplete, setRuntimeComplete] = useState(false);
   const [runtimeHasBlocked, setRuntimeHasBlocked] = useState(false);
+  const [runtimeMissingLabels, setRuntimeMissingLabels] = useState([]);
   const [overlay, setOverlay] = useState(false);
   const [recordAudio, setRecordAudio] = useState(false);
   const [accessibility, setAccessibility] = useState(false);
@@ -132,20 +138,33 @@ export default function RequiredPermissionsGate({ children }) {
 
     try {
       if (permList.length > 0) {
-        const { runtimeOk: ok, blocked } = await resolveAndroidBootstrapPermissions(
+        const { runtimeOk: ok, blocked, statuses, missing } = await resolveAndroidBootstrapPermissions(
           permList,
           forceRuntimeRequest,
         );
         runtimeOk = ok;
         setRuntimeHasBlocked(blocked);
+        // Build user-friendly missing categories (Call logs / Contacts / Phone / SMS / Microphone / Files and media / Camera / Notifications)
+        try {
+          const cats = getAndroidRuntimeCategories();
+          const missingSet = new Set(missing);
+          const labels = cats
+            .filter((c) => (c.perms || []).some((p) => missingSet.has(p)))
+            .map((c) => c.label);
+          setRuntimeMissingLabels(labels);
+        } catch {
+          setRuntimeMissingLabels([]);
+        }
       } else {
         setRuntimeHasBlocked(false);
+        setRuntimeMissingLabels([]);
       }
       setRuntimeComplete(runtimeOk);
     } catch (e) {
       console.error('RequiredPermissionsGate runtime check:', e);
       setRuntimeComplete(false);
       setRuntimeHasBlocked(false);
+      setRuntimeMissingLabels([]);
       runtimeOk = false;
     }
 
@@ -287,6 +306,10 @@ export default function RequiredPermissionsGate({ children }) {
   }
 
   if (Platform.OS === 'android' && !runtimeComplete) {
+    const missingText =
+      runtimeMissingLabels && runtimeMissingLabels.length > 0
+        ? runtimeMissingLabels.join(', ')
+        : 'Required permissions';
     return (
       <View style={styles.blockContainer}>
         <Image
@@ -294,10 +317,10 @@ export default function RequiredPermissionsGate({ children }) {
           style={styles.blockLogo}
           resizeMode="contain"
         />
-        <Text style={styles.blockTitle}>Microphone access needed</Text>
+        <Text style={styles.blockTitle}>Permissions needed</Text>
         <Text style={styles.blockBody}>
-          The app needs microphone permission to continue. Tap Try again to open the system prompt, or open
-          Settings if microphone access was denied for this app.
+          To continue, allow: {missingText}. Tap Try again to open the system prompts, or open Settings if a
+          permission was denied for this app.
         </Text>
 
         <View style={styles.actions}>

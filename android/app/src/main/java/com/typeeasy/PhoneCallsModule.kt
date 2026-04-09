@@ -29,6 +29,8 @@ class PhoneCallsModule(reactContext: ReactApplicationContext) : ReactContextBase
         private const val TAG = "PhoneCallsModule"
         const val CALL_RECORDING_PREFS = "TypeEasyCallRecording"
         const val CALL_RECORDING_PREF_KEY = "call_recording_service_wanted"
+        /** When true, foreground call recorder enables speakerphone so the mic can capture the earpiece (OEM-dependent). */
+        const val CALL_RECORDING_SPEAKERPHONE_BOOST_KEY = "call_recording_speakerphone_boost"
     }
 
     private var receiverRegistered = false
@@ -195,6 +197,38 @@ class PhoneCallsModule(reactContext: ReactApplicationContext) : ReactContextBase
             promise.resolve(true)
         } catch (e: Exception) {
             promise.reject("E_SERVICE", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun setCallRecordingSpeakerphoneBoost(enabled: Boolean, promise: Promise) {
+        try {
+            reactApplicationContext
+                .getSharedPreferences(CALL_RECORDING_PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(CALL_RECORDING_SPEAKERPHONE_BOOST_KEY, enabled)
+                .apply()
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("E_PREFS", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun getCallRecordingSpeakerphoneBoost(promise: Promise) {
+        try {
+            val prefs = reactApplicationContext
+                .getSharedPreferences(CALL_RECORDING_PREFS, Context.MODE_PRIVATE)
+            // Default ON for fresh installs (user can toggle off).
+            val v = if (prefs.contains(CALL_RECORDING_SPEAKERPHONE_BOOST_KEY)) {
+                prefs.getBoolean(CALL_RECORDING_SPEAKERPHONE_BOOST_KEY, true)
+            } else {
+                prefs.edit().putBoolean(CALL_RECORDING_SPEAKERPHONE_BOOST_KEY, true).apply()
+                true
+            }
+            promise.resolve(v)
+        } catch (e: Exception) {
+            promise.reject("E_PREFS", e.message, e)
         }
     }
 

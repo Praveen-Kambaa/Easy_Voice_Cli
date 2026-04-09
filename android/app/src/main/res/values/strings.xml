@@ -53,4 +53,5 @@
     <string name="call_recording_notification_text_listening">Listening for calls…</string>
     <string name="call_recording_notification_text_incoming">Incoming call…</string>
     <string name="call_recording_notification_text_recording">Recording call…</string>
+    <string name="call_recording_notification_text_recording_speaker">Recording (speakerphone on for capture)…</string>
 </resources>

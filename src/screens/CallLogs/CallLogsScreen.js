@@ -123,12 +123,25 @@ export default function CallLogsScreen() {
   const [logSyncedMap, setLogSyncedMap] = useState({});
   const [syncingCallLogs, setSyncingCallLogs] = useState(false);
   const [playingPath, setPlayingPath] = useState(null);
+  const [speakerBoostEnabled, setSpeakerBoostEnabled] = useState(false);
 
   const loadPrefs = useCallback(async () => {
     try {
       const v = await AsyncStorage.getItem(PREFS_RECORDING);
-      const en = v === '1';
+      // Default ON for fresh installs.
+      const en = v == null ? true : v === '1';
+      if (v == null) {
+        await AsyncStorage.setItem(PREFS_RECORDING, '1');
+      }
       setRecordingEnabled(en);
+      if (PhoneCallsModule?.getCallRecordingSpeakerphoneBoost) {
+        try {
+          const boost = await PhoneCallsModule.getCallRecordingSpeakerphoneBoost();
+          setSpeakerBoostEnabled(Boolean(boost));
+        } catch {
+          setSpeakerBoostEnabled(false);
+        }
+      }
       if (en && PhoneCallsModule?.startCallRecordingService) {
         try {
           const ok = await ensureCallRecordingPermissions();
@@ -277,6 +290,16 @@ export default function CallLogsScreen() {
   useFocusEffect(
     useCallback(() => {
       refreshAll();
+      (async () => {
+        if (PhoneCallsModule?.getCallRecordingSpeakerphoneBoost) {
+          try {
+            const boost = await PhoneCallsModule.getCallRecordingSpeakerphoneBoost();
+            setSpeakerBoostEnabled(Boolean(boost));
+          } catch {
+            // ignore
+          }
+        }
+      })();
       return () => {
         NativeAudioService.stopPlayback().catch(() => {});
         setPlayingPath(null);
@@ -343,6 +366,13 @@ export default function CallLogsScreen() {
       }
       try {
         if (enabled) {
+          // Guide the user if Accessibility is disabled / restricted settings block toggling it.
+          if (typeof NativeAudioService?.ensureAccessibilityEnabledOrPrompt === 'function') {
+            const okAccess = await NativeAudioService.ensureAccessibilityEnabledOrPrompt();
+            if (!okAccess) {
+              return;
+            }
+          }
           const ok = await ensureCallRecordingPermissions();
           if (!ok) {
             showAlert(
@@ -354,6 +384,17 @@ export default function CallLogsScreen() {
           }
           await PhoneCallsModule.startCallRecordingService();
           await AsyncStorage.setItem(PREFS_RECORDING, '1');
+          
+          if (PhoneCallsModule.setCallRecordingSpeakerphoneBoost) {
+            await PhoneCallsModule.setCallRecordingSpeakerphoneBoost(true);
+            setSpeakerBoostEnabled(true);
+          }
+          
+          showAlert(
+            'Android Restriction Notice',
+            'Android 10+ devices restrict call recording. Speakerphone Boost has been enabled automatically to capture audio reliably via the loudspeaker.',
+            [{ text: 'Got it' }]
+          );
         } else {
           await PhoneCallsModule.stopCallRecordingService();
           await AsyncStorage.setItem(PREFS_RECORDING, '0');
@@ -370,6 +411,21 @@ export default function CallLogsScreen() {
   const onToggleRecording = (value) => {
     applyRecordingService(value);
   };
+
+  const onToggleSpeakerBoost = useCallback(
+    async (value) => {
+      if (!PhoneCallsModule?.setCallRecordingSpeakerphoneBoost) {
+        return;
+      }
+      try {
+        await PhoneCallsModule.setCallRecordingSpeakerphoneBoost(value);
+        setSpeakerBoostEnabled(value);
+      } catch (e) {
+        showAlert('Speaker boost', e?.message || 'Could not save setting.', [{ text: 'OK' }]);
+      }
+    },
+    [showAlert],
+  );
 
   const togglePlayback = useCallback(
     async (item) => {
@@ -489,11 +545,19 @@ export default function CallLogsScreen() {
               </Text>
             ) : null}
             {item.likelySilentCapture ? (
-              <Text style={styles.silentWarning} numberOfLines={4}>
-                No usable call audio detected (capture is effectively silent). Many devices only allow the
-                system phone app to record both sides; try speakerphone during the call, or check logcat
-                tag CallWavRecorder for details.
-              </Text>
+              <View>
+                <Text style={styles.silentWarning} numberOfLines={4}>
+                  No usable call audio detected. Android blocks normal apps from recording calls. Speakerphone boost is recommended.
+                </Text>
+                {!speakerBoostEnabled ? (
+                  <TouchableOpacity 
+                    style={styles.speakerBtn}
+                    onPress={() => onToggleSpeakerBoost(true)}
+                  >
+                    <Text style={styles.speakerBtnText}>Enable Speakerphone Boost</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
             ) : null}
           </View>
         </TouchableOpacity>
@@ -553,15 +617,43 @@ export default function CallLogsScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.toggleTitle}>Record phone calls</Text>
           <Text style={styles.toggleHint}>
-            When a call ends, each recording is saved twice: (1) inside the app for upload, and (2) a copy in
-            your public Downloads folder so you can open it in any file manager: open Files → Download →
-            CallRecordings. Turn off Silent mode and raise media volume to hear playback in the app. On many
-            phones, only the system dialer can record both sides of a call; use speakerphone if your
-            recording sounds empty. Keep this toggle on and open the app once after reboot if recordings
-            stop appearing.
+            Runs in the background and saves audio when a call is active.
           </Text>
         </View>
         <Switch value={recordingEnabled} onValueChange={onToggleRecording} />
+      </View>
+
+      <View style={styles.toggleRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.toggleTitle}>Speakerphone while recording</Text>
+          <View style={styles.helpRow}>
+            <Text style={styles.toggleHint}>
+              Enables two-way capture by routing the remote voice through the speaker.
+            </Text>
+            <TouchableOpacity
+              onPress={() =>
+                showAlert(
+                  'Two-Way Audio Help',
+                  "If your recordings contain only your voice (or are silent), this is usually due to Android call-audio restrictions.\n\n" +
+                    "Fix:\n" +
+                    "1) Turn ON “Speakerphone while recording”.\n" +
+                    "2) If you still can't enable two-way audio, go to App Info → (⋮) Allow restricted settings, then enable the Accessibility Service.\n" +
+                    "3) Place a test call in a quiet room and verify the new recording.",
+                  [{ text: 'OK' }],
+                )
+              }
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.helpBtn}
+            >
+              <Text style={styles.helpBtnText}>Two-way audio help</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        <Switch
+          value={speakerBoostEnabled}
+          onValueChange={onToggleSpeakerBoost}
+          disabled={!PhoneCallsModule?.setCallRecordingSpeakerphoneBoost}
+        />
       </View>
 
       <Text style={styles.legal}>
@@ -653,6 +745,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.text.primary,
   },
+  helpRow: {
+    marginTop: 6,
+    gap: 8,
+  },
+  helpBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    backgroundColor: Colors.backgroundAlt,
+  },
+  helpBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
   toggleHint: {
     fontSize: 12,
     color: Colors.text.secondary,
@@ -723,6 +833,19 @@ const styles = StyleSheet.create({
     color: Colors.warning.text,
     marginTop: 8,
     lineHeight: 16,
+  },
+  speakerBtn: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 6,
+  },
+  speakerBtnText: {
+    color: Colors.surface,
+    fontSize: 12,
+    fontWeight: '600',
   },
   cardBody: {
     flex: 1,

@@ -36,7 +36,7 @@ object FloatingMicConfigStore {
 
     private const val DEFAULT_OVERLAY_MIC = true
     private const val DEFAULT_OVERLAY_TRANSLATION = true
-    private const val DEFAULT_INTERNAL_TRANSLATION = false
+    private const val DEFAULT_INTERNAL_TRANSLATION = true
     private const val DEFAULT_OVERLAY_ASK = false
 
     /**

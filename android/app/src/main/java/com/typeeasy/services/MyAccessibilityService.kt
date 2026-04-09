@@ -101,7 +101,7 @@ class MyAccessibilityService : AccessibilityService() {
         configureService()
         registerVoiceResultReceiver()
         isServiceReady = true
-        showToast("Voice text injection ready")
+        // showToast("Voice text injection ready")
     }
 
     private fun configureService() {
@@ -707,8 +707,8 @@ class MyAccessibilityService : AccessibilityService() {
     private fun showToast(message: String) {
         // Try system Toast first; if OEM suppresses, also show an overlay toast
         handler.post {
-            runCatching { Toast.makeText(this, message, Toast.LENGTH_SHORT).show() }
-            showOverlayToast(message)
+            // runCatching { Toast.makeText(this, message, Toast.LENGTH_SHORT).show() }
+            // showOverlayToast(message)
         }
     }
 
@@ -773,7 +773,7 @@ class MyAccessibilityService : AccessibilityService() {
     private fun onInjectionSuccess(text: String, method: String) {
         lastSuccessTimestamp.set(System.currentTimeMillis())
         Log.d(TAG, "🎯 INJECTION COMPLETED — method: $method, text: \"$text\"")
-        showToast("Injected: $text")
+        // showToast("Injected: $text")
         // NOTE: intentionally do NOT call injectionInProgress.set(false) here.
         // The gate stays locked until the user starts a new recording session
         // (FloatingMicService sends ACTION_RESET_INJECTION).

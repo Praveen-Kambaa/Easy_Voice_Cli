@@ -571,7 +571,7 @@ class FloatingMicService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to start speech recognition", e)
             sendEventToReactNative("onError", "Failed to start speech recognition: ${e.message}")
-            showToast("Failed to start speech recognition")
+            // showToast("Failed to start speech recognition")
             resetToIdleState()
         }
     }
@@ -605,7 +605,7 @@ class FloatingMicService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to start Ask speech recognition", e)
             sendEventToReactNative("onError", "Failed to start speech recognition: ${e.message}")
-            showToast("Failed to start speech recognition")
+            // showToast("Failed to start speech recognition")
             resetToIdleState()
         }
     }
@@ -670,7 +670,7 @@ class FloatingMicService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to start translate speech recognition", e)
             sendEventToReactNative("onError", "Failed to start speech recognition: ${e.message}")
-            showToast("Failed to start speech recognition")
+            // showToast("Failed to start speech recognition")
             resetToIdleState()
         }
     }
@@ -693,7 +693,7 @@ class FloatingMicService : Service() {
         }
         if (!hasRecordAudioPermission()) {
             sendEventToReactNative("onError", "Microphone permission not granted")
-            showToast("Microphone permission required")
+            // showToast("Microphone permission required")
             return
         }
         val baseUrl = FloatingMicConfigStore.getVoiceTranscribeBaseUrl(this)
@@ -705,14 +705,14 @@ class FloatingMicService : Service() {
                 "onError",
                 "Configure ElevenLabs API key or voice server URL in the app → Settings.",
             )
-            showToast("Configure ElevenLabs key or voice server")
+            // showToast("Configure ElevenLabs key or voice server")
             return
         }
         if (mode == SessionMode.TRANSLATOR && baseUrl.isBlank() &&
             !FloatingMicConfigStore.isInternalFloatingTranslationEnabled(this)
         ) {
             sendEventToReactNative("onError", "Voice API URL not configured. Open the app → Settings.")
-            showToast("Configure voice server in Settings")
+            // showToast("Configure voice server in Settings")
             return
         }
 
@@ -754,7 +754,7 @@ class FloatingMicService : Service() {
             externalAudioFile?.delete()
             externalAudioFile = null
             sendEventToReactNative("onError", e.message ?: "Recording failed")
-            showToast("Recording failed")
+            // showToast("Recording failed")
             resetToIdleState()
         }
     }
@@ -837,7 +837,7 @@ class FloatingMicService : Service() {
                     Log.d(TAG, "✅ Server text injected: $text")
                     injectText(text)
                     sendEventToReactNative("onTranscriptionComplete", text)
-                    showToast(getString(R.string.voice_injected)+" 2 ")
+                    // showToast(getString(R.string.voice_injected)+" 2 ")
                 } else {
                     val err = result.exceptionOrNull()
                     val msg = err?.message ?: if (mode == SessionMode.TRANSLATOR) {
@@ -848,7 +848,7 @@ class FloatingMicService : Service() {
                     Log.e(TAG, "Upload failed: $msg", err)
                     sendEventToReactNative("onError", msg)
                     sendEventToReactNative("onTranscriptionError", msg)
-                    showToast(msg)
+                    // showToast(msg)
                 }
                 runCatching { file.delete() }
                 externalAudioFile = null
@@ -884,7 +884,7 @@ class FloatingMicService : Service() {
                 val errorMessage = getErrorMessage(error)
                 Log.e(TAG, "❌ Speech recognition error: $errorMessage")
                 sendEventToReactNative("onError", errorMessage)
-                showToast("Error: $errorMessage")
+                // showToast("Error: $errorMessage")
                 // ⚠️ NO INJECTION HERE - only in onResults()
                 resetToIdleState()
             }
@@ -913,7 +913,7 @@ class FloatingMicService : Service() {
                         if (apiKey.isEmpty()) {
                             Log.e(TAG, "AI provider API key missing")
                             sendEventToReactNative("onError", "Set AI_PROVIDER_API_KEY in aiProvider.js (app config).")
-                            showToast("AI API key missing in app config")
+                            // showToast("AI API key missing in app config")
                             return
                         }
                         deferredAsk = true
@@ -937,13 +937,13 @@ class FloatingMicService : Service() {
                                             put("answer", t)
                                         }.toString()
                                         sendEventToReactNative("onAskQuestionComplete", qaPayload)
-                                        showToast(getString(R.string.voice_injected)+" sdssdsd ")
+                                        // showToast(getString(R.string.voice_injected)+" sdssdsd ")
                                     }
                                     else -> {
                                         val msg = ai.exceptionOrNull()?.message ?: "AI request failed"
                                         sendEventToReactNative("onError", msg)
                                         sendEventToReactNative("onTranscriptionError", msg)
-                                        showToast(msg)
+                                        // showToast(msg)
                                     }
                                 }
                                 resetToIdleState()
@@ -971,7 +971,7 @@ class FloatingMicService : Service() {
                     Log.d(TAG, "✅ Speech recognition result: $spokenText")
                     injectText(spokenText)
                     sendEventToReactNative("onTranscriptionComplete", spokenText)
-                    showToast("Text injected")
+                    // showToast("Text injected")
                 } finally {
                     if (!deferredTranslation && !deferredAsk) {
                         isInjecting = false
@@ -1034,13 +1034,13 @@ class FloatingMicService : Service() {
             val t = result.getOrNull().orEmpty()
             injectText(t)
             sendEventToReactNative("onTranscriptionComplete", t)
-            showToast(getString(R.string.voice_injected) +" sdsd ")
+            // showToast(getString(R.string.voice_injected) +" sdsd ")
         } else {
             val msg = result.exceptionOrNull()?.message ?: "Translation failed"
             Log.e(TAG, "On-device translation failed: $msg")
             sendEventToReactNative("onError", msg)
             sendEventToReactNative("onTranscriptionError", msg)
-            showToast(msg)
+            // showToast(msg)
         }
     }
 
@@ -1160,7 +1160,7 @@ class FloatingMicService : Service() {
         
     private fun showToast(message: String) {
         try {
-            android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_SHORT).show()
+            // android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Log.e(TAG, "Error showing toast", e)
         }

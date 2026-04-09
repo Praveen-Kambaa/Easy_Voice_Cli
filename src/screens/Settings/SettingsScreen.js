@@ -53,7 +53,7 @@ const SettingsScreen = () => {
   const [internalTranscribe, setInternalTranscribe] = useState(true);
   const [overlayMicEnabled, setOverlayMicEnabledState] = useState(true);
   const [overlayTranslationEnabled, setOverlayTranslationEnabledState] = useState(true);
-  const [internalFloatingTranslation, setInternalFloatingTranslationState] = useState(false);
+  const [internalFloatingTranslation, setInternalFloatingTranslationState] = useState(true);
   const [elevenLabsKeyDraft, setElevenLabsKeyDraft] = useState('');
   const [elevenLabsKeySaving, setElevenLabsKeySaving] = useState(false);
   const [overlayAskQuestionEnabled, setOverlayAskQuestionEnabledState] = useState(false);
@@ -511,7 +511,7 @@ const SettingsScreen = () => {
               </View>
               <View style={[styles.toggleRow, styles.internalTranslateRow]}>
                 <View style={styles.toggleTextCol}>
-                  <Text style={styles.internalTranslationTitle}>Internal translation</Text>
+                  <Text style={styles.internalTranslationTitle}>Internal Translation</Text>
                   <Text style={styles.toggleSubLabel}>
                     Applies when overlay Translation is on. Off while Translation overlay is off.
                   </Text>

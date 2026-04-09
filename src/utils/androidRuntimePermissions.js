@@ -2,14 +2,15 @@ import { Platform } from 'react-native';
 import { PERMISSIONS } from 'react-native-permissions';
 
 /**
- * Permissions required only to pass RequiredPermissionsGate and use core voice features.
- * Keep this list small — OS quirks or partial grants on SMS/media/notifications should not lock users out.
+ * Permissions required to pass RequiredPermissionsGate.
+ * USER REQUIREMENT: ask all runtime permissions first (call logs, contacts, microphone,
+ * phone, files/media), then proceed to overlay + accessibility permissions.
  */
 export function getAndroidBootstrapPermissionList() {
   if (Platform.OS !== 'android') {
     return [];
   }
-  return [PERMISSIONS.ANDROID.RECORD_AUDIO];
+  return getAndroidFeaturePermissionList();
 }
 
 /**
@@ -31,12 +32,7 @@ export function getAndroidFeaturePermissionSpecs() {
     specs.push({ perm: PERMISSIONS.ANDROID.READ_PHONE_NUMBERS, label: 'Phone' });
   }
 
-  specs.push(
-    { perm: PERMISSIONS.ANDROID.READ_SMS, label: 'SMS' },
-    { perm: PERMISSIONS.ANDROID.RECEIVE_SMS, label: 'SMS' },
-    { perm: PERMISSIONS.ANDROID.SEND_SMS, label: 'SMS' },
-    { perm: PERMISSIONS.ANDROID.RECORD_AUDIO, label: 'Microphone' },
-  );
+  specs.push({ perm: PERMISSIONS.ANDROID.RECORD_AUDIO, label: 'Microphone' });
 
   if (v >= 33) {
     specs.push(
@@ -104,7 +100,6 @@ export function getAndroidRuntimeCategories() {
     { label: 'Call logs', perms: [A.READ_CALL_LOG] },
     { label: 'Contacts', perms: [A.READ_CONTACTS] },
     { label: 'Phone', perms: phonePerms },
-    { label: 'SMS', perms: [A.READ_SMS, A.RECEIVE_SMS, A.SEND_SMS] },
     { label: 'Microphone', perms: [A.RECORD_AUDIO] },
     { label: 'Files and media', perms: mediaPerms },
   ];

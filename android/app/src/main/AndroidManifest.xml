@@ -4,6 +4,8 @@
     
     <!-- Core permissions for voice functionality -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Optional: turn on speakerphone during capture so MIC can pick up remote audio when OEM blocks VOICE_CALL -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
     
@@ -12,9 +14,8 @@
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
-    <uses-permission android:name="android.permission.READ_SMS" />
-    <uses-permission android:name="android.permission.RECEIVE_SMS" />
-    <uses-permission android:name="android.permission.SEND_SMS" />
+    <!-- May be ignored on non-privileged apps, but required on some OEM builds for call-related background behaviors -->
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
     
     <!-- Storage / media (API 33+ granular; older uses READ_EXTERNAL_STORAGE) -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
@@ -34,12 +35,21 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
-    <!-- Battery optimization exemption query -->
-  <queries>
-    <intent>
-      <action android:name="android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    </intent>
-  </queries>
+    <!-- Package visibility queries (Android 11+). -->
+    <queries>
+      <intent>
+        <action android:name="android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+      </intent>
+      <intent>
+        <action android:name="android.intent.action.CALL" />
+      </intent>
+      <intent>
+        <action android:name="android.intent.action.DIAL" />
+      </intent>
+      <intent>
+        <action android:name="android.telecom.InCallService" />
+      </intent>
+    </queries>
 
     <application
       android:name=".MainApplication"
@@ -90,7 +100,12 @@
         android:name=".CallRecordingForegroundService"
         android:enabled="true"
         android:exported="false"
-        android:foregroundServiceType="microphone" />
+        android:foregroundServiceType="microphone|specialUse"
+        android:permission="android.permission.FOREGROUND_SERVICE_MICROPHONE">
+        <property
+          android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="call_recording" />
+      </service>
 
       <receiver
         android:name=".CallRecordingBootReceiver"
@@ -114,5 +129,7 @@
           android:name="android.view.im"
           android:resource="@xml/voice_keyboard_method" />
       </service>
+
+
     </application>
 </manifest>
