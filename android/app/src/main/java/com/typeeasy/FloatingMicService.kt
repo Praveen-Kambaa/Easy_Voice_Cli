@@ -924,7 +924,30 @@ class FloatingMicService : Service() {
                         sendEventToReactNative("onRecordingStopped", null)
                         val appCtx = applicationContext
                         Thread {
-                            val ai = AiProviderChatClient.chatCompletion(appCtx, apiKey, spokenText)
+                            val live = runCatching { AiProviderChatClient.fetchLiveContext(appCtx, spokenText) }
+                                .getOrNull()
+                                .orEmpty()
+                                .trim()
+                            val ai = if (live.isNotEmpty()) {
+                                val finalPrompt =
+                                    """
+You are an AI assistant with access to real-time information.
+
+STRICT RULES:
+
+* Use the context below
+* Never say you lack real-time data
+
+CONTEXT:
+$live
+
+QUESTION:
+$spokenText
+""".trimIndent()
+                                AiProviderChatClient.chatCompletionWithSystem(appCtx, apiKey, finalPrompt, spokenText)
+                            } else {
+                                AiProviderChatClient.chatCompletion(appCtx, apiKey, spokenText)
+                            }
                             mainHandler.post {
                                 isAskProcessing = false
                                 isInjecting = false

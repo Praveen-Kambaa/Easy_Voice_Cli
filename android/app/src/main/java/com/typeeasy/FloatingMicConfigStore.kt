@@ -24,6 +24,8 @@ object FloatingMicConfigStore {
     private const val KEY_OVERLAY_ASK = "overlay_ask_question_enabled"
     /** AI provider API key for Ask Question (synced from JS). */
     private const val KEY_AI_PROVIDER_API_KEY = "ai_provider_api_key"
+    /** Tavily search API key for latest context (synced from JS). */
+    private const val KEY_TAVILY_API_KEY = "tavily_api_key"
     /** Legacy pref key; migrated on read. */
     private const val KEY_LEGACY_OPENROUTER_API_KEY = "openrouter_api_key"
     /** OpenAI-compatible chat API base (no trailing slash), synced from JS [aiProvider.js]. */
@@ -124,6 +126,11 @@ object FloatingMicConfigStore {
         return ""
     }
 
+    fun getTavilyApiKey(context: Context): String {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_TAVILY_API_KEY, null)?.trim().orEmpty()
+    }
+
     fun getAiChatApiBaseUrl(context: Context): String {
         val v = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY_AI_CHAT_BASE_URL, null)?.trim().orEmpty()
@@ -151,6 +158,7 @@ object FloatingMicConfigStore {
         aiProviderApiKey: String,
         aiChatApiBaseUrl: String,
         aiChatModel: String,
+        tavilyApiKey: String,
     ) {
         var mic = overlayMicEnabled
         var trans = overlayTranslationEnabled
@@ -173,6 +181,7 @@ object FloatingMicConfigStore {
             putBoolean(KEY_INTERNAL_TRANSLATION, internalFloatingTranslation)
             putBoolean(KEY_OVERLAY_ASK, ask)
             putString(KEY_AI_PROVIDER_API_KEY, aiProviderApiKey.trim())
+            putString(KEY_TAVILY_API_KEY, tavilyApiKey.trim())
             putString(
                 KEY_AI_CHAT_BASE_URL,
                 aiChatApiBaseUrl.trim().ifEmpty { DEFAULT_AI_CHAT_BASE_URL },

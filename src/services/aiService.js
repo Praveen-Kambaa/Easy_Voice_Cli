@@ -3,6 +3,7 @@ import {
   AI_CHAT_MODEL,
 } from '../config/aiProvider';
 import { getAiProviderApiKey } from './floatingMicConfig';
+import { fetchLiveContext } from './liveContextService';
 
 /**
  * Chat completion via the configured AI provider (see aiProvider.js).
@@ -39,13 +40,31 @@ export async function askQuestion(question) {
   }
 
   try {
+    const liveContext = await fetchLiveContext(q);
+    const useLive = Boolean(liveContext && liveContext.trim());
+    const systemContent = useLive
+      ? `You are an AI assistant with access to the latest real-time information.
+
+IMPORTANT RULES:
+
+* You MUST use the provided context to answer
+* DO NOT say "I don’t have real-time data"
+* DO NOT mention knowledge cutoff
+* If context is relevant, prioritize it
+
+LATEST CONTEXT:
+${liveContext}`
+      : 'Answer clearly and concisely.';
     const res = await fetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify({
         model: AI_CHAT_MODEL,
         messages: [
-          { role: 'system', content: 'Answer clearly and concisely.' },
+          {
+            role: 'system',
+            content: systemContent,
+          },
           { role: 'user', content: q },
         ],
         max_tokens: 200,

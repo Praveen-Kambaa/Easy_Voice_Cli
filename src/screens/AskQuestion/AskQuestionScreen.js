@@ -11,6 +11,7 @@ import {
   DeviceEventEmitter,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { History, Bookmark, X } from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
@@ -44,6 +45,7 @@ function renderBoldMarkdown(text) {
 }
 
 const AskQuestionScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const [answerField, setAnswerField] = useState('');
   const [accessAllowed, setAccessAllowed] = useState(null);
   const canClear = answerField.trim().length > 0;
@@ -122,7 +124,11 @@ const AskQuestionScreen = ({ navigation }) => {
             pairs (unsaved items drop off after two days).
           </Text>
           <View style={styles.inputWrap}>
-            <ScrollView style={styles.input} contentContainerStyle={styles.inputContent}>
+            <ScrollView
+              style={styles.input}
+              contentContainerStyle={styles.inputContent}
+              keyboardShouldPersistTaps="handled"
+            >
               {canClear ? (
                 renderBoldMarkdown(answerField)
               ) : (
@@ -142,7 +148,7 @@ const AskQuestionScreen = ({ navigation }) => {
             ) : null}
           </View>
         </View>
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: 16 + (insets?.bottom || 0) }]}>
           <TouchableOpacity
             style={styles.footerItem}
             onPress={() => navigation.navigate('AiQaHistory')}
@@ -204,14 +210,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
-    color: Colors.text.primary,
     marginBottom: 12,
-    paddingRight: 44,
   },
   inputContent: {
     flexGrow: 1,
+    padding: 14,
+    paddingRight: 44,
+    paddingBottom: 28,
   },
   placeholderText: {
     fontSize: 16,

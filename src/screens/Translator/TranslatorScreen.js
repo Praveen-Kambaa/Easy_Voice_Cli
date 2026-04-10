@@ -12,7 +12,7 @@ import {
   ScrollView,
   Clipboard,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import {
   X,
   ArrowLeftRight,
@@ -62,6 +62,7 @@ const OUTPUT_TINT = 'rgba(14, 165, 233, 0.08)';
 
 const TranslatorScreen = ({ navigation }) => {
   const showAlert = useAlert();
+  const isFocused = useIsFocused();
   const [fromCode, setFromCode] = useState('en');
   const [toCode, setToCode] = useState('ta');
   const [sourceText, setSourceText] = useState('');
@@ -76,6 +77,8 @@ const TranslatorScreen = ({ navigation }) => {
 
   const requestIdRef = useRef(0);
   const debounceTimerRef = useRef(null);
+  const hasFocusedOnceRef = useRef(false);
+  const wasFocusedRef = useRef(false);
   /** After voice input, source text is English until the user edits the field */
   const sttSourceLangRef = useRef(null);
   /** Skip one debounced translate after Ask Question fills source + translation */
@@ -124,36 +127,49 @@ const TranslatorScreen = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       loadLanguages();
-      let raf2;
-      const raf1 = requestAnimationFrame(() => {
-        raf2 = requestAnimationFrame(() => {
-          if (
-            !translating &&
-            !transcribingVoice &&
-            !recordingVoice &&
-            !recordingAskVoice &&
-            !askBusyPhase
-          ) {
-            setTranslateError('');
-          }
-        });
-      });
       return () => {
-        cancelAnimationFrame(raf1);
-        if (raf2 != null) {
-          cancelAnimationFrame(raf2);
-        }
         stopTranslationSpeech();
       };
-    }, [
-      loadLanguages,
-      translating,
-      transcribingVoice,
-      recordingVoice,
-      recordingAskVoice,
-      askBusyPhase,
-    ]),
+    }, [loadLanguages]),
   );
+
+  // Reset ONLY when the screen is re-entered (focus transitions false -> true).
+  useEffect(() => {
+    const gainedFocus = isFocused && !wasFocusedRef.current;
+    wasFocusedRef.current = isFocused;
+    if (!gainedFocus) return;
+
+    if (hasFocusedOnceRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      requestIdRef.current += 1;
+      sttSourceLangRef.current = null;
+      skipNextSourceTranslateRef.current = false;
+      setSourceText('');
+      setTranslatedText('');
+      setTranslateError('');
+      setStarred(false);
+      setTranslating(false);
+    } else {
+      hasFocusedOnceRef.current = true;
+    }
+  }, [isFocused]);
+
+  // When returning to idle while focused, clear transient error text.
+  useEffect(() => {
+    if (!isFocused) return;
+    let raf2;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        if (!translating && !transcribingVoice && !recordingVoice && !recordingAskVoice && !askBusyPhase) {
+          setTranslateError('');
+        }
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2 != null) cancelAnimationFrame(raf2);
+    };
+  }, [isFocused, translating, transcribingVoice, recordingVoice, recordingAskVoice, askBusyPhase]);
 
   const runTranslation = useCallback(
     async (trimmed, id) => {
@@ -607,58 +623,6 @@ function TranslatorScrollBody({
                 maxLength={5000}
               />
               <View style={styles.panelToolbar}>
-                <TouchableOpacity
-                  style={styles.iconHit}
-                  onPress={onMicPress}
-                  activeOpacity={0.65}
-                  disabled={
-                    transcribingVoice ||
-                    (translating && !recordingVoice) ||
-                    recordingAskVoice ||
-                    !!askBusyPhase
-                  }
-                >
-                  <Mic
-                    size={22}
-                    color={
-                      recordingVoice
-                        ? Colors.primary
-                        : transcribingVoice || (translating && !recordingVoice)
-                          ? Colors.borderLight
-                          : iconMuted
-                    }
-                    strokeWidth={2}
-                  />
-                </TouchableOpacity>
-                {askFeatureEnabled ? (
-                  <TouchableOpacity
-                    style={styles.iconHit}
-                    onPress={onAskPress}
-                    activeOpacity={0.65}
-                    disabled={
-                      transcribingVoice ||
-                      recordingVoice ||
-                      (translating && !recordingAskVoice) ||
-                      !!askBusyPhase
-                    }
-                    accessibilityLabel="Ask question with voice"
-                  >
-                    <MessageCircle
-                      size={22}
-                      color={
-                        recordingAskVoice
-                          ? Colors.primary
-                          : transcribingVoice ||
-                              recordingVoice ||
-                              (translating && !recordingAskVoice) ||
-                              askBusyPhase
-                            ? Colors.borderLight
-                            : iconMuted
-                      }
-                      strokeWidth={2}
-                    />
-                  </TouchableOpacity>
-                ) : null}
                 <View style={styles.flex1} />
                 <Text style={styles.charCount}>{charCount}</Text>
               </View>

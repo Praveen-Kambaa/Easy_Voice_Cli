@@ -9,6 +9,8 @@ const HISTORY_KEY = '@ai_qa_history';
 const SAVED_KEY = '@ai_qa_saved';
 const MAX_HISTORY = 80;
 
+export const AI_QA_HISTORY_UPDATED_EVENT = 'AI_QA_HISTORY_UPDATED_EVENT';
+
 export function getAiQaPairKey(question, answer) {
   return `${String(question).trim()}|${String(answer).trim()}`.slice(0, 400);
 }

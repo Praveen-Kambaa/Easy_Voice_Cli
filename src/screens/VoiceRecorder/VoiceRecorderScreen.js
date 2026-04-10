@@ -236,16 +236,21 @@ const VoiceRecorderScreen = ({ navigation }) => {
         throw new Error(result.error || 'Transcription failed');
       }
     } catch (error) {
-      const msg = error.message || 'Transcription failed';
-      setTranscriptError(msg);
+      const rawMsg = error.message || 'Transcription failed';
       setTranscript(null);
       await logActivity(ActivityCategory.VOICE_RECORDER, 'transcription_failed', {
         label: 'Transcription failed',
-        meta: msg.slice(0, 200),
+        meta: rawMsg.slice(0, 200),
       });
+
+      const userMessage =
+        /network/i.test(rawMsg) || /fetch/i.test(rawMsg)
+          ? 'We couldn’t connect to the server to create your transcript. Your recording is safe on this device.'
+          : 'We couldn’t generate a transcript for this recording. Your recording is safe on this device.';
+      setTranscriptError(userMessage);
       showAlert(
-        'Upload / Transcription Failed',
-        msg,
+        'Couldn’t create transcript',
+        userMessage,
         [
           {
             text: 'Save Without Transcription',
@@ -535,7 +540,7 @@ const VoiceRecorderScreen = ({ navigation }) => {
           <AppCard
             style={[styles.errorCard, { borderLeftColor: Colors.status.blocked, borderLeftWidth: 3 }]}
           >
-            <Text style={styles.errorTitle}>Upload Failed</Text>
+            <Text style={styles.errorTitle}>Couldn’t create transcript</Text>
             <Text style={styles.errorText}>{transcriptError}</Text>
           </AppCard>
         )}

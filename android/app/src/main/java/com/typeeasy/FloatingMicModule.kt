@@ -168,6 +168,7 @@ class FloatingMicModule(reactContext: ReactApplicationContext) : ReactContextBas
         aiProviderApiKey: String,
         aiChatApiBaseUrl: String,
         aiChatModel: String,
+        tavilyApiKey: String,
         promise: Promise,
     ) {
         try {
@@ -186,6 +187,7 @@ class FloatingMicModule(reactContext: ReactApplicationContext) : ReactContextBas
                 aiProviderApiKey,
                 aiChatApiBaseUrl,
                 aiChatModel,
+                tavilyApiKey,
             )
             reactApplicationContext.sendAppScopedBroadcast(Intent("com.typeeasy.FLOATING_MIC_CONFIG_UPDATED"))
             promise.resolve(true)

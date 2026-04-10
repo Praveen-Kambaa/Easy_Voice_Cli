@@ -37,16 +37,15 @@ export function getAndroidFeaturePermissionSpecs() {
   if (v >= 33) {
     specs.push(
       { perm: 'android.permission.POST_NOTIFICATIONS', label: 'Notifications' },
-      { perm: PERMISSIONS.ANDROID.READ_MEDIA_AUDIO, label: 'Files and media' },
-      { perm: PERMISSIONS.ANDROID.READ_MEDIA_IMAGES, label: 'Files and media' },
-      { perm: PERMISSIONS.ANDROID.READ_MEDIA_VIDEO, label: 'Files and media' },
+      // Call recordings are audio only; do not ask for gallery (images/videos) permissions.
+      { perm: PERMISSIONS.ANDROID.READ_MEDIA_AUDIO, label: 'Files' },
     );
   } else {
-    specs.push({ perm: PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE, label: 'Files and media' });
+    specs.push({ perm: PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE, label: 'Files' });
     if (v <= 28) {
       specs.push({
         perm: PERMISSIONS.ANDROID.WRITE_EXTERNAL_STORAGE,
-        label: 'Files and media',
+        label: 'Files',
       });
     }
   }
@@ -88,7 +87,7 @@ export function getAndroidRuntimeCategories() {
 
   const mediaPerms =
     v >= 33
-      ? [A.READ_MEDIA_AUDIO, A.READ_MEDIA_IMAGES, A.READ_MEDIA_VIDEO]
+      ? [A.READ_MEDIA_AUDIO]
       : [A.READ_EXTERNAL_STORAGE, ...(v <= 28 ? [A.WRITE_EXTERNAL_STORAGE] : [])];
 
   const notifPerms = v >= 33 ? ['android.permission.POST_NOTIFICATIONS'] : [];
@@ -101,6 +100,6 @@ export function getAndroidRuntimeCategories() {
     { label: 'Contacts', perms: [A.READ_CONTACTS] },
     { label: 'Phone', perms: phonePerms },
     { label: 'Microphone', perms: [A.RECORD_AUDIO] },
-    { label: 'Files and media', perms: mediaPerms },
+    { label: 'Files', perms: mediaPerms },
   ];
 }

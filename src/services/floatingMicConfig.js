@@ -6,6 +6,7 @@ import {
   AI_CHAT_API_BASE_URL,
   AI_CHAT_MODEL,
 } from '../config/aiProvider';
+import { TAVILY_API_KEY } from '../config/liveContextProvider';
 
 const STORAGE_KEY = '@internal_transcribe';
 /** Floating overlay: show microphone vs speech-translate; at least one must stay on (enforced in Settings + native). */
@@ -171,6 +172,7 @@ export async function syncFloatingMicSettingsToNative() {
     const overlayAskQuestion = await getOverlayAskQuestionEnabled();
     const internalFloatingTranslation = await getInternalFloatingTranslationEnabled();
     const aiProviderApiKey = await getAiProviderApiKey();
+    const tavilyApiKey = (TAVILY_API_KEY ?? '').trim();
     if (!overlayMic && !overlayTranslation && !overlayAskQuestion) {
       overlayMic = true;
       overlayTranslation = false;
@@ -192,6 +194,7 @@ export async function syncFloatingMicSettingsToNative() {
         aiProviderApiKey,
         (AI_CHAT_API_BASE_URL ?? '').trim(),
         (AI_CHAT_MODEL ?? '').trim(),
+        tavilyApiKey,
       );
     }
   } catch (e) {
