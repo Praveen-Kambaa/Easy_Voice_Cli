@@ -48,6 +48,7 @@ const screenOptions = {
 export const AppNavigator = () => {
   return (
     <Drawer.Navigator
+      id="AppDrawer"
       drawerContent={(props) => <DrawerContent {...props} />}
       screenOptions={screenOptions}
       initialRouteName="Home"

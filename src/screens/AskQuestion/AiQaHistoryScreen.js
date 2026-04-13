@@ -93,7 +93,7 @@ const AiQaHistoryScreen = () => {
 
   return (
     <View style={styles.screen}>
-      <AppHeader title="Q&A History" onBack={() => navigation.goBack()} />
+      <AppHeader title="Q&A History" />
       {items.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>No Q&A Yet</Text>

@@ -86,7 +86,6 @@ const VoiceRecorderHistoryScreen = ({ navigation }) => {
     <View style={styles.screen}>
       <AppHeader
         title="Voice Command history"
-        onBack={() => navigation.goBack()}
         rightComponent={
           entries.length > 0 ? (
             <TouchableOpacity onPress={onClear} hitSlop={10}>

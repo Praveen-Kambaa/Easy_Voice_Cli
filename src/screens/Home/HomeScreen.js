@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   RefreshControl,
   DeviceEventEmitter,
-  Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Mic, Music, Radio, Settings, Circle, ChevronRight, History, Languages, CircleHelp } from 'lucide-react-native';
@@ -23,7 +22,7 @@ import {
 import { getTranslationHistory, TRANSLATION_HISTORY_UPDATED_EVENT } from '../../services/translationTextStorage';
 import { getAiQaHistory, AI_QA_HISTORY_UPDATED_EVENT } from '../../services/aiQaStorage';
 import { formatCompactDateTime } from '../../utils/dateTimeFormat';
-import { useFloatingMic } from '../../hooks/useFloatingMic';
+import VoiceRecorderScreen from '../VoiceRecorder/VoiceRecorderScreen';
 
 const RECENT_FEED_LIMIT = 14;
 
@@ -60,15 +59,7 @@ function mergeRecentFeed(speechAll, translations, qaList) {
 const HomeScreen = ({ navigation }) => {
   const [recentFeed, setRecentFeed] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
-
-  const {
-    isServiceActive,
-    checkPermissions,
-    handleMissingPermissions,
-    needsPermissions,
-    startFloatingMic,
-    stopFloatingMic,
-  } = useFloatingMic();
+  const voiceCommandRef = useRef(null);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -91,10 +82,7 @@ const HomeScreen = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       loadDashboard();
-      if (Platform.OS === 'android') {
-        checkPermissions();
-      }
-    }, [loadDashboard, checkPermissions]),
+    }, [loadDashboard]),
   );
 
   useEffect(() => {
@@ -151,9 +139,6 @@ const HomeScreen = ({ navigation }) => {
               <Text style={styles.heroGreeting}>{greeting}</Text>
               <Text style={styles.heroSubtitle}>Ready to give voice commands?</Text>
             </View>
-            <View style={styles.heroMicWrap}>
-              <Mic size={26} color="#FFFFFF" strokeWidth={1.8} />
-            </View>
           </View>
           {/* <View style={styles.heroStats}>
             <View style={styles.heroStatItem}>
@@ -172,45 +157,23 @@ const HomeScreen = ({ navigation }) => {
           </View> */}
         </View>
 
-        {/* Start Recording CTA */}
-        <TouchableOpacity
-          style={styles.ctaBtn}
-          onPress={() => navigation.navigate('VoiceRecorder')}
-          activeOpacity={0.85}
-        >
-          <Circle size={18} color="#FFFFFF" strokeWidth={2.5} />
-          <Text style={styles.ctaBtnText}>Start Voice Command</Text>
-        </TouchableOpacity>
-        {/* Floating mic overlay — one-line toggle (Android); same behavior as Floating Mic screen */}
-        {Platform.OS === 'android' ? (
+        <View style={styles.voiceCommandSection}>
           <TouchableOpacity
-            style={[styles.floatingMicBtn, needsPermissions && styles.floatingMicBtnMuted]}
-            onPress={() => {
-              if (needsPermissions) {
-                handleMissingPermissions();
-                return;
-              }
-              if (isServiceActive) {
-                stopFloatingMic();
-              } else {
-                startFloatingMic();
-              }
-            }}
+            style={styles.ctaBtn}
+            onPress={() => voiceCommandRef.current?.startRecording?.()}
             activeOpacity={0.85}
           >
-            <Text style={styles.floatingMicBtnText} numberOfLines={1}>
-              {needsPermissions
-                ? 'Floating mic — tap to set up permissions'
-                : isServiceActive
-                  ? 'Floating Mic: On'
-                  : 'Floating Mic: Off'}
-            </Text>
+            <Circle size={18} color="#FFFFFF" strokeWidth={2.5} />
+            <Text style={styles.ctaBtnText}>Start Voice Command</Text>
           </TouchableOpacity>
-        ) : (
-          <Text style={styles.floatingMicIosNote} numberOfLines={1}>
-            Floating mic overlay is available on Android.
-          </Text>
-        )}
+
+          <VoiceRecorderScreen
+            ref={voiceCommandRef}
+            navigation={navigation}
+            embedded
+            homeEmbedded
+          />
+        </View>
 
         {/* Quick Actions */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -230,7 +193,7 @@ const HomeScreen = ({ navigation }) => {
           ))}
         </View>
 
-        <Text style={[styles.sectionTitle, styles.recentFeedSectionTitle]}>Recent transcripts</Text>
+        {/*         <Text style={[styles.sectionTitle, styles.recentFeedSectionTitle]}>Recent transcripts</Text>
         <Text style={styles.recentFeedIntro}>
           What you spoke (floating mic), translations, and question &amp; answers — newest first.
         </Text>
@@ -296,7 +259,7 @@ const HomeScreen = ({ navigation }) => {
               </TouchableOpacity>
             );
           })
-        )}
+        )} */}
       </ScrollView>
     </ScreenContainer>
   );
@@ -307,6 +270,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 40,
+    alignItems: 'stretch',
   },
 
   // Hero
@@ -314,13 +278,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     borderRadius: 20,
     padding: 22,
-    marginBottom: 14,
+    marginBottom: 16,
   },
   heroTop: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'flex-start',
-    // marginBottom: 20,
   },
   heroGreeting: {
     fontSize: 22,
@@ -332,17 +295,6 @@ const styles = StyleSheet.create({
   heroSubtitle: {
     fontSize: 13,
     color: 'rgba(255,255,255,0.6)',
-  },
-  heroMicWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroMicIcon: {
-    fontSize: 22,
   },
   heroStats: {
     flexDirection: 'row',
@@ -369,32 +321,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
   },
 
-  floatingMicBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 14,
-  },
-  floatingMicBtnMuted: {
-    borderColor: Colors.primary + '55',
-    backgroundColor: Colors.backgroundAlt,
-  },
-  floatingMicBtnText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    textAlign: 'center',
-  },
-  floatingMicIosNote: {
-    fontSize: 14,
-    color: Colors.text.secondary,
-    marginBottom: 14,
-    textAlign: 'center',
+  /** Voice CTA + embedded recorder: shared horizontal edges and even vertical rhythm */
+  voiceCommandSection: {
+    gap: 12,
+    marginBottom: 24,
+    alignSelf: 'stretch',
   },
 
   // CTA button
@@ -406,7 +337,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 16,
     gap: 10,
-    marginBottom: 14,
     shadowColor: Colors.recording.active,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,

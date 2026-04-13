@@ -1,4 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  forwardRef,
+  useImperativeHandle,
+} from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -18,12 +25,6 @@ import {
   Circle,
   Square,
   Play,
-  Pencil,
-  Send,
-  X,
-  Info,
-  Lightbulb,
-  HelpCircle,
 } from 'lucide-react-native';
 import { FileSystem } from 'react-native-file-access';
 import NativeAudioService from '../../services/NativeAudioService';
@@ -36,7 +37,14 @@ import { Colors } from '../../theme/Colors';
 import { logActivity, ActivityCategory } from '../../services/appActivityHistoryService';
 import { isGlobalAlertModalVisible } from '../../utils/alertModalState';
 
-const VoiceRecorderScreen = ({ navigation }) => {
+/**
+ * Voice Command — full screen from the drawer, or embedded on Home (`embedded` prop).
+ * Ref exposes `startRecording()` for the Home “Start Voice Command” button.
+ */
+const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
+  { navigation, embedded = false, homeEmbedded = false },
+  ref,
+) {
   const showAlert = useAlert();
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -57,7 +65,6 @@ const VoiceRecorderScreen = ({ navigation }) => {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pulseRef = useRef(null);
 
-  // ── Duration timer ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (isRecording && !isPaused) {
       durationInterval.current = setInterval(() => {
@@ -71,14 +78,13 @@ const VoiceRecorderScreen = ({ navigation }) => {
     return () => clearInterval(durationInterval.current);
   }, [isRecording, isPaused]);
 
-  // ── Pulse animation ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (isRecording && !isPaused) {
       pulseRef.current = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, { toValue: 1.12, duration: 800, useNativeDriver: true }),
           Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
-        ])
+        ]),
       );
       pulseRef.current.start();
     } else {
@@ -87,7 +93,6 @@ const VoiceRecorderScreen = ({ navigation }) => {
     }
   }, [isRecording, isPaused, pulseAnim]);
 
-  // ── Cleanup ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     return () => {
       clearInterval(durationInterval.current);
@@ -97,43 +102,50 @@ const VoiceRecorderScreen = ({ navigation }) => {
 
   useFocusEffect(
     useCallback(() => {
-      const refreshIfAllowed = () => {
-        if (isGlobalAlertModalVisible()) {
-          return;
-        }
-        if (!isRecording && !isTranscribing) {
-          setLastRecording(null);
-          setFilePath('');
-          setDuration(0);
-          setTranscript(null);
-          setTranscriptError(null);
-          setEditableTranscript('');
-          setIsEditingTranscript(false);
-          setVoiceAssetId(null);
-          setIsExecuting(false);
-          setIsPlaying(false);
-          recordingStartTime.current = null;
-        }
-      };
+      if (!embedded) {
+        const refreshIfAllowed = () => {
+          if (isGlobalAlertModalVisible()) {
+            return;
+          }
+          if (!isRecording && !isTranscribing) {
+            setLastRecording(null);
+            setFilePath('');
+            setDuration(0);
+            setTranscript(null);
+            setTranscriptError(null);
+            setEditableTranscript('');
+            setIsEditingTranscript(false);
+            setVoiceAssetId(null);
+            setIsExecuting(false);
+            setIsPlaying(false);
+            recordingStartTime.current = null;
+          }
+        };
 
-      let raf2;
-      const raf1 = requestAnimationFrame(() => {
-        raf2 = requestAnimationFrame(refreshIfAllowed);
-      });
+        let raf2;
+        const raf1 = requestAnimationFrame(() => {
+          raf2 = requestAnimationFrame(refreshIfAllowed);
+        });
+
+        return () => {
+          cancelAnimationFrame(raf1);
+          if (raf2 != null) {
+            cancelAnimationFrame(raf2);
+          }
+          NativeAudioService.stopPlayback().catch(() => {});
+          setIsPlaying(false);
+        };
+      }
 
       return () => {
-        cancelAnimationFrame(raf1);
-        if (raf2 != null) {
-          cancelAnimationFrame(raf2);
-        }
         NativeAudioService.stopPlayback().catch(() => {});
         setIsPlaying(false);
       };
-    }, [isRecording, isTranscribing]),
+    }, [isRecording, isTranscribing, embedded]),
   );
 
-  // ── Recording controls ──────────────────────────────────────────────────────
-  const handleStart = async () => {
+  const handleStart = useCallback(async () => {
+    if (isRecording) return;
     setTranscript(null);
     setTranscriptError(null);
     const result = await NativeAudioService.startRecording();
@@ -149,7 +161,9 @@ const VoiceRecorderScreen = ({ navigation }) => {
     } else {
       showAlert('Recording Error', result.error || 'Failed to start recording');
     }
-  };
+  }, [showAlert, isRecording]);
+
+  useImperativeHandle(ref, () => ({ startRecording: handleStart }), [handleStart]);
 
   const handleStop = async () => {
     if (!isRecording) return;
@@ -174,7 +188,6 @@ const VoiceRecorderScreen = ({ navigation }) => {
     await handleTranscription(result.filePath, result.recordingData);
   };
 
-  // ── Playback ────────────────────────────────────────────────────────────────
   const handlePlayPause = async () => {
     const path = lastRecording?.filePath || filePath;
     if (!path) {
@@ -200,7 +213,6 @@ const VoiceRecorderScreen = ({ navigation }) => {
     }
   };
 
-  // ── Transcription ───────────────────────────────────────────────────────────
   const handleTranscription = async (audioFilePath, recordingData) => {
     try {
       const absPath = audioFilePath.startsWith('file://')
@@ -265,14 +277,13 @@ const VoiceRecorderScreen = ({ navigation }) => {
             onPress: () => handleTranscription(lastRecording?.filePath || filePath, lastRecording),
           },
           { text: 'Cancel', style: 'cancel' },
-        ]
+        ],
       );
     } finally {
       setIsTranscribing(false);
     }
   };
 
-  // ── Transcript edit & execute ────────────────────────────────────────────────
   const handleEditTranscript = () => {
     setIsEditingTranscript(true);
     setEditableTranscript(transcript);
@@ -350,7 +361,7 @@ const VoiceRecorderScreen = ({ navigation }) => {
         showAlert(
           'Command Executed!',
           `Voice command processed successfully.\n\n${hasChanged ? '(Transcript was updated before execution)' : '(Original transcript used)'}`,
-          [{ text: 'OK' }]
+          [{ text: 'OK' }],
         );
       } else {
         throw new Error(executeResult.error);
@@ -367,10 +378,233 @@ const VoiceRecorderScreen = ({ navigation }) => {
     setEditableTranscript(transcript);
   };
 
-  // ── Derived state ────────────────────────────────────────────────────────────
   const hasRecording = Boolean(lastRecording?.filePath || filePath);
 
-  // ── Render ───────────────────────────────────────────────────────────────────
+  const micIconSize = homeEmbedded ? 30 : 48;
+  /** On Home, never show the red Start here — the header CTA starts recording; row only Stop / Play. */
+  const showPrimaryStart = !homeEmbedded;
+
+  const mainBody = (
+    <>
+      <Animated.View
+        style={[
+          styles.recordingCard,
+          homeEmbedded && styles.recordingCardHome,
+          isRecording && !isPaused && styles.recordingCardActive,
+          { transform: [{ scale: pulseAnim }] },
+        ]}
+      >
+        <View style={[styles.recordingIconWrap, homeEmbedded && styles.recordingIconWrapHome]}>
+          {isRecording ? (
+            <Mic
+              size={micIconSize}
+              color={isRecording && !isPaused ? Colors.recording.active : Colors.text.secondary}
+              strokeWidth={1.5}
+            />
+          ) : (
+            <MicOff size={micIconSize} color={Colors.text.light} strokeWidth={1.5} />
+          )}
+        </View>
+        <Text style={[styles.statusText, homeEmbedded && styles.statusTextHome]}>
+          {isRecording ? (isPaused ? 'Recording Paused' : 'Recording…') : 'Ready to Record'}
+        </Text>
+        {isRecording && (
+          <Text style={[styles.durationText, homeEmbedded && styles.durationTextHome]}>
+            {NativeAudioService.formatDuration(duration)}
+          </Text>
+        )}
+        {!isRecording && hasRecording && (
+          <Text style={[styles.savedLabel, homeEmbedded && styles.savedLabelHome]}>
+            Last recording saved ✓
+          </Text>
+        )}
+      </Animated.View>
+
+      <View style={[styles.controlsRow, homeEmbedded && styles.controlsRowHome]}>
+        {!isRecording ? (
+          showPrimaryStart ? (
+            <TouchableOpacity
+              style={[styles.controlBtn, styles.recordBtn]}
+              onPress={handleStart}
+              disabled={isTranscribing}
+              activeOpacity={0.85}
+            >
+              <Circle size={20} color="#FFFFFF" strokeWidth={2.5} />
+              <Text style={styles.controlBtnLabel}>Start</Text>
+            </TouchableOpacity>
+          ) : null
+        ) : (
+          <TouchableOpacity
+            style={[
+              styles.controlBtn,
+              styles.stopBtn,
+              homeEmbedded && styles.controlBtnHomeWide,
+            ]}
+            onPress={handleStop}
+            activeOpacity={0.85}
+          >
+            <Square size={20} color="#FFFFFF" strokeWidth={2} />
+            <Text style={[styles.controlBtnLabel, homeEmbedded && styles.controlBtnLabelHome]}>
+              Stop & Send
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {hasRecording && !isRecording && (
+          <TouchableOpacity
+            style={[
+              styles.controlBtn,
+              isPlaying ? styles.stopPlayBtn : styles.playBtn,
+              homeEmbedded && styles.controlBtnHomeWide,
+            ]}
+            onPress={handlePlayPause}
+            disabled={isTranscribing}
+            activeOpacity={0.85}
+          >
+            {isPlaying ? (
+              <Square size={20} color="#FFFFFF" strokeWidth={2} />
+            ) : (
+              <Play size={20} color="#FFFFFF" strokeWidth={2} />
+            )}
+            <Text style={[styles.controlBtnLabel, homeEmbedded && styles.controlBtnLabelHome]}>
+              {isPlaying ? 'Stop' : 'Play'}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {isTranscribing && (
+        <AppCard style={[styles.infoCard, homeEmbedded && styles.infoCardHome]}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.infoTitle}>Uploading & Transcribing…</Text>
+          <Text style={styles.infoSubtext}>Sending audio to server</Text>
+        </AppCard>
+      )}
+
+      {transcript && !isTranscribing && (
+        <AppCard
+          style={[
+            styles.transcriptCard,
+            homeEmbedded && styles.transcriptCardHome,
+            { borderLeftColor: Colors.status.granted, borderLeftWidth: 3 },
+          ]}
+        >
+          {isEditingTranscript ? (
+            <>
+              <Text style={styles.editLabel}>Edit Transcript</Text>
+              <TextInput
+                style={styles.transcriptInput}
+                multiline
+                value={editableTranscript}
+                onChangeText={setEditableTranscript}
+                placeholder="Edit transcript…"
+                autoFocus
+              />
+              <View style={styles.editActionsRow}>
+                <PrimaryButton
+                  title="Save"
+                  onPress={handleSaveTranscript}
+                  variant="ghost"
+                  style={styles.editActionBtn}
+                  textStyle={{ color: Colors.status.granted }}
+                />
+                <PrimaryButton
+                  title="Send"
+                  onPress={handleExecuteVoiceCommand}
+                  loading={isExecuting}
+                  style={[styles.editActionBtn, { backgroundColor: Colors.primary }]}
+                />
+                <PrimaryButton
+                  title="Cancel"
+                  onPress={handleCancelEdit}
+                  variant="danger"
+                  style={styles.editActionBtn}
+                />
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={styles.transcriptDoneLabel}>Transcription Complete</Text>
+              <Text style={styles.transcriptText}>{transcript}</Text>
+              <View style={styles.transcriptActionsRow}>
+                <PrimaryButton
+                  title="Edit"
+                  onPress={handleEditTranscript}
+                  variant="outline"
+                  style={styles.transcriptActionBtn}
+                />
+                <PrimaryButton
+                  title="Send"
+                  onPress={handleExecuteVoiceCommand}
+                  loading={isExecuting}
+                  style={styles.transcriptActionBtn}
+                />
+              </View>
+            </>
+          )}
+        </AppCard>
+      )}
+
+      {transcriptError && !isTranscribing && (
+        <AppCard
+          style={[
+            styles.errorCard,
+            homeEmbedded && styles.errorCardHome,
+            { borderLeftColor: Colors.status.blocked, borderLeftWidth: 3 },
+          ]}
+        >
+          <Text style={styles.errorTitle}>Couldn’t create transcript</Text>
+          <Text style={styles.errorText}>{transcriptError}</Text>
+        </AppCard>
+      )}
+
+      {!homeEmbedded ? (
+        <AppCard>
+          <Text style={styles.tipsTitle}>Quick Tips</Text>
+          {[
+            { Icon: Circle, text: 'Tap Start to begin recording', color: Colors.recording.active },
+            { Icon: Square, text: 'Tap Stop & Send to upload to backend', color: Colors.primary },
+            { Icon: Play, text: 'Play back the recorded audio', color: Colors.status.info },
+            { Icon: Music, text: 'Files saved in MP4/AAC format', color: Colors.text.secondary },
+          ].map(({ Icon, text, color }) => (
+            <View key={text} style={styles.tipRow}>
+              <View style={styles.tipIconWrap}>
+                <Icon size={16} color={color} strokeWidth={2} />
+              </View>
+              <Text style={styles.tipText}>{text}</Text>
+            </View>
+          ))}
+        </AppCard>
+      ) : null}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <View style={[styles.embeddedRoot, homeEmbedded && styles.embeddedRootHome]}>
+        {!homeEmbedded ? (
+          <View style={styles.inlineHeaderActions}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('VoiceRecorderHistory')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <History size={22} color={Colors.text.primary} strokeWidth={1.8} />
+            </TouchableOpacity>
+            {hasRecording ? (
+              <TouchableOpacity
+                onPress={() => navigation.navigate('RecordedAudio')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Music size={22} color={Colors.text.primary} strokeWidth={1.8} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
+        {mainBody}
+      </View>
+    );
+  }
+
   return (
     <View style={styles.safeArea}>
       <AppHeader
@@ -394,189 +628,98 @@ const VoiceRecorderScreen = ({ navigation }) => {
           </View>
         }
       />
-
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Recording card */}
-        <Animated.View
-          style={[
-            styles.recordingCard,
-            isRecording && !isPaused && styles.recordingCardActive,
-            { transform: [{ scale: pulseAnim }] },
-          ]}
-        >
-          <View style={styles.recordingIconWrap}>
-            {isRecording
-              ? <Mic size={48} color={isRecording && !isPaused ? Colors.recording.active : Colors.text.secondary} strokeWidth={1.5} />
-              : <MicOff size={48} color={Colors.text.light} strokeWidth={1.5} />}
-          </View>
-          <Text style={styles.statusText}>
-            {isRecording
-              ? isPaused ? 'Recording Paused' : 'Recording…'
-              : 'Ready to Record'}
-          </Text>
-          {isRecording && (
-            <Text style={styles.durationText}>
-              {NativeAudioService.formatDuration(duration)}
-            </Text>
-          )}
-          {!isRecording && hasRecording && (
-            <Text style={styles.savedLabel}>Last recording saved ✓</Text>
-          )}
-        </Animated.View>
-
-        {/* Controls */}
-        <View style={styles.controlsRow}>
-          {!isRecording ? (
-            <TouchableOpacity
-              style={[styles.controlBtn, styles.recordBtn]}
-              onPress={handleStart}
-              disabled={isTranscribing}
-              activeOpacity={0.85}
-            >
-              <Circle size={20} color="#FFFFFF" strokeWidth={2.5} />
-              <Text style={styles.controlBtnLabel}>Start</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={[styles.controlBtn, styles.stopBtn]}
-              onPress={handleStop}
-              activeOpacity={0.85}
-            >
-              <Square size={20} color="#FFFFFF" strokeWidth={2} />
-              <Text style={styles.controlBtnLabel}>Stop & Send</Text>
-            </TouchableOpacity>
-          )}
-
-          {hasRecording && !isRecording && (
-            <TouchableOpacity
-              style={[styles.controlBtn, isPlaying ? styles.stopPlayBtn : styles.playBtn]}
-              onPress={handlePlayPause}
-              disabled={isTranscribing}
-              activeOpacity={0.85}
-            >
-              {isPlaying
-                ? <Square size={20} color="#FFFFFF" strokeWidth={2} />
-                : <Play size={20} color="#FFFFFF" strokeWidth={2} />}
-              <Text style={styles.controlBtnLabel}>{isPlaying ? 'Stop' : 'Play'}</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Uploading indicator */}
-        {isTranscribing && (
-          <AppCard style={styles.infoCard}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.infoTitle}>Uploading & Transcribing…</Text>
-            <Text style={styles.infoSubtext}>Sending audio to server</Text>
-          </AppCard>
-        )}
-
-        {/* Transcript result */}
-        {transcript && !isTranscribing && (
-          <AppCard
-            style={[styles.transcriptCard, { borderLeftColor: Colors.status.granted, borderLeftWidth: 3 }]}
-          >
-            {isEditingTranscript ? (
-              <>
-                <Text style={styles.editLabel}>Edit Transcript</Text>
-                <TextInput
-                  style={styles.transcriptInput}
-                  multiline
-                  value={editableTranscript}
-                  onChangeText={setEditableTranscript}
-                  placeholder="Edit transcript…"
-                  autoFocus
-                />
-                <View style={styles.editActionsRow}>
-                  <PrimaryButton
-                    title="Save"
-                    onPress={handleSaveTranscript}
-                    variant="ghost"
-                    style={styles.editActionBtn}
-                    textStyle={{ color: Colors.status.granted }}
-                  />
-                  <PrimaryButton
-                    title="Send"
-                    onPress={handleExecuteVoiceCommand}
-                    loading={isExecuting}
-                    style={[styles.editActionBtn, { backgroundColor: Colors.primary }]}
-                  />
-                  <PrimaryButton
-                    title="Cancel"
-                    onPress={handleCancelEdit}
-                    variant="danger"
-                    style={styles.editActionBtn}
-                  />
-                </View>
-              </>
-            ) : (
-              <>
-                <Text style={styles.transcriptDoneLabel}>Transcription Complete</Text>
-                <Text style={styles.transcriptText}>{transcript}</Text>
-                <View style={styles.transcriptActionsRow}>
-                  <PrimaryButton
-                    title="Edit"
-                    onPress={handleEditTranscript}
-                    variant="outline"
-                    style={styles.transcriptActionBtn}
-                  />
-                  <PrimaryButton
-                    title="Send"
-                    onPress={handleExecuteVoiceCommand}
-                    loading={isExecuting}
-                    style={styles.transcriptActionBtn}
-                  />
-                </View>
-              </>
-            )}
-          </AppCard>
-        )}
-
-        {/* Error */}
-        {transcriptError && !isTranscribing && (
-          <AppCard
-            style={[styles.errorCard, { borderLeftColor: Colors.status.blocked, borderLeftWidth: 3 }]}
-          >
-            <Text style={styles.errorTitle}>Couldn’t create transcript</Text>
-            <Text style={styles.errorText}>{transcriptError}</Text>
-          </AppCard>
-        )}
-
-        {/* Tips */}
-        <AppCard>
-          <Text style={styles.tipsTitle}>Quick Tips</Text>
-          {[
-            { Icon: Circle, text: 'Tap Start to begin recording', color: Colors.recording.active },
-            { Icon: Square, text: 'Tap Stop & Send to upload to backend', color: Colors.primary },
-            { Icon: Play, text: 'Play back the recorded audio', color: Colors.status.info },
-            { Icon: Music, text: 'Files saved in MP4/AAC format', color: Colors.text.secondary },
-          ].map(({ Icon, text, color }) => (
-            <View key={text} style={styles.tipRow}>
-              <View style={styles.tipIconWrap}>
-                <Icon size={16} color={color} strokeWidth={2} />
-              </View>
-              <Text style={styles.tipText}>{text}</Text>
-            </View>
-          ))}
-        </AppCard>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {mainBody}
       </ScrollView>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: Colors.backgroundAlt,
   },
+  embeddedRoot: {
+    marginBottom: 8,
+  },
+  embeddedRootHome: {
+    marginBottom: 0,
+    alignSelf: 'stretch',
+    width: '100%',
+  },
+  recordingCardHome: {
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginBottom: 0,
+    borderRadius: 14,
+    alignSelf: 'stretch',
+  },
+  recordingIconWrapHome: {
+    marginBottom: 6,
+  },
+  statusTextHome: {
+    fontSize: 14,
+  },
+  durationTextHome: {
+    fontSize: 22,
+    marginTop: 6,
+  },
+  savedLabelHome: {
+    fontSize: 11,
+    marginTop: 4,
+  },
+  controlsRowHome: {
+    alignSelf: 'stretch',
+    width: '100%',
+    marginTop: 12,
+    marginBottom: 0,
+    justifyContent: 'center',
+  },
+  controlBtnHomeWide: {
+    flex: 1,
+    alignSelf: 'stretch',
+    minWidth: 0,
+    width: '100%',
+    flexDirection: 'row',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    gap: 10,
+  },
+  controlBtnLabelHome: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  infoCardHome: {
+    marginTop: 12,
+    marginBottom: 0,
+  },
+  transcriptCardHome: {
+    marginTop: 12,
+    marginBottom: 0,
+  },
+  errorCardHome: {
+    marginTop: 12,
+    marginBottom: 0,
+  },
   scrollContent: {
     padding: 20,
     paddingBottom: 40,
   },
-
+  inlineHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 14,
+    marginBottom: 16,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
   recordingCard: {
     backgroundColor: Colors.surface,
     borderRadius: 20,
@@ -618,7 +761,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.text.secondary,
   },
-
   controlsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -642,9 +784,7 @@ const styles = StyleSheet.create({
   stopBtn: { backgroundColor: Colors.primary },
   playBtn: { backgroundColor: Colors.status.info },
   stopPlayBtn: { backgroundColor: Colors.text.secondary },
-  controlBtnIcon: { marginBottom: 4 },
   controlBtnLabel: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
-
   infoCard: {
     alignItems: 'center',
     marginBottom: 20,
@@ -661,7 +801,6 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
     marginTop: 4,
   },
-
   transcriptCard: {
     marginBottom: 20,
   },
@@ -714,7 +853,6 @@ const styles = StyleSheet.create({
     minHeight: 40,
     paddingVertical: 0,
   },
-
   errorCard: {
     marginBottom: 20,
   },
@@ -729,7 +867,6 @@ const styles = StyleSheet.create({
     color: Colors.text.primary,
     lineHeight: 18,
   },
-
   tipsTitle: {
     fontSize: 15,
     fontWeight: '600',
@@ -750,11 +887,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.text.secondary,
     flex: 1,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
   },
 });
 

@@ -65,7 +65,7 @@ const TranslatorHistoryScreen = () => {
 
   return (
     <View style={styles.screen}>
-      <AppHeader title="Translation history" onBack={() => navigation.goBack()} />
+      <AppHeader title="Translation history" />
       {items.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>No translations yet</Text>
