@@ -5,6 +5,7 @@ import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-si
 
 const STORAGE_KEYS = {
   USER_DATA: '@auth_user_data',
+  LAST_LOGIN_RESPONSE: '@auth_last_login_response',
 };
 
 const AuthContext = createContext(null);
@@ -31,7 +32,27 @@ export const AuthProvider = ({ children }) => {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
       if (stored) {
-        setUser(JSON.parse(stored));
+        const parsed = JSON.parse(stored);
+        // Backfill displayName from last login response if missing/legacy.
+        let patched = parsed;
+        if (!parsed?.name && (!parsed?.displayName || parsed?.displayName === parsed?.email?.split('@')?.[0])) {
+          try {
+            const last = await AsyncStorage.getItem(STORAGE_KEYS.LAST_LOGIN_RESPONSE);
+            const lastObj = last ? JSON.parse(last) : null;
+            const apiName = lastObj?.data?.data?.name || lastObj?.data?.data?.user?.name;
+            if (apiName) {
+              patched = {
+                ...parsed,
+                name: apiName,
+                displayName: apiName,
+              };
+              await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(patched));
+            }
+          } catch {
+            // ignore
+          }
+        }
+        setUser(patched);
       }
     } catch (error) {
       console.error('Failed to restore session:', error);
@@ -54,12 +75,32 @@ export const AuthProvider = ({ children }) => {
       });
 
       const data = await response.json();
+      try {
+        console.log('[Auth] login response', { ok: response.ok, status: response.status, data });
+        await AsyncStorage.setItem(
+          STORAGE_KEYS.LAST_LOGIN_RESPONSE,
+          JSON.stringify({
+            at: new Date().toISOString(),
+            ok: response.ok,
+            status: response.status,
+            data,
+          }),
+        );
+      } catch {
+        // ignore
+      }
 
       if (response.ok && data.success) {
         const userData = {
-          email: email.trim(),
+          email: (data.email || data.user?.email || email.trim()).trim(),
           loginTime: new Date().toISOString(),
-          displayName: data.user?.displayName || email.split('@')[0],
+          displayName:
+            data.user?.displayName ||
+            data.user?.name ||
+            data.name ||
+            email.split('@')[0],
+          name: data.user?.name || data.name,
+          userId: data.userId || data.user?.id,
           token: data.token,
         };
         

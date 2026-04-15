@@ -6,14 +6,14 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  Switch,
   Platform,
   NativeEventEmitter,
   ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, Play, Pause, Trash2 } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, Play, Pause } from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { Colors } from '../../theme/Colors';
@@ -38,8 +38,6 @@ import {
 } from 'react-native-permissions';
 import { getAndroidFeaturePermissionList } from '../../utils/androidRuntimePermissions';
 
-const TAB_LOG = 'log';
-const TAB_RECORDINGS = 'recordings';
 const PREFS_RECORDING = '@call_recording_service_enabled';
 
 async function ensureCallRecordingPermissions() {
@@ -109,10 +107,40 @@ function callTypeLabel(type) {
   }
 }
 
+function formatTime(ts) {
+  try {
+    const d = new Date(Number(ts) || 0);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  } catch {
+    return '—';
+  }
+}
+
+function formatDate(ts) {
+  try {
+    const d = new Date(Number(ts) || 0);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch {
+    return '—';
+  }
+}
+
+function normalizePhone(p) {
+  return String(p ?? '').replace(/[^\d+]/g, '').trim();
+}
+
+function directionFromCallType(callType) {
+  if (callType === 'outgoing') return 'outgoing';
+  if (callType === 'incoming') return 'incoming';
+  return '';
+}
+
 export default function CallLogsScreen() {
   const showAlert = useAlert();
+  const insets = useSafeAreaInsets();
   const featurePermsOnce = useRef(false);
-  const [tab, setTab] = useState(TAB_LOG);
   const [callLogs, setCallLogs] = useState([]);
   const [recordings, setRecordings] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -147,6 +175,15 @@ export default function CallLogsScreen() {
           const ok = await ensureCallRecordingPermissions();
           if (ok) {
             await PhoneCallsModule.startCallRecordingService();
+            // Default ON: speaker boost for two-way audio capture.
+            if (PhoneCallsModule?.setCallRecordingSpeakerphoneBoost) {
+              try {
+                await PhoneCallsModule.setCallRecordingSpeakerphoneBoost(true);
+                setSpeakerBoostEnabled(true);
+              } catch {
+                // ignore
+              }
+            }
           }
         } catch (e) {
           console.error('CallLogsScreen start recording service:', e);
@@ -281,11 +318,11 @@ export default function CallLogsScreen() {
   }, [loadPrefs]);
 
   useEffect(() => {
-    if (tab !== TAB_RECORDINGS) {
+    return () => {
       NativeAudioService.stopPlayback().catch(() => {});
       setPlayingPath(null);
-    }
-  }, [tab]);
+    };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -474,100 +511,119 @@ export default function CallLogsScreen() {
     ]);
   };
 
-  const renderLogItem = ({ item }) => {
+  const findRecordingForLog = useCallback(
+    (logItem) => {
+      if (!logItem) return null;
+      const logPhone = normalizePhone(logItem.phoneNumber);
+      const dir = directionFromCallType(logItem.callType);
+      const ts = Number(logItem.timestamp) || 0;
+      if (!logPhone || !ts || recordings.length === 0) return null;
+
+      // Match recording by phone + direction and closest timestamp (within 15 minutes).
+      let best = null;
+      let bestDelta = Infinity;
+      for (const r of recordings) {
+        const recPhone = normalizePhone(r.phoneNumber);
+        if (!recPhone || recPhone !== logPhone) continue;
+        if (dir && r.direction && String(r.direction).toLowerCase() !== dir) continue;
+        const rts = Number(r.recordedAt || r.modifiedAt || 0) || 0;
+        if (!rts) continue;
+        const delta = Math.abs(rts - ts);
+        if (delta < bestDelta) {
+          bestDelta = delta;
+          best = r;
+        }
+      }
+      return bestDelta <= 15 * 60 * 1000 ? best : null;
+    },
+    [recordings],
+  );
+
+  const renderUnifiedItem = ({ item }) => {
     const Icon = callTypeIcon(item.callType);
-    const when = formatDateTime(item.timestamp);
     const logId = String(item.id);
     const logSynced = logSyncedMap[logId];
-    return (
-      <View style={styles.card}>
-        <View style={[styles.iconWrap, item.callType === 'missed' && styles.iconMissed]}>
-          <Icon size={20} color={Colors.text.primary} strokeWidth={2} />
-        </View>
-        <View style={styles.cardBody}>
-          <Text style={styles.cardTitle} numberOfLines={1}>
-            {item.contactName || item.phoneNumber || 'Unknown'}
-          </Text>
-          <Text style={styles.cardSub} numberOfLines={1}>
-            {item.phoneNumber || '—'} · {callTypeLabel(item.callType)}
-          </Text>
-          <Text style={styles.cardMeta}>
-            {when} · {formatDurationSec(item.durationSec)}
-            {syncingCallLogs && !logSynced ? ' · Sending…' : ''}
-            {!syncingCallLogs && logSynced ? ' · Synced' : ''}
-            {!syncingCallLogs && !logSynced ? ' · Pending sync' : ''}
-          </Text>
-        </View>
-      </View>
-    );
-  };
+    const typeText =
+      item.callType === 'missed'
+        ? '#EF4444'
+        : item.callType === 'incoming'
+          ? '#10B981'
+          : item.callType === 'outgoing'
+            ? Colors.primary
+            : Colors.text.secondary;
+    const typeBg =
+      item.callType === 'missed'
+        ? 'rgba(239, 68, 68, 0.10)'
+        : item.callType === 'incoming'
+          ? 'rgba(16, 185, 129, 0.10)'
+          : item.callType === 'outgoing'
+            ? 'rgba(30, 136, 255, 0.10)'
+            : Colors.backgroundAlt;
+    const typeBorder =
+      item.callType === 'missed'
+        ? 'rgba(239, 68, 68, 0.20)'
+        : item.callType === 'incoming'
+          ? 'rgba(16, 185, 129, 0.20)'
+          : item.callType === 'outgoing'
+            ? 'rgba(30, 136, 255, 0.20)'
+            : Colors.borderLight;
+    const timeText = formatTime(item.timestamp);
+    const dateText = formatDate(item.timestamp);
 
-  const renderRecordingItem = ({ item }) => {
-    const path = item.audioPath;
-    const playPath = playbackSource(item);
-    const pkey = playbackKey(item);
-    const uploaded = path && uploadedMap[path];
-    const syncing = uploadingPath === path;
-    const isPlaying = playingPath === pkey && NativeAudioService.isPlaying;
-    const hasPublicCopy = !!(item.publicLocation && String(item.publicLocation).trim());
+    const rec = findRecordingForLog(item);
+    const pkey = rec ? playbackKey(rec) : null;
+    const isPlaying = rec ? playingPath === pkey && NativeAudioService.isPlaying : false;
+    const recDuration = rec?.durationMs != null ? formatDurationMs(rec.durationMs) : null;
+
     return (
       <View style={styles.card}>
-        <TouchableOpacity
-          style={styles.cardTouchable}
-          onPress={() => togglePlayback(item)}
-          activeOpacity={0.75}
-          disabled={!playPath}
-        >
-          <View style={[styles.iconWrap, isPlaying && styles.iconPlaying]}>
-            {isPlaying ? (
-              <Pause size={22} color={Colors.text.primary} strokeWidth={2.2} fill={Colors.text.primary} />
-            ) : (
-              <Play size={22} color={Colors.text.primary} strokeWidth={2.2} fill={Colors.text.primary} />
-            )}
+        <View style={styles.cardTopRow}>
+          <View style={[styles.iconWrap, { backgroundColor: typeBg, borderColor: typeBorder }]}>
+            <Icon size={18} color={typeText} strokeWidth={2.2} />
           </View>
-          <View style={styles.cardBody}>
-            <Text style={styles.cardTitle} numberOfLines={1}>
-              {item.contactName || item.phoneNumber || 'Unknown number'}
-            </Text>
-            <Text style={styles.cardSub} numberOfLines={1}>
-              {item.phoneNumber || '—'} · {item.direction === 'outgoing' ? 'Outgoing' : 'Incoming'}
-            </Text>
-            <Text style={styles.cardMeta}>
-              {formatDurationMs(item.durationMs)} · {formatDateTime(item.recordedAt || item.modifiedAt)}
-              {syncing ? ' · Sending…' : ''}
-              {!syncing && uploaded ? ' · Synced' : ''}
-              {!syncing && !uploaded ? ' · Pending sync' : ''}
-            </Text>
-            <Text style={styles.tapHint}>Tap to play or stop</Text>
-            {hasPublicCopy ? (
-              <Text style={styles.storageHint} numberOfLines={2}>
-                Also in Files: Download → CallRecordings (same recording)
+
+          <View style={styles.mainCol}>
+            <View style={styles.topLineRow}>
+              <Text style={styles.cardTitle} numberOfLines={1}>
+                {item.contactName || item.phoneNumber || 'Unknown'}
               </Text>
-            ) : null}
-            {item.likelySilentCapture ? (
-              <View>
-                <Text style={styles.silentWarning} numberOfLines={4}>
-                  No usable call audio detected. Android blocks normal apps from recording calls. Speakerphone boost is recommended.
-                </Text>
-                {!speakerBoostEnabled ? (
-                  <TouchableOpacity 
-                    style={styles.speakerBtn}
-                    onPress={() => onToggleSpeakerBoost(true)}
-                  >
-                    <Text style={styles.speakerBtnText}>Enable Speakerphone Boost</Text>
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-            ) : null}
+            </View>
+            <Text style={styles.cardSub} numberOfLines={1}>
+              {item.phoneNumber || '—'}
+            </Text>
           </View>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.deleteBtn}
-          onPress={() => handleDelete(item)}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Trash2 size={18} color={Colors.text.secondary} />
-        </TouchableOpacity>
+
+          <View style={styles.rightCol}>
+            <Text style={styles.timeText}>{timeText}</Text>
+            <Text style={styles.dateText}>{dateText}</Text>
+          </View>
+        </View>
+
+        {rec ? (
+          <TouchableOpacity
+            style={[styles.recordRow, isPlaying && styles.recordRowActive]}
+            onPress={() => togglePlayback(rec)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={isPlaying ? 'Pause call recording' : 'Play call recording'}
+          >
+            <View style={[styles.recordPlay, isPlaying && styles.recordPlayActive]}>
+              {isPlaying ? (
+                <Pause size={16} color="#FFFFFF" strokeWidth={2.4} fill="#FFFFFF" />
+              ) : (
+                <Play size={16} color="#FFFFFF" strokeWidth={2.4} fill="#FFFFFF" />
+              )}
+            </View>
+            <View style={styles.recordRowText}>
+              <Text style={styles.recordRowTitle} numberOfLines={1}>
+                Call recording
+              </Text>
+              <Text style={styles.recordRowSub} numberOfLines={1}>
+                Duration: {recDuration || '—'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ) : null}
       </View>
     );
   };
@@ -598,97 +654,27 @@ export default function CallLogsScreen() {
   return (
     <ScreenContainer>
       <AppHeader title="Calls" />
-      <View style={styles.tabs}>
-        <TouchableOpacity
-          style={[styles.tab, tab === TAB_LOG && styles.tabActive]}
-          onPress={() => setTab(TAB_LOG)}
-        >
-          <Text style={[styles.tabText, tab === TAB_LOG && styles.tabTextActive]}>Call log</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, tab === TAB_RECORDINGS && styles.tabActive]}
-          onPress={() => setTab(TAB_RECORDINGS)}
-        >
-          <Text style={[styles.tabText, tab === TAB_RECORDINGS && styles.tabTextActive]}>Recordings</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.toggleRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.toggleTitle}>Record phone calls</Text>
-          <Text style={styles.toggleHint}>
-            Runs in the background and saves audio when a call is active.
-          </Text>
-        </View>
-        <Switch value={recordingEnabled} onValueChange={onToggleRecording} />
-      </View>
-
-      <View style={styles.toggleRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.toggleTitle}>Speakerphone while recording</Text>
-          <View style={styles.helpRow}>
-            <Text style={styles.toggleHint}>
-              Enables two-way capture by routing the remote voice through the speaker.
-            </Text>
-            <TouchableOpacity
-              onPress={() =>
-                showAlert(
-                  'Two-Way Audio Help',
-                  "If your recordings contain only your voice (or are silent), this is usually due to Android call-audio restrictions.\n\n" +
-                    "Fix:\n" +
-                    "1) Turn ON “Speakerphone while recording”.\n" +
-                    "2) If you still can't enable two-way audio, go to App Info → (⋮) Allow restricted settings, then enable the Accessibility Service.\n" +
-                    "3) Place a test call in a quiet room and verify the new recording.",
-                  [{ text: 'OK' }],
-                )
-              }
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={styles.helpBtn}
-            >
-              <Text style={styles.helpBtnText}>Two-way audio help</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-        <Switch
-          value={speakerBoostEnabled}
-          onValueChange={onToggleSpeakerBoost}
-          disabled={!PhoneCallsModule?.setCallRecordingSpeakerphoneBoost}
-        />
-      </View>
-
-      <Text style={styles.legal}>
-        Laws on recording calls vary by country and state. Only use this feature where you are allowed to
-        record, and inform the other party if required.
-      </Text>
+      {/* Default enabled (see loadPrefs/applyRecordingService). Keeping UI hidden as requested.
+      <View style={styles.toggleRow}>...</View>
+      <View style={styles.toggleRow}>...</View>
+      */}
 
       {loading ? (
         <View style={styles.loaderWrap}>
           <ActivityIndicator size="large" color={Colors.primaryLight} />
         </View>
-      ) : tab === TAB_LOG ? (
+      ) : (
         <FlatList
           data={callLogs}
           keyExtractor={(item, index) => `log_${item.id}_${index}`}
-          renderItem={renderLogItem}
+          renderItem={renderUnifiedItem}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refreshAll} />}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: 24 + (insets?.bottom || 0) + 96 },
+          ]}
           ListEmptyComponent={
             <Text style={styles.listEmpty}>No entries in the call log. Grant call log permission if prompted.</Text>
-          }
-        />
-      ) : (
-        <FlatList
-          data={recordings}
-          keyExtractor={(item, index) => `rec_${item.fileName}_${index}`}
-          renderItem={renderRecordingItem}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refreshAll} />}
-          contentContainerStyle={styles.listContent}
-          ListEmptyComponent={
-            <Text style={styles.listEmpty}>
-              No recordings yet. Enable “Record phone calls” and place or receive a call. If files appear but
-              sound is empty, your phone may block third-party call audio; try speakerphone or the built-in
-              dialer recorder.
-            </Text>
           }
         />
       )}
@@ -697,173 +683,125 @@ export default function CallLogsScreen() {
 }
 
 const styles = StyleSheet.create({
-  tabs: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 12,
-    backgroundColor: Colors.borderLight,
-    borderRadius: 10,
-    padding: 4,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  tabActive: {
-    backgroundColor: Colors.surface,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  tabText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.text.secondary,
-  },
-  tabTextActive: {
-    color: Colors.text.primary,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 16,
-    marginBottom: 8,
-    padding: 14,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    gap: 12,
-  },
-  toggleTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text.primary,
-  },
-  helpRow: {
-    marginTop: 6,
-    gap: 8,
-  },
-  helpBtn: {
-    alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    backgroundColor: Colors.backgroundAlt,
-  },
-  helpBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.text.primary,
-  },
-  toggleHint: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-    marginTop: 4,
-    lineHeight: 18,
-  },
-  legal: {
-    fontSize: 11,
-    color: Colors.text.light,
-    marginHorizontal: 16,
-    marginBottom: 12,
-    lineHeight: 16,
-  },
   listContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
+    paddingTop: 8,
     paddingBottom: 24,
   },
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingLeft: 14,
-    paddingRight: 8,
-    marginBottom: 10,
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    gap: 4,
+    borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.05,
+    shadowRadius: 16,
+    elevation: 2,
   },
-  cardTouchable: {
-    flex: 1,
+  cardTopRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 12,
   },
-  deleteBtn: {
-    padding: 10,
-    borderRadius: 8,
-  },
   iconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
     backgroundColor: Colors.backgroundAlt,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconMissed: {
-    backgroundColor: Colors.recording.activeBg,
-  },
-  iconPlaying: {
-    backgroundColor: Colors.status.infoBg,
-  },
-  tapHint: {
-    fontSize: 11,
-    color: Colors.text.light,
-    marginTop: 4,
-  },
-  storageHint: {
-    fontSize: 11,
-    color: Colors.text.secondary,
-    marginTop: 6,
-    lineHeight: 15,
-  },
-  silentWarning: {
-    fontSize: 11,
-    color: Colors.warning.text,
-    marginTop: 8,
-    lineHeight: 16,
-  },
-  speakerBtn: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: Colors.primaryLight,
-    borderRadius: 6,
-  },
-  speakerBtnText: {
-    color: Colors.surface,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  cardBody: {
+  mainCol: {
     flex: 1,
   },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+  rightCol: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 2,
+    paddingLeft: 10,
+  },
+  topLineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  timeText: {
+    fontSize: 13,
+    fontWeight: '900',
     color: Colors.text.primary,
   },
+  dateText: {
+    fontSize: 10,
+    color: Colors.text.secondary,
+  },
+  rightMetaText: {
+    marginTop: 6,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  syncRightText: {
+    marginTop: 4,
+    fontSize: 10,
+    color: Colors.text.light,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: Colors.text.primary,
+    letterSpacing: -0.2,
+  },
   cardSub: {
-    fontSize: 14,
+    fontSize: 11,
     color: Colors.text.secondary,
     marginTop: 2,
   },
-  cardMeta: {
-    fontSize: 12,
-    color: Colors.text.light,
-    marginTop: 6,
+  recordRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    padding: 6,
+    borderRadius: 16,
+    backgroundColor: Colors.backgroundAlt,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  recordRowActive: {
+    borderColor: 'rgba(30, 136, 255, 0.28)',
+    backgroundColor: 'rgba(30, 136, 255, 0.08)',
+  },
+  recordPlay: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recordPlayActive: {
+    backgroundColor: Colors.primary,
+  },
+  recordRowText: {
+    flex: 1,
+  },
+  recordRowTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: Colors.text.primary,
+    letterSpacing: -0.2,
+  },
+  recordRowSub: {
+    marginTop: 2,
+    fontSize: 11,
+    color: Colors.text.secondary,
   },
   listEmpty: {
     textAlign: 'center',

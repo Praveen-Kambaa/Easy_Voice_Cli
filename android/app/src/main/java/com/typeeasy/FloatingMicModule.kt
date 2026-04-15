@@ -8,9 +8,14 @@ import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.typeeasy.speech.VoiceSpeechRecognitionManager
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 class FloatingMicModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
+
+    private var speechManager: VoiceSpeechRecognitionManager? = null
+    private val speechInFlight = AtomicBoolean(false)
 
     override fun getName(): String {
         return "FloatingMicModule"
@@ -209,6 +214,68 @@ class FloatingMicModule(reactContext: ReactApplicationContext) : ReactContextBas
         } catch (e: Exception) {
             promise.reject("INJECTION_ERROR", "Failed to inject text: ${e.message}")
         }
+    }
+
+    /**
+     * One-shot speech to text using Android SpeechRecognizer (prefers offline).
+     * Resolves with recognized text, or rejects on error.
+     *
+     * This is intended for in-app mic flows (e.g. Ask Question screen) without requiring the floating overlay service.
+     */
+    @ReactMethod
+    fun startSpeechToText(promise: Promise) {
+        try {
+            val context = reactApplicationContext
+            if (!hasRecordAudioPermission(context)) {
+                promise.reject("RECORD_AUDIO_PERMISSION_DENIED", "Record audio permission not granted")
+                return
+            }
+            if (!speechInFlight.compareAndSet(false, true)) {
+                promise.reject("SPEECH_BUSY", "Speech recognition is already running")
+                return
+            }
+            if (speechManager == null) {
+                speechManager = VoiceSpeechRecognitionManager(context)
+            }
+            speechManager?.startRecording(
+                onResult = { text ->
+                    speechInFlight.set(false)
+                    promise.resolve(text)
+                },
+                onError = { msg ->
+                    speechInFlight.set(false)
+                    promise.reject("SPEECH_ERROR", msg)
+                }
+            )
+        } catch (e: Exception) {
+            speechInFlight.set(false)
+            promise.reject("SPEECH_START_ERROR", "Failed to start speech recognition: ${e.message}")
+        }
+    }
+
+    /** Cancel current speech recognition session (best-effort). */
+    @ReactMethod
+    fun stopSpeechToText(promise: Promise) {
+        try {
+            speechManager?.stopRecording()
+        } catch (_: Exception) {
+            // ignore
+        } finally {
+            speechInFlight.set(false)
+            promise.resolve(true)
+        }
+    }
+
+    override fun onCatalystInstanceDestroy() {
+        try {
+            speechManager?.destroy()
+        } catch (_: Exception) {
+            // ignore
+        } finally {
+            speechManager = null
+            speechInFlight.set(false)
+        }
+        super.onCatalystInstanceDestroy()
     }
 
     private fun hasOverlayPermission(context: Context): Boolean {

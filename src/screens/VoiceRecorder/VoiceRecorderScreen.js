@@ -16,6 +16,8 @@ import {
   ActivityIndicator,
   ScrollView,
   TextInput,
+  Clipboard,
+  NativeModules,
 } from 'react-native';
 import {
   Mic,
@@ -25,6 +27,8 @@ import {
   Circle,
   Square,
   Play,
+  RotateCw,
+  Save,
 } from 'lucide-react-native';
 import { FileSystem } from 'react-native-file-access';
 import NativeAudioService from '../../services/NativeAudioService';
@@ -158,12 +162,21 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
       await logActivity(ActivityCategory.VOICE_RECORDER, 'recording_started', {
         label: 'Recording started',
       });
+      return true;
     } else {
       showAlert('Recording Error', result.error || 'Failed to start recording');
+      return false;
     }
   }, [showAlert, isRecording]);
 
-  useImperativeHandle(ref, () => ({ startRecording: handleStart }), [handleStart]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      startRecording: handleStart,
+      stopRecording: handleStop,
+    }),
+    [handleStart],
+  );
 
   const handleStop = async () => {
     if (!isRecording) return;
@@ -213,8 +226,57 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
     }
   };
 
+  const handlePickExistingAudio = useCallback(async () => {
+    if (isRecording || isTranscribing) return;
+    try {
+      const pickedUri = await NativeModules.AudioPickerModule?.pickAudio?.();
+      if (!pickedUri) {
+        showAlert('Upload audio', 'Could not access the selected file.');
+        return;
+      }
+
+      setTranscript(null);
+      setTranscriptError(null);
+      setIsEditingTranscript(false);
+      setEditableTranscript('');
+      setVoiceAssetId(null);
+
+      setLastRecording(null);
+      setFilePath(pickedUri);
+      setDuration(0);
+
+      setIsTranscribing(true);
+      await handleTranscription(pickedUri, null);
+    } catch (e) {
+      if (/cancel/i.test(e?.message || '')) return;
+      showAlert('Upload audio', e?.message || 'Could not pick an audio file.');
+    }
+  }, [isRecording, isTranscribing, showAlert]);
+
+  const handleCopyTranscript = useCallback(() => {
+    const t = (isEditingTranscript ? editableTranscript : transcript) || '';
+    const val = String(t).trim();
+    if (!val) {
+      showAlert('Copy', 'No transcript to copy yet.');
+      return;
+    }
+    try {
+      Clipboard.setString(val);
+      showAlert('Copied', 'Transcript copied to clipboard.');
+    } catch (_e) {
+      showAlert('Copy', 'Could not copy transcript.');
+    }
+  }, [editableTranscript, isEditingTranscript, transcript, showAlert]);
+
+  const handleSaveWithoutTranscription = () => {
+    setIsTranscribing(false);
+    setTranscriptError(null);
+    showAlert('Saved', 'Recording saved locally without transcription.');
+  };
+
   const handleTranscription = async (audioFilePath, recordingData) => {
     try {
+      setTranscriptError(null);
       const absPath = audioFilePath.startsWith('file://')
         ? audioFilePath.slice(7)
         : audioFilePath;
@@ -266,15 +328,13 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
         [
           {
             text: 'Save Without Transcription',
-            onPress: () => {
-              setIsTranscribing(false);
-              setTranscriptError(null);
-              showAlert('Saved', 'Recording saved locally without transcription.');
-            },
+            onPress: handleSaveWithoutTranscription,
           },
           {
             text: 'Retry',
-            onPress: () => handleTranscription(lastRecording?.filePath || filePath, lastRecording),
+            onPress: () => {
+              void handleRetryTranscription();
+            },
           },
           { text: 'Cancel', style: 'cancel' },
         ],
@@ -282,6 +342,16 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
     } finally {
       setIsTranscribing(false);
     }
+  };
+
+  const handleRetryTranscription = async () => {
+    const path = lastRecording?.filePath || filePath;
+    if (!path) {
+      showAlert('Retry', 'No recording file is available to resend.');
+      return;
+    }
+    setIsTranscribing(true);
+    await handleTranscription(path, lastRecording);
   };
 
   const handleEditTranscript = () => {
@@ -386,92 +456,143 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
 
   const mainBody = (
     <>
-      <Animated.View
-        style={[
-          styles.recordingCard,
-          homeEmbedded && styles.recordingCardHome,
-          isRecording && !isPaused && styles.recordingCardActive,
-          { transform: [{ scale: pulseAnim }] },
-        ]}
-      >
-        <View style={[styles.recordingIconWrap, homeEmbedded && styles.recordingIconWrapHome]}>
-          {isRecording ? (
-            <Mic
-              size={micIconSize}
-              color={isRecording && !isPaused ? Colors.recording.active : Colors.text.secondary}
-              strokeWidth={1.5}
-            />
-          ) : (
-            <MicOff size={micIconSize} color={Colors.text.light} strokeWidth={1.5} />
-          )}
-        </View>
-        <Text style={[styles.statusText, homeEmbedded && styles.statusTextHome]}>
-          {isRecording ? (isPaused ? 'Recording Paused' : 'Recording…') : 'Ready to Record'}
-        </Text>
-        {isRecording && (
-          <Text style={[styles.durationText, homeEmbedded && styles.durationTextHome]}>
-            {NativeAudioService.formatDuration(duration)}
-          </Text>
-        )}
-        {!isRecording && hasRecording && (
-          <Text style={[styles.savedLabel, homeEmbedded && styles.savedLabelHome]}>
-            Last recording saved ✓
-          </Text>
-        )}
-      </Animated.View>
-
-      <View style={[styles.controlsRow, homeEmbedded && styles.controlsRowHome]}>
-        {!isRecording ? (
-          showPrimaryStart ? (
-            <TouchableOpacity
-              style={[styles.controlBtn, styles.recordBtn]}
-              onPress={handleStart}
-              disabled={isTranscribing}
-              activeOpacity={0.85}
-            >
-              <Circle size={20} color="#FFFFFF" strokeWidth={2.5} />
-              <Text style={styles.controlBtnLabel}>Start</Text>
-            </TouchableOpacity>
-          ) : null
-        ) : (
-          <TouchableOpacity
+      {!homeEmbedded ? (
+        <>
+          <Animated.View
             style={[
-              styles.controlBtn,
-              styles.stopBtn,
-              homeEmbedded && styles.controlBtnHomeWide,
+              styles.heroCard,
+              homeEmbedded && styles.recordingCardHome,
+              isRecording && !isPaused && styles.heroCardActive,
             ]}
-            onPress={handleStop}
-            activeOpacity={0.85}
           >
-            <Square size={20} color="#FFFFFF" strokeWidth={2} />
-            <Text style={[styles.controlBtnLabel, homeEmbedded && styles.controlBtnLabelHome]}>
-              Stop & Send
-            </Text>
-          </TouchableOpacity>
-        )}
+            <View style={styles.heroTopRow}>
+              <Animated.View
+                style={[
+                  styles.heroIconWrap,
+                  isRecording && !isPaused && styles.heroIconWrapActive,
+                  { transform: [{ scale: pulseAnim }] },
+                ]}
+              >
+                {isRecording ? (
+                  <Mic
+                    size={micIconSize}
+                    color={isRecording && !isPaused ? Colors.recording.active : Colors.text.secondary}
+                    strokeWidth={1.6}
+                  />
+                ) : (
+                  <MicOff size={micIconSize} color={Colors.text.light} strokeWidth={1.6} />
+                )}
+              </Animated.View>
 
-        {hasRecording && !isRecording && (
-          <TouchableOpacity
-            style={[
-              styles.controlBtn,
-              isPlaying ? styles.stopPlayBtn : styles.playBtn,
-              homeEmbedded && styles.controlBtnHomeWide,
-            ]}
-            onPress={handlePlayPause}
-            disabled={isTranscribing}
-            activeOpacity={0.85}
-          >
-            {isPlaying ? (
-              <Square size={20} color="#FFFFFF" strokeWidth={2} />
+              <View style={styles.heroTextCol}>
+                <Text style={styles.heroTitle}>
+                  {isRecording ? (isPaused ? 'Recording paused' : 'Recording…') : 'Voice Command'}
+                </Text>
+                <Text style={styles.heroSub}>
+                  {isRecording
+                    ? 'Speak clearly. Tap Stop & Send when done.'
+                    : 'Record now or import an existing audio from Files.'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.heroMetaRow}>
+              {isRecording ? (
+                <Text style={styles.heroMetaValue}>{NativeAudioService.formatDuration(duration)}</Text>
+              ) : hasRecording ? (
+                <Text style={styles.heroMetaHint}>Last recording saved ✓</Text>
+              ) : (
+                <Text style={styles.heroMetaHint}>Ready</Text>
+              )}
+            </View>
+          </Animated.View>
+
+          <View style={[styles.actionRow, homeEmbedded && styles.controlsRowHome]}>
+            {!isRecording ? (
+              showPrimaryStart ? (
+                <TouchableOpacity
+                  style={[styles.actionTile, styles.actionPrimary]}
+                  onPress={handleStart}
+                  disabled={isTranscribing}
+                  activeOpacity={0.85}
+                >
+                  <View style={[styles.actionIcon, { backgroundColor: 'rgba(255,255,255,0.18)' }]}>
+                    <Circle size={18} color="#FFFFFF" strokeWidth={2.4} />
+                  </View>
+                  <View style={styles.actionTextCol}>
+                    <Text style={styles.actionTitleLight}>Start</Text>
+                    <Text style={styles.actionSubLight}>Record now</Text>
+                  </View>
+                </TouchableOpacity>
+              ) : null
             ) : (
-              <Play size={20} color="#FFFFFF" strokeWidth={2} />
+              <TouchableOpacity
+                style={[
+                  styles.actionTile,
+                  styles.actionDanger,
+                  homeEmbedded && styles.controlBtnHomeWide,
+                ]}
+                onPress={handleStop}
+                activeOpacity={0.85}
+              >
+                <View style={[styles.actionIcon, { backgroundColor: 'rgba(255,255,255,0.18)' }]}>
+                  <Square size={18} color="#FFFFFF" strokeWidth={2.2} />
+                </View>
+                <View style={styles.actionTextCol}>
+                  <Text style={styles.actionTitleLight}>Stop</Text>
+                  <Text style={styles.actionSubLight}>Send to server</Text>
+                </View>
+              </TouchableOpacity>
             )}
-            <Text style={[styles.controlBtnLabel, homeEmbedded && styles.controlBtnLabelHome]}>
-              {isPlaying ? 'Stop' : 'Play'}
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
+
+            {!isRecording ? (
+              <TouchableOpacity
+                style={[styles.actionTile, styles.actionOutline, homeEmbedded && styles.controlBtnHomeWide]}
+                onPress={handlePickExistingAudio}
+                disabled={isTranscribing}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Upload existing audio"
+              >
+                <View style={styles.actionIconOutline}>
+                  <Music size={18} color={Colors.primary} strokeWidth={2.2} />
+                </View>
+                <View style={styles.actionTextCol}>
+                  <Text style={styles.actionTitle}>Import</Text>
+                  <Text style={styles.actionSub}>From Files</Text>
+                </View>
+              </TouchableOpacity>
+            ) : null}
+
+            {hasRecording && !isRecording && (
+              <TouchableOpacity
+                style={[
+                  styles.actionTile,
+                  isPlaying ? styles.actionMuted : styles.actionInfo,
+                  homeEmbedded && styles.controlBtnHomeWide,
+                ]}
+                onPress={handlePlayPause}
+                disabled={isTranscribing}
+                activeOpacity={0.85}
+              >
+                <View style={[styles.actionIcon, { backgroundColor: 'rgba(255,255,255,0.18)' }]}>
+                  {isPlaying ? (
+                    <Square size={18} color="#FFFFFF" strokeWidth={2.2} />
+                  ) : (
+                    <Play size={18} color="#FFFFFF" strokeWidth={2.2} />
+                  )}
+                </View>
+                <View style={styles.actionTextCol}>
+                  <Text style={styles.actionTitleLight}>{isPlaying ? 'Stop' : 'Play'}</Text>
+                  <Text style={styles.actionSubLight}>{isPlaying ? 'Playback' : 'Listen'}</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
+
+
+        </>
+      ) : null}
 
       {isTranscribing && (
         <AppCard style={[styles.infoCard, homeEmbedded && styles.infoCardHome]}>
@@ -534,6 +655,12 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
                   style={styles.transcriptActionBtn}
                 />
                 <PrimaryButton
+                  title="Copy"
+                  onPress={handleCopyTranscript}
+                  variant="outline"
+                  style={styles.transcriptActionBtn}
+                />
+                <PrimaryButton
                   title="Send"
                   onPress={handleExecuteVoiceCommand}
                   loading={isExecuting}
@@ -555,6 +682,38 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
         >
           <Text style={styles.errorTitle}>Couldn’t create transcript</Text>
           <Text style={styles.errorText}>{transcriptError}</Text>
+          <Text style={styles.errorHint}>
+            If the popup closed, you can still resend your recording from here.
+          </Text>
+          <View style={styles.errorActionsRow}>
+            <TouchableOpacity
+              style={[
+                styles.errorChipBtn,
+                styles.errorChipPrimary,
+                !hasRecording && styles.errorChipDisabled,
+              ]}
+              onPress={() => {
+                void handleRetryTranscription();
+              }}
+              disabled={!hasRecording}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Retry upload"
+            >
+              <RotateCw size={18} color="#FFFFFF" strokeWidth={2.2} />
+              <Text style={styles.errorChipPrimaryText}>Retry</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.errorChipBtn, styles.errorChipOutline]}
+              onPress={handleSaveWithoutTranscription}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Save without transcription"
+            >
+              <Save size={18} color={Colors.primary} strokeWidth={2.2} />
+              <Text style={styles.errorChipOutlineText}>Save local</Text>
+            </TouchableOpacity>
+          </View>
         </AppCard>
       )}
 
@@ -564,12 +723,13 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
           {[
             { Icon: Circle, text: 'Tap Start to begin recording', color: Colors.recording.active },
             { Icon: Square, text: 'Tap Stop & Send to upload to backend', color: Colors.primary },
+            { Icon: Music, text: 'Tap Import to choose an existing audio from Files', color: Colors.primary },
             { Icon: Play, text: 'Play back the recorded audio', color: Colors.status.info },
             { Icon: Music, text: 'Files saved in MP4/AAC format', color: Colors.text.secondary },
           ].map(({ Icon, text, color }) => (
             <View key={text} style={styles.tipRow}>
-              <View style={styles.tipIconWrap}>
-                <Icon size={16} color={color} strokeWidth={2} />
+              <View style={[styles.tipIconWrap, { backgroundColor: `${color}14`, borderColor: `${color}22` }]}>
+                <Icon size={16} color={color} strokeWidth={2.2} />
               </View>
               <Text style={styles.tipText}>{text}</Text>
             </View>
@@ -652,8 +812,16 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 14,
     marginBottom: 0,
-    borderRadius: 14,
+    borderRadius: 16,
     alignSelf: 'stretch',
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   recordingIconWrapHome: {
     marginBottom: 6,
@@ -720,53 +888,172 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
   },
-  recordingCard: {
+  heroCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 20,
-    padding: 36,
-    alignItems: 'center',
-    marginBottom: 24,
-    borderWidth: 1,
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1.5,
     borderColor: Colors.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 5,
   },
-  recordingCardActive: {
-    borderColor: Colors.recording.active,
+  heroCardActive: {
+    borderColor: 'rgba(16, 185, 129, 0.35)',
     backgroundColor: Colors.recording.activeBg,
   },
-  recordingIconWrap: {
-    marginBottom: 12,
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  heroIconWrap: {
+    width: 68,
+    height: 68,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.backgroundAlt,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+  },
+  heroIconWrapActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.10)',
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+  },
+  heroTextCol: {
+    flex: 1,
+  },
+  heroTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.text.primary,
+    letterSpacing: -0.2,
+  },
+  heroSub: {
+    marginTop: 2,
+    fontSize: 12,
+    color: Colors.text.secondary,
+    lineHeight: 16,
+  },
+  heroMetaRow: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
+    alignItems: 'center',
+  },
+  heroMetaValue: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: Colors.text.primary,
+    fontFamily: 'monospace',
+    letterSpacing: -0.5,
+  },
+  heroMetaHint: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    fontWeight: '600',
+  },
+  actionRow: {
+    flexDirection: 'column',
+    gap: 10,
+    marginBottom: 16,
+  },
+  actionTile: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  actionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statusText: {
-    fontSize: 18,
-    fontWeight: '600',
+  actionIconOutline: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(30, 136, 255, 0.05)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(30, 136, 255, 0.12)',
+  },
+  actionTextCol: {
+    flex: 1,
+  },
+  actionTitleLight: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.1,
+  },
+  actionSubLight: {
+    marginTop: 2,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.80)',
+  },
+  actionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
     color: Colors.text.primary,
-    textAlign: 'center',
+    letterSpacing: 0.1,
   },
-  durationText: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: Colors.primary,
-    fontFamily: 'monospace',
-    marginTop: 10,
-  },
-  savedLabel: {
-    marginTop: 8,
-    fontSize: 13,
+  actionSub: {
+    marginTop: 2,
+    fontSize: 12,
     color: Colors.text.secondary,
   },
-  controlsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 14,
-    marginBottom: 24,
+  actionPrimary: {
+    backgroundColor: Colors.recording.active,
   },
+  actionDanger: {
+    backgroundColor: Colors.primary,
+  },
+  actionInfo: {
+    backgroundColor: Colors.status.info,
+  },
+  actionMuted: {
+    backgroundColor: Colors.text.secondary,
+  },
+  actionOutline: {
+    backgroundColor: Colors.surface,
+    borderColor: 'rgba(30, 136, 255, 0.55)',
+    borderStyle: 'dashed',
+    borderWidth: 1.5,
+    shadowOpacity: 0.02,
+    elevation: 1,
+  },
+  controlsHelpRow: {
+    marginTop: -12,
+    marginBottom: 18,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+  },
+  controlsHelpText: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  // Legacy button styles kept for embedded Home variant
   controlBtn: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -782,9 +1069,16 @@ const styles = StyleSheet.create({
   },
   recordBtn: { backgroundColor: Colors.recording.active },
   stopBtn: { backgroundColor: Colors.primary },
+  uploadBtn: {
+    backgroundColor: Colors.backgroundAlt,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    borderStyle: 'dashed',
+  },
   playBtn: { backgroundColor: Colors.status.info },
   stopPlayBtn: { backgroundColor: Colors.text.secondary },
   controlBtnLabel: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
+  uploadBtnLabel: { color: Colors.primary, fontWeight: '800' },
   infoCard: {
     alignItems: 'center',
     marginBottom: 20,
@@ -866,6 +1160,51 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.text.primary,
     lineHeight: 18,
+  },
+  errorHint: {
+    marginTop: 10,
+    fontSize: 12,
+    color: Colors.text.secondary,
+    lineHeight: 17,
+  },
+  errorActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 10,
+    marginTop: 12,
+  },
+  errorChipBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    minHeight: 44,
+  },
+  errorChipPrimary: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  errorChipPrimaryText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  errorChipOutline: {
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
+  },
+  errorChipOutlineText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  errorChipDisabled: {
+    opacity: 0.38,
   },
   tipsTitle: {
     fontSize: 15,

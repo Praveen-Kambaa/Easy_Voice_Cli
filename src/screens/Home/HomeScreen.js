@@ -6,260 +6,145 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  DeviceEventEmitter,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Mic, Music, Radio, Settings, Circle, ChevronRight, History, Languages, CircleHelp } from 'lucide-react-native';
+import { Mic, Circle } from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { Colors } from '../../theme/Colors';
 import { TIME_LABELS, USER } from '../../constants';
-import { getLanguageName } from '../../constants/translationLanguages';
-import {
-  FloatingSpeechHistoryService,
-  FLOATING_SPEECH_UPDATED_EVENT,
-} from '../../services/FloatingSpeechHistoryService';
-import { getTranslationHistory, TRANSLATION_HISTORY_UPDATED_EVENT } from '../../services/translationTextStorage';
-import { getAiQaHistory, AI_QA_HISTORY_UPDATED_EVENT } from '../../services/aiQaStorage';
-import { formatCompactDateTime } from '../../utils/dateTimeFormat';
 import VoiceRecorderScreen from '../VoiceRecorder/VoiceRecorderScreen';
-
-const RECENT_FEED_LIMIT = 14;
-
-function mergeRecentFeed(speechAll, translations, qaList) {
-  const rows = [];
-  for (const e of speechAll || []) {
-    rows.push({
-      kind: 'speech',
-      key: `sp_${e.id}`,
-      sortAt: Date.parse(e.createdAt) || 0,
-      data: e,
-    });
-  }
-  for (const e of translations || []) {
-    rows.push({
-      kind: 'translation',
-      key: `tr_${e.id}`,
-      sortAt: Date.parse(e.createdAt) || 0,
-      data: e,
-    });
-  }
-  for (const e of qaList || []) {
-    rows.push({
-      kind: 'qa',
-      key: `qa_${e.id}`,
-      sortAt: Date.parse(e.createdAt) || 0,
-      data: e,
-    });
-  }
-  rows.sort((a, b) => b.sortAt - a.sortAt);
-  return rows.slice(0, RECENT_FEED_LIMIT);
-}
+import { useAuth } from '../../context/AuthContext';
 
 const HomeScreen = ({ navigation }) => {
-  const [recentFeed, setRecentFeed] = useState([]);
+  const { user } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const voiceCommandRef = useRef(null);
+  const [homeRecording, setHomeRecording] = useState(false);
+  const [homeElapsedMs, setHomeElapsedMs] = useState(0);
+  const homeTimerRef = useRef(null);
+  const homeStartRef = useRef(null);
 
-  const loadDashboard = useCallback(async () => {
-    try {
-      const [speechAll, translations, qaList] = await Promise.all([
-        FloatingSpeechHistoryService.getAll(),
-        getTranslationHistory(),
-        getAiQaHistory(),
-      ]);
-      const speechNewestFirst = (speechAll || []).slice().reverse();
-      setRecentFeed(mergeRecentFeed(speechNewestFirst, translations, qaList));
-    } catch {
-      // Non-critical
-    }
-  }, []);
-
-  useEffect(() => {
-    loadDashboard();
-  }, [loadDashboard]);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadDashboard();
-    }, [loadDashboard]),
-  );
-
-  useEffect(() => {
-    const a = DeviceEventEmitter.addListener(FLOATING_SPEECH_UPDATED_EVENT, loadDashboard);
-    const b = DeviceEventEmitter.addListener(TRANSLATION_HISTORY_UPDATED_EVENT, loadDashboard);
-    const c = DeviceEventEmitter.addListener(AI_QA_HISTORY_UPDATED_EVENT, loadDashboard);
-    return () => {
-      a.remove();
-      b.remove();
-      c.remove();
-    };
-  }, [loadDashboard]);
-
+  console.log(user, "Logging user data")
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadDashboard();
     setRefreshing(false);
   };
 
-  const openFeedDestination = (kind) => {
-    if (kind === 'speech') {
-      navigation.navigate('FloatingMicHistory');
-    } else if (kind === 'translation') {
-      navigation.navigate('Translator', { screen: 'TranslatorHistory' });
-    } else {
-      navigation.navigate('AskQuestion', { screen: 'AiQaHistory' });
-    }
-  };
+  const stopHomeTimer = useCallback(() => {
+    if (homeTimerRef.current) clearInterval(homeTimerRef.current);
+    homeTimerRef.current = null;
+    homeStartRef.current = null;
+    setHomeElapsedMs(0);
+  }, []);
 
-  const greeting = `${TIME_LABELS.getGreeting()}, ${USER.DEFAULT_NAME}`;
+  useEffect(() => {
+    return () => {
+      stopHomeTimer();
+    };
+  }, [stopHomeTimer]);
 
-  const QUICK_ACTIONS = [
-    { Icon: Mic, label: 'Voice Command', screen: 'VoiceRecorder', color: '#EF4444' },
-    { Icon: Radio, label: 'Floating Mic', screen: 'FloatingMic', color: '#6366F1' },
-    { Icon: Music, label: 'My Recordings', screen: 'RecordedAudio', color: '#10B981' },
-    { Icon: History, label: 'Speech History', screen: 'FloatingMicHistory', color: '#0EA5E9' },
-    { Icon: Languages, label: 'Translator', screen: 'Translator', color: '#38BDF8' },
-    { Icon: Settings, label: 'Settings', screen: 'Settings', color: '#F59E0B' },
-  ];
+  const displayName =
+    (user?.name || user?.displayName || user?.username || user?.email || '').trim() || USER.DEFAULT_NAME;
+  const greeting = `${TIME_LABELS.getGreeting()}, ${displayName}`;
+
+  const name = greeting.split(',').slice(1).join(',').trim() || USER.DEFAULT_NAME;
+  const greetingPrefix = greeting.replace(new RegExp(`,\\s*${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`), ',').trim();
 
   return (
     <ScreenContainer>
-      <AppHeader title="Home" />
+      <AppHeader title="Home" forceMenu />
 
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
       >
-        {/* Hero greeting card */}
-        <View style={styles.heroCard}>
-          <View style={styles.heroTop}>
-            <View>
-              <Text style={styles.heroGreeting}>{greeting}</Text>
-              <Text style={styles.heroSubtitle}>Ready to give voice commands?</Text>
-            </View>
-          </View>
-          {/* <View style={styles.heroStats}>
-            <View style={styles.heroStatItem}>
-              <Text style={styles.heroStatValue}>{recordings.length}</Text>
-              <Text style={styles.heroStatLabel}>Total Recordings</Text>
-            </View>
-            <View style={styles.heroStatDivider} />
-            <View style={styles.heroStatItem}>
-              <Text style={styles.heroStatValue}>
-                {recordings.length > 0
-                  ? formatDuration(recordings.reduce((sum, r) => sum + (r.duration || 0), 0))
-                  : '0:00'}
-              </Text>
-              <Text style={styles.heroStatLabel}>Total Duration</Text>
-            </View>
-          </View> */}
+        {/* Modern greeting */}
+        <View style={styles.greetingBlock}>
+          <Text style={styles.greetingTitle}>
+            {greetingPrefix}{' '}
+            <Text style={styles.greetingTitleAccent}>{name}</Text>
+          </Text>
+          <Text style={styles.greetingSub}>
+            Your voice assistant is primed and ready for your requests.
+          </Text>
         </View>
 
-        <View style={styles.voiceCommandSection}>
-          <TouchableOpacity
-            style={styles.ctaBtn}
-            onPress={() => voiceCommandRef.current?.startRecording?.()}
-            activeOpacity={0.85}
-          >
-            <Circle size={18} color="#FFFFFF" strokeWidth={2.5} />
-            <Text style={styles.ctaBtnText}>Start Voice Command</Text>
-          </TouchableOpacity>
-
-          <VoiceRecorderScreen
-            ref={voiceCommandRef}
-            navigation={navigation}
-            embedded
-            homeEmbedded
-          />
-        </View>
-
-        {/* Quick Actions */}
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.quickGrid}>
-          {QUICK_ACTIONS.map((action) => (
+        {/* Primary Voice card (keeps voice command on Home) */}
+        <View style={styles.primaryCard}>
+          <View style={styles.voiceTopRow}>
+            <View style={styles.voiceTopLeft}>
+              <Text style={styles.primaryCardKicker}>VOICE COMMAND</Text>
+              <Text style={styles.primaryCardTitle}>Neural Engine Active</Text>
+              <Text style={styles.primaryCardSub}>Tap to start recording, then stop & send.</Text>
+            </View>
             <TouchableOpacity
-              key={action.screen}
-              style={styles.quickCard}
-              onPress={() => navigation.navigate(action.screen)}
-              activeOpacity={0.75}
+              style={styles.micOrb}
+            onPress={async () => {
+              if (homeRecording) return;
+              const ok = await voiceCommandRef.current?.startRecording?.();
+              if (ok) {
+                setHomeRecording(true);
+                homeStartRef.current = Date.now();
+                homeTimerRef.current = setInterval(() => {
+                  if (!homeStartRef.current) return;
+                  setHomeElapsedMs(Date.now() - homeStartRef.current);
+                }, 200);
+              }
+            }}
+              activeOpacity={0.9}
             >
-              <View style={[styles.quickIconCircle, { backgroundColor: action.color + '18' }]}>
-                <action.Icon size={22} color={action.color} strokeWidth={1.8} />
-              </View>
-              <Text style={styles.quickLabel}>{action.label}</Text>
+              <Mic size={22} color="#FFFFFF" strokeWidth={2.2} />
             </TouchableOpacity>
-          ))}
-        </View>
-
-        {/*         <Text style={[styles.sectionTitle, styles.recentFeedSectionTitle]}>Recent transcripts</Text>
-        <Text style={styles.recentFeedIntro}>
-          What you spoke (floating mic), translations, and question &amp; answers — newest first.
-        </Text>
-
-        {recentFeed.length === 0 ? (
-          <View style={styles.transcriptHintCard}>
-            <Text style={styles.transcriptHintText}>
-              Use the floating mic, Translator, or Ask Question; your text will show up here automatically.
-            </Text>
           </View>
-        ) : (
-          recentFeed.map((item) => {
-            const RowIcon =
-              item.kind === 'speech' ? Mic : item.kind === 'translation' ? Languages : CircleHelp;
-            const kindLabel =
-              item.kind === 'speech' ? 'Speech' : item.kind === 'translation' ? 'Translation' : 'Q & A';
 
-            let title = '';
-            let subtitle = '';
-            let metaTime = '';
+          {!homeRecording ? (
+            <TouchableOpacity
+              style={styles.ctaBtn}
+              onPress={async () => {
+                const ok = await voiceCommandRef.current?.startRecording?.();
+                if (ok) {
+                  setHomeRecording(true);
+                  homeStartRef.current = Date.now();
+                  homeTimerRef.current = setInterval(() => {
+                    if (!homeStartRef.current) return;
+                    setHomeElapsedMs(Date.now() - homeStartRef.current);
+                  }, 200);
+                }
+              }}
+              activeOpacity={0.9}
+            >
+              <View style={styles.ctaIconBadge}>
+                <Circle size={16} color="#FFFFFF" strokeWidth={2.8} />
+              </View>
+              <Text style={styles.ctaBtnText}>Start Voice Command</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.timerPill}>
+              <Text style={styles.timerText}>
+                {Math.floor(homeElapsedMs / 60000)}:
+                {String(Math.floor((homeElapsedMs % 60000) / 1000)).padStart(2, '0')}
+              </Text>
+            </View>
+          )}
 
-            if (item.kind === 'speech') {
-              title = item.data.text || '';
-              subtitle = 'Floating mic';
-              metaTime = formatCompactDateTime(item.data.createdAt);
-            } else if (item.kind === 'translation') {
-              const d = item.data;
-              title = d.translatedText || '';
-              const fromN = getLanguageName(d.fromCode);
-              const toN = getLanguageName(d.toCode);
-              subtitle = `${fromN} → ${toN}: ${d.sourceText || ''}`.trim();
-              metaTime = formatCompactDateTime(d.createdAt);
-            } else {
-              const d = item.data;
-              title = `Q: ${d.question || ''}`;
-              subtitle = `A: ${d.answer || ''}`;
-              metaTime = formatCompactDateTime(d.createdAt);
-            }
+          {homeRecording ? (
+            <TouchableOpacity
+              style={styles.stopBtnHome}
+              onPress={async () => {
+                setHomeRecording(false);
+                stopHomeTimer();
+                await voiceCommandRef.current?.stopRecording?.();
+              }}
+              activeOpacity={0.9}
+            >
+              <Text style={styles.stopBtnHomeText}>Stop</Text>
+            </TouchableOpacity>
+          ) : null}
 
-            return (
-              <TouchableOpacity
-                key={item.key}
-                style={styles.transcriptPreviewRow}
-                onPress={() => openFeedDestination(item.kind)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.transcriptPreviewIcon}>
-                  <RowIcon size={17} color={Colors.primary} strokeWidth={2} />
-                </View>
-                <View style={styles.transcriptPreviewBody}>
-                  <Text style={styles.feedKindTag}>{kindLabel}</Text>
-                  <Text style={styles.transcriptPreviewTitle} numberOfLines={item.kind === 'qa' ? 2 : 3}>
-                    {title}
-                  </Text>
-                  {subtitle ? (
-                    <Text style={styles.transcriptPreviewSubtitle} numberOfLines={item.kind === 'qa' ? 3 : 2}>
-                      {subtitle}
-                    </Text>
-                  ) : null}
-                  <Text style={styles.activityMeta}>{metaTime}</Text>
-                </View>
-                <ChevronRight size={16} color={Colors.text.light} strokeWidth={2} />
-              </TouchableOpacity>
-            );
-          })
-        )} */}
+          <VoiceRecorderScreen ref={voiceCommandRef} navigation={navigation} embedded homeEmbedded />
+        </View>
       </ScrollView>
     </ScreenContainer>
   );
@@ -271,80 +156,106 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 40,
     alignItems: 'stretch',
+    gap: 14,
   },
 
-  // Hero
-  heroCard: {
-    backgroundColor: Colors.primary,
-    borderRadius: 20,
-    padding: 22,
-    marginBottom: 16,
+  greetingBlock: {
+    paddingTop: 6,
   },
-  heroTop: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-start',
+  greetingTitle: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: Colors.text.primary,
+    letterSpacing: -0.8,
+    lineHeight: 36,
   },
-  heroGreeting: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
-    marginBottom: 4,
+  greetingTitleAccent: {
+    color: Colors.primary,
   },
-  heroSubtitle: {
+  greetingSub: {
+    marginTop: 8,
     fontSize: 13,
-    color: 'rgba(255,255,255,0.6)',
+    color: Colors.text.secondary,
+    lineHeight: 19,
   },
-  heroStats: {
+
+  primaryCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  voiceTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 14,
+    marginBottom: 14,
   },
-  heroStatItem: {
+  voiceTopLeft: {
     flex: 1,
   },
-  heroStatValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 2,
-  },
-  heroStatLabel: {
+  primaryCardKicker: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.55)',
-    fontWeight: '500',
+    fontWeight: '800',
+    color: Colors.primary,
+    letterSpacing: 1.2,
   },
-  heroStatDivider: {
-    width: 1,
-    height: 36,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    marginHorizontal: 20,
+  primaryCardTitle: {
+    marginTop: 6,
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.text.primary,
+    letterSpacing: -0.2,
+  },
+  primaryCardSub: {
+    marginTop: 6,
+    fontSize: 13,
+    color: Colors.text.secondary,
+    lineHeight: 19,
+  },
+  micOrb: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 6,
   },
 
-  /** Voice CTA + embedded recorder: shared horizontal edges and even vertical rhythm */
-  voiceCommandSection: {
-    gap: 12,
-    marginBottom: 24,
-    alignSelf: 'stretch',
-  },
-
-  // CTA button
   ctaBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.recording.active,
+    backgroundColor: Colors.primary,
     borderRadius: 14,
     paddingVertical: 16,
+    paddingHorizontal: 16,
     gap: 10,
-    shadowColor: Colors.recording.active,
+    shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.22,
     shadowRadius: 8,
     elevation: 4,
   },
-  ctaBtnIcon: {
-    fontSize: 20,
+  ctaIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   ctaBtnText: {
     fontSize: 16,
@@ -352,120 +263,36 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0.3,
   },
-
-  // Quick actions
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.text.primary,
-    marginBottom: 12,
-  },
-  recentFeedSectionTitle: {
-    marginTop: 4,
-  },
-  recentFeedIntro: {
-    fontSize: 13,
-    color: Colors.text.secondary,
-    lineHeight: 19,
-    marginBottom: 12,
-    marginTop: -4,
-  },
-  quickGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 28,
-  },
-  quickCard: {
-    width: '47%',
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 16,
-    alignItems: 'center',
-    gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  quickIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quickLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    textAlign: 'center',
-  },
-
-  feedKindTag: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: 4,
-  },
-
-  transcriptHintCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 16,
-    marginBottom: 8,
-  },
-  transcriptHintText: {
-    fontSize: 13,
-    color: Colors.text.secondary,
-    lineHeight: 19,
-  },
-  transcriptPreviewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 14,
-    marginBottom: 8,
-  },
-  transcriptPreviewIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+  timerPill: {
     backgroundColor: Colors.backgroundAlt,
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  transcriptPreviewBody: {
-    flex: 1,
-  },
-  transcriptPreviewTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+  timerText: {
+    fontSize: 16,
+    fontWeight: '800',
     color: Colors.text.primary,
-    marginBottom: 4,
-    lineHeight: 20,
+    letterSpacing: 0.8,
+    fontVariant: ['tabular-nums'],
   },
-  transcriptPreviewSubtitle: {
-    fontSize: 13,
-    color: Colors.text.secondary,
-    lineHeight: 18,
-    marginBottom: 4,
+  stopBtnHome: {
+    marginTop: 10,
+    backgroundColor: Colors.status.blocked,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-
-  activityMeta: {
-    fontSize: 12,
-    color: Colors.text.secondary,
+  stopBtnHomeText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0.4,
   },
 });
 

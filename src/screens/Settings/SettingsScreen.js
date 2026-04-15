@@ -388,70 +388,60 @@ const SettingsScreen = () => {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Section 0: Translation Settings ────────────────────────────── */}
-        <Text style={styles.sectionLabel}>TRANSLATION</Text>
+        <Text style={styles.sectionLabel}>Translation</Text>
 
-        <AppCard style={styles.translationCard}>
-          <Text style={styles.translationTitle}>Translation Settings</Text>
-          <Text style={styles.translationDesc}>
-            Set your preferred translation languages
-          </Text>
-
-          {/* From Language */}
-          <View style={styles.languageRow}>
-            <Text style={styles.languageLabel}>From:</Text>
-            <TouchableOpacity
-              style={styles.dropdownField}
-              onPress={() => setLanguagePickerFor('from')}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Select source language"
-            >
-              <Text style={styles.dropdownFieldText} numberOfLines={1}>
-                {getLanguageName(fromLanguage)}
-              </Text>
-              <ChevronDown size={20} color={Colors.text.secondary} />
-            </TouchableOpacity>
+        <AppCard style={styles.groupCard} noPadding>
+          <View style={styles.groupHeader}>
+            <Text style={styles.groupTitle}>Default languages</Text>
+            <Text style={styles.groupSub}>Used by Translator and Floating Mic translation</Text>
           </View>
 
-          {/* To Language */}
-          <View style={styles.languageRow}>
-            <Text style={styles.languageLabel}>To:</Text>
-            <TouchableOpacity
-              style={styles.dropdownField}
-              onPress={() => setLanguagePickerFor('to')}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Select target language"
-            >
-              <Text style={styles.dropdownFieldText} numberOfLines={1}>
-                {getLanguageName(toLanguage)}
-              </Text>
-              <ChevronDown size={20} color={Colors.text.secondary} />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => setLanguagePickerFor('from')}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Select source language"
+          >
+            <View style={styles.settingTextCol}>
+              <Text style={styles.settingTitle}>From</Text>
+              <Text style={styles.settingSub} numberOfLines={1}>{getLanguageName(fromLanguage)}</Text>
+            </View>
+            <ChevronDown size={18} color={Colors.text.light} />
+          </TouchableOpacity>
 
-          {/* Save Button */}
-          <PrimaryButton
-            title={isLoading ? 'Saving...' : 'Save'}
-            onPress={saveTranslationPreference}
-            loading={isLoading}
-            variant="primary"
-            style={styles.saveBtn}
-          />
+          <TouchableOpacity
+            style={[styles.settingRow, styles.settingRowLast]}
+            onPress={() => setLanguagePickerFor('to')}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Select target language"
+          >
+            <View style={styles.settingTextCol}>
+              <Text style={styles.settingTitle}>To</Text>
+              <Text style={styles.settingSub} numberOfLines={1}>{getLanguageName(toLanguage)}</Text>
+            </View>
+            <ChevronDown size={18} color={Colors.text.light} />
+          </TouchableOpacity>
+
+          <View style={styles.groupFooter}>
+            <PrimaryButton
+              title={isLoading ? 'Saving...' : 'Save'}
+              onPress={saveTranslationPreference}
+              loading={isLoading}
+              variant="primary"
+              style={styles.groupPrimaryBtn}
+            />
+          </View>
         </AppCard>
 
         {Platform.OS === 'android' && (
           <>
-            <Text style={[styles.sectionLabel, { marginTop: 16 }]}>FLOATING MIC</Text>
+            <Text style={[styles.sectionLabel, { marginTop: 18 }]}>Floating mic</Text>
             <AppCard style={styles.internalTranscribeCard}>
               <Text style={styles.translationTitle}>Overlay actions</Text>
               <Text style={styles.translationDesc}>
-                Choose what the floating overlay can do. If more than one is on, tap the floating
-                button to open a menu. If only one is on, that icon is shown and starts that action
-                directly. At least one must stay on.
-              </Text>
-              <Text style={styles.overlayHint}>
-                Tip: Touch and hold the icon for one second, then drag to move the overlay.
+                Choose what the floating overlay can do. Keep at least one enabled.
               </Text>
               <View style={[styles.toggleRow, styles.overlayActionRow]}>
                 <View style={styles.toggleTextCol}>
@@ -547,7 +537,7 @@ const SettingsScreen = () => {
                 onPress={saveElevenLabsKey}
                 loading={elevenLabsKeySaving}
                 variant="outline"
-                style={styles.saveBtn}
+                style={styles.groupPrimaryBtn}
               />
             </AppCard> */}
           </>
@@ -565,7 +555,7 @@ const SettingsScreen = () => {
         </View>
 
         {/* ── Section 1: Standard Permissions ────────────────────────────── */}
-        <Text style={styles.sectionLabel}>MICROPHONE</Text>
+        <Text style={styles.sectionLabel}>Microphone</Text>
 
         {Object.keys(STD_NAMES).map((key) => {
           const name = STD_NAMES[key];
@@ -611,7 +601,7 @@ const SettingsScreen = () => {
         })}
 
         {/* ── Section 2: System Permissions ──────────────────────────────── */}
-        <Text style={[styles.sectionLabel, { marginTop: 8 }]}>SYSTEM & OVERLAY PERMISSIONS</Text>
+        <Text style={[styles.sectionLabel, { marginTop: 18 }]}>System & overlay</Text>
 
         {Object.values(SYS_NAMES).map((permissionType) => {
           const isGranted = isSysPermissionGranted(permissionType);
@@ -761,10 +751,9 @@ const styles = StyleSheet.create({
   },
 
   sectionLabel: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
     color: Colors.text.secondary,
-    letterSpacing: 0.8,
     marginBottom: 10,
   },
 
@@ -892,8 +881,62 @@ const styles = StyleSheet.create({
   },
 
   // Translation styles
-  translationCard: {
+  groupCard: {
     marginBottom: 16,
+  },
+  groupHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
+  },
+  groupTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    letterSpacing: -0.2,
+  },
+  groupSub: {
+    marginTop: 4,
+    fontSize: 13,
+    color: Colors.text.secondary,
+    lineHeight: 18,
+  },
+  groupFooter: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.borderLight,
+  },
+  groupPrimaryBtn: {
+    minHeight: 48,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.borderLight,
+  },
+  settingRowLast: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.borderLight,
+  },
+  settingTextCol: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  settingTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  settingSub: {
+    marginTop: 2,
+    fontSize: 13,
+    color: Colors.text.secondary,
   },
   translationTitle: {
     fontSize: 16,
@@ -907,36 +950,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 20,
   },
-  languageRow: {
-    marginBottom: 16,
-  },
-  languageLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text.secondary,
-    marginBottom: 8,
-  },
-  dropdownField: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 8,
-    backgroundColor: Colors.backgroundAlt,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  dropdownFieldText: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '500',
-    color: Colors.text.primary,
-  },
-  saveBtn: {
-    marginTop: 8,
-  },
+  // Legacy translation styles (kept for other blocks)
   internalTranscribeCard: {
     marginBottom: 16,
   },

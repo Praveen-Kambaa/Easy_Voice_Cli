@@ -1,8 +1,10 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Trash2 } from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
+import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { getLanguageName } from '../../constants/translationLanguages';
 import {
   getTranslationHistory,
@@ -13,8 +15,8 @@ import { formatDateTime } from '../../utils/dateTimeFormat';
 import { useAlert } from '../../context/AlertContext';
 
 const TranslatorHistoryScreen = () => {
-  const navigation = useNavigation();
   const showAlert = useAlert();
+  const insets = useSafeAreaInsets();
   const [items, setItems] = useState([]);
 
   const load = useCallback(async () => {
@@ -42,29 +44,42 @@ const TranslatorHistoryScreen = () => {
     ]);
   };
 
-  const renderItem = ({ item }) => (
-    <View style={styles.card}>
-      <Text style={styles.timeStamp}>{formatDateTime(item.createdAt)}</Text>
-      <Text style={styles.meta}>
-        {getLanguageName(item.fromCode)} → {getLanguageName(item.toCode)}
-      </Text>
-      <Text style={styles.source}>{item.sourceText}</Text>
-      <View style={styles.divider} />
-      <Text style={styles.target}>{item.translatedText}</Text>
-      <TouchableOpacity
-        style={styles.deleteBtn}
-        onPress={() => handleDelete(item)}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        activeOpacity={0.75}
-      >
-        <Trash2 size={16} color={Colors.recording.active} strokeWidth={2} />
-        <Text style={styles.deleteLabel}>Delete</Text>
-      </TouchableOpacity>
-    </View>
-  );
+  const renderItem = ({ item }) => {
+    const from = getLanguageName(item.fromCode);
+    const to = getLanguageName(item.toCode);
+    return (
+      <View style={styles.card}>
+        <View style={styles.cardTopRow}>
+          <View style={styles.langPill}>
+            <Text style={styles.langPillText} numberOfLines={1}>
+              {from} → {to}
+            </Text>
+          </View>
+          <Text style={styles.timeStamp}>{formatDateTime(item.createdAt)}</Text>
+          <TouchableOpacity
+            onPress={() => handleDelete(item)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Delete history item"
+            style={styles.iconBtn}
+          >
+            <Trash2 size={18} color={Colors.recording.active} strokeWidth={2} />
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.source} numberOfLines={3}>
+          {item.sourceText}
+        </Text>
+        <Text style={styles.target} numberOfLines={4}>
+          {item.translatedText}
+        </Text>
+      </View>
+    );
+  };
 
   return (
-    <View style={styles.screen}>
+    <ScreenContainer style={styles.screen}>
       <AppHeader title="Translation history" />
       {items.length === 0 ? (
         <View style={styles.empty}>
@@ -79,76 +94,89 @@ const TranslatorHistoryScreen = () => {
           data={items}
           keyExtractor={(it) => it.id}
           renderItem={renderItem}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[
+            styles.list,
+            { paddingBottom: 24 + (insets?.bottom || 0) + 96 },
+          ]}
           showsVerticalScrollIndicator={false}
         />
       )}
-    </View>
+    </ScreenContainer>
   );
 };
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1,
     backgroundColor: Colors.backgroundAlt,
   },
   list: {
-    padding: 16,
+    paddingHorizontal: 18,
+    paddingTop: 14,
     paddingBottom: 40,
   },
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.borderLight,
     padding: 14,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 1,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
     marginBottom: 12,
   },
   timeStamp: {
     fontSize: 11,
     color: Colors.text.secondary,
-    marginBottom: 6,
+    flexShrink: 0,
   },
-  meta: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.text.light,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  source: {
-    fontSize: 15,
-    color: Colors.text.primary,
-    lineHeight: 22,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginVertical: 10,
-  },
-  target: {
-    fontSize: 15,
-    color: Colors.text.secondary,
-    lineHeight: 22,
-    marginBottom: 10,
-  },
-  deleteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
+  iconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
     backgroundColor: Colors.recording.activeBg,
     borderWidth: 1,
     borderColor: '#FECACA',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  deleteLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.recording.active,
+  langPill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: Colors.backgroundAlt,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    flex: 1,
+  },
+  langPillText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.text.secondary,
+    letterSpacing: 0.2,
+  },
+  source: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    lineHeight: 23,
+    letterSpacing: -0.2,
+  },
+  target: {
+    marginTop: 10,
+    fontSize: 15,
+    color: Colors.text.secondary,
+    lineHeight: 22,
   },
   empty: {
     flex: 1,

@@ -1,7 +1,7 @@
 // API Configuration - Multiple Servers
 export const API_SERVERS = {
   TYPE_EASY: 'https://easyvoice.kambaaincorporation.in/apiv2',  // Authentication server
-  EASY_VOICE: 'http://192.168.0.231:4000/api',               // Local development server
+  EASY_VOICE: 'https://easy-voice-api.kambaaincorporation.in/api',               // Local development server
 };
 
 // API Endpoints - Organized by server
@@ -19,7 +19,7 @@ export const API_ENDPOINTS = {
     RESET_PASSWORD: '/auth/reset-password',
     GOOGLE_SIGNIN: '/auth/google-signin',
   },
-  
+
   // Local Server Endpoints  
   VOICE: {
     TRANSCRIBE: '/voice/transcribe',
@@ -55,7 +55,7 @@ export const buildApiUrl = (endpoint) => {
   if (authEndpoints.includes(endpoint)) {
     return buildTypeEasyUrl(endpoint);
   }
-  
+
   // Default to Easy Voice server for other endpoints
   return buildEasyVoiceUrl(endpoint);
 };

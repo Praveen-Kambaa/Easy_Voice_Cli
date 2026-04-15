@@ -1,20 +1,19 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  Keyboard,
   Home,
-  Mic,
-  Music,
   Radio,
   Settings,
   X,
   LogOut,
-  ChevronRight,
   History,
   Languages,
   MessageCircle,
   Phone,
+  Mic,
+  Music,
+  User,
 } from 'lucide-react-native';
 import { Colors } from '../../theme/Colors';
 import { APP_NAME, APP_TAGLINE } from '../../constants';
@@ -23,15 +22,13 @@ import { useAlert } from '../../context/AlertContext';
 import { useAppVersion } from '../../hooks/useAppVersion';
 
 const MENU_ITEMS = [
-  { title: 'Home', description: 'Dashboard & overview', Icon: Home, screen: 'Home' },
+  { title: 'Home', description: 'Dashboard & overview', Icon: Home, screen: 'MainTabs', tab: 'HomeTab' },
+
   { title: 'Voice Command', description: 'Record your voice', Icon: Mic, screen: 'VoiceRecorder' },
-  { title: 'Floating Mic', description: 'Background recording', Icon: Radio, screen: 'FloatingMic' },
   { title: 'Calls', description: 'Call log & recordings', Icon: Phone, screen: 'CallLogs' },
   { title: 'My Recordings', description: 'View saved audio', Icon: Music, screen: 'RecordedAudio' },
   { title: 'Speech History', description: 'Floating mic transcripts', Icon: History, screen: 'FloatingMicHistory' },
-  { title: 'Ask Question', description: 'Voice Q&A — answer pastes here', Icon: MessageCircle, screen: 'AskQuestion' },
-  { title: 'Translator', description: 'Text translation', Icon: Languages, screen: 'Translator' },
-  { title: 'Settings', description: 'Permissions & preferences', Icon: Settings, screen: 'Settings' },
+  { title: 'Profile', description: 'Account & usage', Icon: User, screen: 'Profile' },
 ];
 
 export const DrawerContent = (props) => {
@@ -40,10 +37,19 @@ export const DrawerContent = (props) => {
   const showAlert = useAlert();
   const { version: appVersion } = useAppVersion();
 
-  const currentRouteName = props.state?.routes?.[props.state?.index]?.name;
+  const focusedDrawerRoute = props.state?.routes?.[props.state?.index];
+  const currentRouteName = focusedDrawerRoute?.name;
+  const currentTabName =
+    focusedDrawerRoute?.name === 'MainTabs'
+      ? focusedDrawerRoute?.state?.routes?.[focusedDrawerRoute?.state?.index ?? 0]?.name
+      : null;
 
-  const handleNav = (screen) => {
-    props.navigation.navigate(screen);
+  const handleNav = (item) => {
+    if (item.screen === 'MainTabs') {
+      props.navigation.navigate('MainTabs', item.tab ? { screen: item.tab } : undefined);
+    } else {
+      props.navigation.navigate(item.screen);
+    }
     props.navigation.closeDrawer();
   };
 
@@ -58,22 +64,50 @@ export const DrawerContent = (props) => {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Brand header */}
+      {/* Header */}
       <View style={styles.header}>
-        <View style={styles.logoWrap}>
-          <Keyboard size={22} color="#FFFFFF" strokeWidth={1.8} />
+        <View style={styles.headerTopRow}>
+          <View style={styles.brandText}>
+            <Text style={styles.appName}>{APP_NAME}</Text>
+            <Text style={styles.appTagline}>{APP_TAGLINE}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.closeBtn}
+            onPress={() => props.navigation.closeDrawer()}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Close menu"
+          >
+            <X size={18} color={Colors.text.secondary} strokeWidth={2.2} />
+          </TouchableOpacity>
         </View>
-        <View style={styles.brandText}>
-          <Text style={styles.appName}>{APP_NAME}</Text>
-          <Text style={styles.appTagline}>{APP_TAGLINE}</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.closeBtn}
-          onPress={() => props.navigation.closeDrawer()}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <X size={14} color={Colors.text.secondary} strokeWidth={2.5} />
-        </TouchableOpacity>
+
+        {user ? (
+          <View style={styles.profileRow}>
+            <View style={styles.userAvatar}>
+              <Text style={styles.userAvatarText}>
+                {user.username?.[0]?.toUpperCase() ?? 'U'}
+              </Text>
+            </View>
+            <View style={styles.userInfo}>
+              <Text style={styles.userDisplayName} numberOfLines={1}>
+                {user.displayName}
+              </Text>
+              <Text style={styles.userUsername} numberOfLines={1}>
+                @{user.username}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.logoutBtn}
+              onPress={handleLogout}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Sign out"
+            >
+              <LogOut size={16} color="#EF4444" strokeWidth={2} />
+            </TouchableOpacity>
+          </View>
+        ) : null}
       </View>
 
       {/* Navigation items */}
@@ -82,63 +116,40 @@ export const DrawerContent = (props) => {
         contentContainerStyle={styles.menuContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.navLabel}>NAVIGATION</Text>
+        {/* <Text style={styles.navLabel}>Navigation</Text> */}
 
-        {MENU_ITEMS.map((item) => {
-          const isActive = currentRouteName === item.screen;
-          const iconColor = isActive ? '#FFFFFF' : Colors.text.secondary;
+        <View style={styles.groupCard}>
+          {MENU_ITEMS.map((item, idx) => {
+            const isActive =
+              item.screen === 'MainTabs'
+                ? currentRouteName === 'MainTabs' && currentTabName === item.tab
+                : currentRouteName === item.screen;
+            const iconColor = isActive ? Colors.primary : Colors.text.secondary;
+            const isLast = idx === MENU_ITEMS.length - 1;
 
-          return (
-            <TouchableOpacity
-              key={item.screen}
-              style={[styles.menuItem, isActive && styles.menuItemActive]}
-              onPress={() => handleNav(item.screen)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.iconWrap, isActive && styles.iconWrapActive]}>
-                <item.Icon size={18} color={iconColor} strokeWidth={1.8} />
-              </View>
-              <View style={styles.menuItemText}>
-                <Text style={[styles.menuTitle, isActive && styles.menuTitleActive]}>
-                  {item.title}
-                </Text>
-                <Text style={[styles.menuDesc, isActive && styles.menuDescActive]}>
-                  {item.description}
-                </Text>
-              </View>
-              {isActive && (
-                <ChevronRight size={14} color="rgba(255,255,255,0.6)" strokeWidth={2} />
-              )}
-            </TouchableOpacity>
-          );
-        })}
+            return (
+              <TouchableOpacity
+                key={`${item.screen}:${item.tab ?? 'drawer'}`}
+                style={[styles.menuItem, isActive && styles.menuItemActive, isLast && styles.menuItemLast]}
+                onPress={() => handleNav(item)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.iconWrap, isActive && styles.iconWrapActive]}>
+                  <item.Icon size={18} color={iconColor} strokeWidth={1.8} />
+                </View>
+                <View style={styles.menuItemText}>
+                  <Text style={[styles.menuTitle, isActive && styles.menuTitleActive]}>{item.title}</Text>
+                  <Text style={styles.menuDesc} numberOfLines={1}>{item.description}</Text>
+                </View>
+                {isActive ? <View style={styles.activeDot} /> : <View style={styles.chevSpace} />}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </ScrollView>
 
       {/* Footer */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <View style={styles.divider} />
-
-        {user && (
-          <View style={styles.userRow}>
-            <View style={styles.userAvatar}>
-              <Text style={styles.userAvatarText}>
-                {user.username?.[0]?.toUpperCase() ?? 'U'}
-              </Text>
-            </View>
-            <View style={styles.userInfo}>
-              <Text style={styles.userDisplayName}>{user.displayName}</Text>
-              <Text style={styles.userUsername}>@{user.username}</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.logoutBtn}
-              onPress={handleLogout}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <LogOut size={16} color="#EF4444" strokeWidth={2} />
-            </TouchableOpacity>
-          </View>
-        )}
-
         <Text style={styles.footerText}>{APP_NAME} v{appVersion}</Text>
         <Text style={styles.footerSubText}>Voice Assistant Platform</Text>
       </View>
@@ -153,22 +164,16 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.drawer.border,
-    gap: 12,
   },
-  logoWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: Colors.primary,
+  headerTopRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
+    justifyContent: 'space-between',
+    gap: 10,
   },
   brandText: {
     flex: 1,
@@ -185,10 +190,55 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   closeBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: Colors.backgroundAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  profileRow: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  userAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  userAvatarText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  userInfo: {
+    flex: 1,
+  },
+  userDisplayName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.text.primary,
+    letterSpacing: -0.2,
+  },
+  userUsername: {
+    marginTop: 2,
+    fontSize: 12,
+    color: Colors.text.secondary,
+  },
+  logoutBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -198,113 +248,80 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   menuContent: {
-    paddingHorizontal: 12,
-    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
     paddingBottom: 8,
   },
   navLabel: {
-    fontSize: 10,
+    fontSize: 13,
     fontWeight: '700',
-    color: Colors.text.light,
-    letterSpacing: 1.2,
-    marginLeft: 8,
-    marginBottom: 8,
+    color: Colors.text.secondary,
+    marginLeft: 4,
+    marginBottom: 10,
+  },
+  groupCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Colors.drawer.border,
+    overflow: 'hidden',
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 10,
-    marginBottom: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     gap: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.borderLight,
   },
   menuItemActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: 'rgba(30, 136, 255, 0.08)',
+  },
+  menuItemLast: {
+    borderBottomWidth: 0,
   },
   iconWrap: {
     width: 38,
     height: 38,
-    borderRadius: 9,
+    borderRadius: 12,
     backgroundColor: Colors.backgroundAlt,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   iconWrapActive: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(30, 136, 255, 0.12)',
   },
   menuItemText: {
     flex: 1,
   },
   menuTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.text.primary,
     marginBottom: 1,
   },
   menuTitleActive: {
-    color: '#FFFFFF',
+    color: Colors.text.primary,
   },
   menuDesc: {
     fontSize: 12,
     color: Colors.text.secondary,
   },
-  menuDescActive: {
-    color: 'rgba(255,255,255,0.55)',
+  chevSpace: { width: 10 },
+  activeDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.primary,
   },
 
   footer: {
     paddingHorizontal: 20,
-    paddingTop: 4,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: Colors.drawer.border,
-    marginBottom: 14,
-  },
-  userRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-    gap: 10,
-  },
-  userAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  userAvatarText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  userInfo: {
-    flex: 1,
-  },
-  userDisplayName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.text.primary,
-  },
-  userUsername: {
-    fontSize: 11,
-    color: Colors.text.secondary,
-  },
-  logoutBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.drawer.border,
   },
   footerText: {
     fontSize: 13,

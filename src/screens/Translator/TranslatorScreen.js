@@ -13,20 +13,10 @@ import {
   Clipboard,
 } from 'react-native';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
-import {
-  X,
-  ArrowLeftRight,
-  Star,
-  Volume2,
-  Share2,
-  Copy,
-  Mic,
-  MessageCircle,
-  History,
-  Bookmark,
-} from 'lucide-react-native';
+import { X, Repeat2, Volume2, Share2, Copy, History, Bookmark } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppHeader } from '../../components/Header/AppHeader';
+import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { LanguagePickerModal } from '../../components/LanguagePickerModal';
 import {
   TRANSLATION_LANGUAGES,
@@ -57,9 +47,6 @@ import {
   stopTranslationSpeech,
 } from '../../services/translationTtsService';
 
-/** Subtle tint for translated block (light theme, matches “output” panel feel) */
-const OUTPUT_TINT = 'rgba(14, 165, 233, 0.08)';
-
 const TranslatorScreen = ({ navigation }) => {
   const showAlert = useAlert();
   const isFocused = useIsFocused();
@@ -89,6 +76,8 @@ const TranslatorScreen = ({ navigation }) => {
   const [askBusyPhase, setAskBusyPhase] = useState(
     /** @type {'transcribe' | 'ai' | null} */ (null),
   );
+  const [copyToastVisible, setCopyToastVisible] = useState(false);
+  const copyToastTimerRef = useRef(null);
 
   const loadLanguages = useCallback(async () => {
     try {
@@ -407,8 +396,13 @@ const TranslatorScreen = ({ navigation }) => {
   const onCopyTranslation = useCallback(() => {
     if (!translatedText?.trim()) return;
     Clipboard.setString(translatedText);
-    showAlert('Copied', 'Translation copied to clipboard.');
-  }, [translatedText, showAlert]);
+    setCopyToastVisible(true);
+    if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
+    copyToastTimerRef.current = setTimeout(() => {
+      setCopyToastVisible(false);
+      copyToastTimerRef.current = null;
+    }, 2000);
+  }, [translatedText]);
 
   const onToggleStar = async () => {
     const src = sourceText.trim();
@@ -439,11 +433,19 @@ const TranslatorScreen = ({ navigation }) => {
     askBusyPhase === 'transcribe' ? 'Transcribing…' : askBusyPhase === 'ai' ? 'Asking AI…' : '';
 
   const iconMuted = Colors.text.secondary;
-  const starColor = starred ? '#F59E0B' : Colors.text.secondary;
+  const starColor = starred ? Colors.primary : Colors.text.secondary;
 
   return (
-    <View style={styles.screen}>
-      <AppHeader title="Translate" />
+    <ScreenContainer style={styles.screen}>
+      <AppHeader title="Translator" />
+
+      {copyToastVisible ? (
+        <View pointerEvents="none" style={styles.toastWrap}>
+          <View style={styles.toast}>
+            <Text style={styles.toastText}>Copied</Text>
+          </View>
+        </View>
+      ) : null}
 
       <LanguagePickerModal
         visible={languagePickerFor !== null}
@@ -527,7 +529,7 @@ const TranslatorScreen = ({ navigation }) => {
           />
         </View>
       )}
-    </View>
+    </ScreenContainer>
   );
 };
 
@@ -562,6 +564,8 @@ function TranslatorScrollBody({
   onSpeakTranslation,
   onCopyTranslation,
 }) {
+  const showOutputActions = !!translatedText;
+
   return (
         <ScrollView
           style={styles.scroll}
@@ -570,172 +574,131 @@ function TranslatorScrollBody({
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.langBar}>
-            <TouchableOpacity style={styles.langBtn} onPress={onPressFromLang} activeOpacity={0.7}>
-              <Text style={styles.langText} numberOfLines={1}>
-                {fromName}
-              </Text>
+          <View style={styles.langPillsRow}>
+            <TouchableOpacity style={styles.langPill} onPress={onPressFromLang} activeOpacity={0.8}>
+              <Text style={styles.langPillText} numberOfLines={1}>{fromName}</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.swapBtn} onPress={swapLanguages} activeOpacity={0.75}>
-              <ArrowLeftRight size={22} color={Colors.primary} strokeWidth={2.2} />
+            <TouchableOpacity style={styles.swapPill} onPress={swapLanguages} activeOpacity={0.8}>
+              <Repeat2 size={18} color={Colors.text.secondary} strokeWidth={2.2} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.langBtn} onPress={onPressToLang} activeOpacity={0.7}>
-              <Text style={styles.langText} numberOfLines={1}>
-                {toName}
-              </Text>
+            <TouchableOpacity style={styles.langPill} onPress={onPressToLang} activeOpacity={0.8}>
+              <Text style={styles.langPillText} numberOfLines={1}>{toName}</Text>
             </TouchableOpacity>
           </View>
 
           <Text style={styles.langHint}>Tap a language to change · search in the picker</Text>
-          {Platform.OS === 'android' ? (
-            <Text style={styles.langHintVoice}>
-              Typed text: on-device translate ({fromName} → {toName}). Voice: English speech-to-text,
-              then on-device translate to {toName}.
-            </Text>
-          ) : (
-            <Text style={styles.langHintVoice}>
-              On-device translation (ML Kit) runs on Android. On iOS, use typed text with your existing
-              server translator if configured.
-            </Text>
-          )}
 
-          <View style={styles.columns}>
-            <View style={[styles.panel, styles.panelSource]}>
-              <View style={styles.panelTopBar}>
-                <View style={styles.flex1} />
-                {!!sourceText && (
-                  <TouchableOpacity onPress={clearSource} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <X size={20} color={iconMuted} strokeWidth={2} />
+          <View style={styles.inputCard}>
+            <Text style={styles.cardKicker}>INPUT</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter text"
+              placeholderTextColor={Colors.text.light}
+              value={sourceText}
+              onChangeText={onSourceChange}
+              multiline
+              textAlignVertical="top"
+              scrollEnabled
+              maxLength={5000}
+            />
+            <View style={styles.inputMetaRow}>
+              {!!sourceText ? (
+                <TouchableOpacity onPress={clearSource} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
+                  <X size={18} color={Colors.text.secondary} strokeWidth={2.2} />
+                </TouchableOpacity>
+              ) : (
+                <View />
+              )}
+              <Text style={styles.charCount}>{charCount}</Text>
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.outputCard}>
+            <View style={styles.outputTopRow}>
+              <View style={styles.outputTitleRow}>
+                <Text style={styles.outputLabel}>Translation</Text>
+                {translatedText ? (
+                  <TouchableOpacity
+                    style={styles.starBtn}
+                    onPress={onToggleStar}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Bookmark
+                      size={18}
+                      color={starColor}
+                      strokeWidth={2}
+                      fill={starred ? starColor : 'transparent'}
+                    />
                   </TouchableOpacity>
-                )}
+                ) : null}
               </View>
-              <TextInput
-                style={styles.sourceInput}
-                placeholder="Enter text"
-                placeholderTextColor={Colors.text.light}
-                value={sourceText}
-                onChangeText={onSourceChange}
-                multiline
-                textAlignVertical="top"
-                scrollEnabled
-                maxLength={5000}
-              />
-              <View style={styles.panelToolbar}>
-                <View style={styles.flex1} />
-                <Text style={styles.charCount}>{charCount}</Text>
-              </View>
+
+              {translatedText && showOutputActions ? (
+                <View style={styles.outputActions}>
+                  <TouchableOpacity onPress={onCopyTranslation} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Copy size={18} color={Colors.primary} strokeWidth={2.2} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={onSpeakTranslation} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Volume2 size={18} color={Colors.primary} strokeWidth={2.2} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={onShareTranslation} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Share2 size={18} color={Colors.primary} strokeWidth={2.2} />
+                  </TouchableOpacity>
+                </View>
+              ) : null}
             </View>
 
-            <View style={[styles.panel, styles.panelTarget]}>
-              <View style={styles.panelTopBar}>
-                <View style={styles.flex1} />
-                <TouchableOpacity
-                  style={styles.iconHit}
-                  onPress={onToggleStar}
-                  disabled={!translatedText}
-                  activeOpacity={0.65}
-                >
-                  <Star
-                    size={22}
-                    color={translatedText ? starColor : Colors.border}
-                    strokeWidth={2}
-                    fill={starred ? starColor : 'transparent'}
-                  />
-                </TouchableOpacity>
+            {(translating || transcribingVoice || askBusyPhase) && !translatedText && !translateError ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color={Colors.primary} size="small" />
+                <Text style={styles.loadingText}>
+                  {askBusyPhase ? askLoadingLabel : transcribingVoice ? 'Transcribing…' : 'Translating…'}
+                </Text>
               </View>
-
-              <ScrollView
-                style={styles.outScroll}
-                nestedScrollEnabled
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-              >
-                {(translating || transcribingVoice || askBusyPhase) &&
-                !translatedText &&
-                !translateError ? (
-                  <View style={styles.loadingRow}>
-                    <ActivityIndicator color={Colors.primary} size="small" />
-                    <Text style={styles.loadingText}>
-                      {askBusyPhase ? askLoadingLabel : transcribingVoice ? 'Transcribing…' : 'Translating…'}
-                    </Text>
-                  </View>
-                ) : translateError ? (
-                  <Text style={styles.errorText}>{translateError}</Text>
-                ) : (
-                  <Text style={styles.outText}>
-                    {translatedText || (sourceText.trim() ? '' : 'Translation')}
-                  </Text>
-                )}
-              </ScrollView>
-
-              <View style={styles.panelToolbar}>
-                <TouchableOpacity
-                  style={styles.iconHit}
-                  activeOpacity={0.5}
-                  disabled={!translatedText}
-                  onPress={onSpeakTranslation}
-                  accessibilityLabel="Read translation aloud"
-                >
-                  <Volume2
-                    size={22}
-                    color={translatedText ? iconMuted : Colors.borderLight}
-                    strokeWidth={2}
-                  />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.iconHit}
-                  onPress={onCopyTranslation}
-                  disabled={!translatedText}
-                  activeOpacity={0.65}
-                  accessibilityLabel="Copy translation"
-                >
-                  <Copy
-                    size={22}
-                    color={translatedText ? iconMuted : Colors.borderLight}
-                    strokeWidth={2}
-                  />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.iconHit}
-                  onPress={onShareTranslation}
-                  disabled={!translatedText}
-                  activeOpacity={0.65}
-                  accessibilityLabel="Share translation"
-                >
-                  <Share2
-                    size={22}
-                    color={translatedText ? iconMuted : Colors.borderLight}
-                    strokeWidth={2}
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
+            ) : translateError ? (
+              <Text style={styles.errorText}>{translateError}</Text>
+            ) : (
+              <Text style={[styles.outputText, !translatedText && styles.outputPlaceholder]} numberOfLines={12}>
+                {translatedText || (sourceText.trim() ? 'Translation will appear here…' : '—')}
+              </Text>
+            )}
           </View>
 
-          <View style={styles.footer}>
+          <View style={styles.quickLinksRow}>
             <TouchableOpacity
-              style={styles.footerItem}
+              style={styles.quickLinkCard}
+              activeOpacity={0.75}
               onPress={() => navigation.navigate('TranslatorHistory')}
-              activeOpacity={0.75}
             >
-              <View style={styles.footerCircle}>
-                <History size={20} color={Colors.primary} strokeWidth={2} />
+              <View style={[styles.quickLinkIcon, styles.quickLinkIconBlue]}>
+                <History size={18} color={Colors.primary} strokeWidth={2.2} />
               </View>
-              <Text style={styles.footerLabel}>History</Text>
+              <View style={styles.quickLinkTextCol}>
+                <Text style={styles.quickLinkTitle}>History</Text>
+                <Text style={styles.quickLinkSub} numberOfLines={1}>Recent translations</Text>
+              </View>
             </TouchableOpacity>
+
             <TouchableOpacity
-              style={styles.footerItem}
-              onPress={() => navigation.navigate('TranslatorSaved')}
+              style={styles.quickLinkCard}
               activeOpacity={0.75}
+              onPress={() => navigation.navigate('TranslatorSaved')}
             >
-              <View style={styles.footerCircle}>
-                <Bookmark size={20} color={Colors.primary} strokeWidth={2} />
+              <View style={[styles.quickLinkIcon, styles.quickLinkIconGold]}>
+                <Bookmark size={18} color="#B45309" strokeWidth={2.2} />
               </View>
-              <Text style={styles.footerLabel}>Saved</Text>
+              <View style={styles.quickLinkTextCol}>
+                <Text style={styles.quickLinkTitle}>Saved</Text>
+                <Text style={styles.quickLinkSub} numberOfLines={1}>Starred items</Text>
+              </View>
             </TouchableOpacity>
           </View>
+
         </ScrollView>
   );
 }
@@ -745,8 +708,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   screen: {
-    flex: 1,
     backgroundColor: Colors.backgroundAlt,
+  },
+  toastWrap: {
+    position: 'absolute',
+    top: 10,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 30,
+  },
+  toast: {
+    backgroundColor: 'rgba(17, 24, 39, 0.92)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+  },
+  toastText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   kav: {
     flex: 1,
@@ -756,95 +738,73 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 24,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 26,
+    gap: 14,
   },
-  langBar: {
+  langPillsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 4,
-    gap: 8,
+    gap: 10,
   },
-  langBtn: {
+  langPill: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-  },
-  langText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.primary,
-    textAlign: 'center',
-  },
-  swapBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  langPillText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    letterSpacing: 0.2,
+  },
+  swapPill: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   langHint: {
     fontSize: 11,
     color: Colors.text.secondary,
     textAlign: 'center',
-    marginBottom: 4,
-    paddingHorizontal: 20,
   },
-  langHintVoice: {
-    fontSize: 10,
-    color: Colors.text.light,
-    textAlign: 'center',
-    marginBottom: 8,
-    paddingHorizontal: 16,
-    lineHeight: 14,
+  cardKicker: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.text.secondary,
+    letterSpacing: 1.1,
   },
-  columns: {
-    paddingHorizontal: 12,
-    gap: 10,
-  },
-  panel: {
-    borderRadius: 14,
+  inputCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: Colors.border,
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 10,
-    minHeight: 168,
-    backgroundColor: Colors.surface,
+    padding: 14,
   },
-  panelSource: {
-    maxHeight: 280,
+  input: {
+    minHeight: 90,
+    fontSize: 16,
+    lineHeight: 24,
+    color: Colors.text.primary,
+    fontWeight: '500',
+    paddingVertical: 10,
   },
-  panelTarget: {
-    minHeight: 200,
-    backgroundColor: OUTPUT_TINT,
-  },
-  panelTopBar: {
+  inputMetaRow: {
+    marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 28,
-  },
-  sourceInput: {
-    minHeight: 100,
-    maxHeight: 200,
-    fontSize: 18,
-    lineHeight: 26,
-    color: Colors.text.primary,
-    paddingVertical: 8,
-    marginTop: 4,
-  },
-  outScroll: {
-    maxHeight: 220,
-    marginTop: 4,
-  },
-  outText: {
-    fontSize: 18,
-    lineHeight: 26,
-    color: Colors.text.primary,
+    justifyContent: 'space-between',
   },
   loadingRow: {
     flexDirection: 'row',
@@ -858,57 +818,117 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 14,
-    color: Colors.recording.active,
+    color: Colors.status.blocked,
     lineHeight: 20,
     paddingVertical: 8,
   },
-  panelToolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-  },
-  iconHit: {
-    padding: 8,
-    marginHorizontal: -4,
-  },
   charCount: {
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.text.secondary,
     fontVariant: ['tabular-nums'],
   },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    gap: 48,
-    marginTop: 10,
-    // paddingTop: 18,
-    paddingBottom: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+  divider: {
+    height: 1,
+    borderRadius: 1,
+    backgroundColor: Colors.borderLight,
   },
-  footerItem: {
-    alignItems: 'center',
-  },
-  footerCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+  outputCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: Colors.border,
+    padding: 14,
+  },
+  outputTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    gap: 10,
+  },
+  outputTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  outputLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    color: Colors.text.secondary,
+    textTransform: 'uppercase',
+  },
+  starBtn: {
+    padding: 6,
+    borderRadius: 12,
     backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  outputActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  outputText: {
+    fontSize: 16,
+    lineHeight: 24,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    letterSpacing: 0,
+  },
+  outputPlaceholder: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '500',
+    color: Colors.text.secondary,
+  },
+
+  quickLinksRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 0,
+  },
+  quickLinkCard: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  quickLinkIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
   },
-  footerLabel: {
-    marginTop: 8,
+  quickLinkIconBlue: {
+    backgroundColor: 'rgba(30, 136, 255, 0.10)',
+    borderColor: 'rgba(30, 136, 255, 0.18)',
+  },
+  quickLinkIconGold: {
+    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    borderColor: 'rgba(245, 158, 11, 0.22)',
+  },
+  quickLinkTextCol: {
+    flex: 1,
+  },
+  quickLinkTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.text.primary,
+    letterSpacing: -0.2,
+  },
+  quickLinkSub: {
+    marginTop: 2,
     fontSize: 12,
-    fontWeight: '600',
     color: Colors.text.secondary,
   },
 });

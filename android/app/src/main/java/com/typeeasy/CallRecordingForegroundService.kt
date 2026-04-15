@@ -26,6 +26,8 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Locale
 import org.json.JSONObject
 
 /**
@@ -561,18 +563,19 @@ class CallRecordingForegroundService : Service() {
         } catch (_: Exception) {
         }
 
+        val meta = readLatestCallMeta()
+        val phone = meta.first ?: ""
+        val name = meta.second ?: ""
+        val direction = if (isOutgoing) "outgoing" else "incoming"
+        val exportDisplayName = buildPublicExportName(phone, file.extension, System.currentTimeMillis())
+
         // Export a user-visible copy (public Downloads/CallRecordings) so the Files app can find it.
-        val publicLocation = PublicDownloadsExporter.export(this, file, mime)
+        val publicLocation = PublicDownloadsExporter.export(this, file, mime, exportDisplayName)
         if (publicLocation != null) {
             Log.i(tag, "Exported to public downloads: $publicLocation")
         } else {
             Log.w(tag, "Export to public downloads failed (device may restrict or storage unavailable)")
         }
-
-        val meta = readLatestCallMeta()
-        val phone = meta.first ?: ""
-        val name = meta.second ?: ""
-        val direction = if (isOutgoing) "outgoing" else "incoming"
 
         val json = JSONObject().apply {
             put("audioFileName", file.name)
@@ -628,6 +631,20 @@ class CallRecordingForegroundService : Service() {
         } catch (_: Exception) {
         }
         return Pair(number, name)
+    }
+
+    private fun buildPublicExportName(phoneNumber: String, ext: String, nowMs: Long): String {
+        val safePhone = phoneNumber
+            .trim()
+            .ifEmpty { "unknown" }
+            .replace(Regex("[^0-9+]"), "_")
+        val stamp = try {
+            SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(nowMs)
+        } catch (_: Exception) {
+            nowMs.toString()
+        }
+        val safeExt = ext.trim().ifEmpty { "m4a" }
+        return "${safePhone}_${stamp}.$safeExt"
     }
 
     companion object {

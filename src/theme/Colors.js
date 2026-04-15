@@ -1,21 +1,21 @@
 export const Colors = {
-  primary: '#1A1A1A',
-  primaryLight: '#333333',
+  primary: '#1E88FF',
+  primaryLight: '#60A5FA',
 
   background: '#FFFFFF',
   backgroundAlt: '#F9FAFB',
   surface: '#FFFFFF',
 
-  border: '#E0E0E0',
-  borderLight: '#F0F0F0',
-
   text: {
-    primary: '#1A1A1A',
+    primary: '#111827',
     secondary: '#6B7280',
     light: '#9CA3AF',
     white: '#FFFFFF',
     hint: '#7F8C8D',
   },
+
+  border: '#E5E7EB',
+  borderLight: '#EEF2F7',
 
   status: {
     granted: '#4CAF50',
@@ -47,7 +47,7 @@ export const Colors = {
     background: '#F9FAFB',
     border: '#E5E7EB',
     itemBg: '#FFFFFF',
-    active: '#1A1A1A',
+    active: '#111827',
     inactive: '#4B5563',
   },
 };

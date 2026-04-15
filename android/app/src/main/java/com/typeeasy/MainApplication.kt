@@ -12,6 +12,7 @@ import com.typeeasy.FloatingMicPackage
 import com.typeeasy.VoiceKeyboardPackage
 import com.typeeasy.AudioRecorderPackage
 import com.typeeasy.PhoneCallsPackage
+import com.typeeasy.AudioPickerPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -29,6 +30,7 @@ class MainApplication : Application(), ReactApplication {
           add(VoiceKeyboardPackage())
           add(AudioRecorderPackage())
           add(PhoneCallsPackage())
+          add(AudioPickerPackage())
         },
     )
   }

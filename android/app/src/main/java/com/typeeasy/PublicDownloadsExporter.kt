@@ -23,13 +23,13 @@ object PublicDownloadsExporter {
     private const val TAG = "PublicDownloadsExporter"
     private const val SUBDIR = "CallRecordings"
 
-    fun export(context: Context, source: File, mime: String): String? {
+    fun export(context: Context, source: File, mime: String, displayName: String? = null): String? {
         if (!source.exists() || source.length() <= 0L) return null
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                exportViaMediaStore(context, source, mime)?.toString()
+                exportViaMediaStore(context, source, mime, displayName)?.toString()
             } else {
-                exportViaLegacyPublicDir(context, source, mime)
+                exportViaLegacyPublicDir(context, source, mime, displayName)
             }
         } catch (e: Exception) {
             Log.e(TAG, "export failed: ${e.message}", e)
@@ -37,10 +37,11 @@ object PublicDownloadsExporter {
         }
     }
 
-    private fun exportViaMediaStore(context: Context, source: File, mime: String): Uri? {
+    private fun exportViaMediaStore(context: Context, source: File, mime: String, displayName: String?): Uri? {
         val resolver = context.contentResolver
+        val name = (displayName?.trim()?.takeIf { it.isNotEmpty() } ?: source.name)
         val values = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, source.name)
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, mime)
             put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + File.separator + SUBDIR)
             put(MediaStore.MediaColumns.IS_PENDING, 1)
@@ -65,14 +66,15 @@ object PublicDownloadsExporter {
         return uri
     }
 
-    private fun exportViaLegacyPublicDir(context: Context, source: File, mime: String): String? {
+    private fun exportViaLegacyPublicDir(context: Context, source: File, mime: String, displayName: String?): String? {
         @Suppress("DEPRECATION")
         val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
         val dir = File(downloads, SUBDIR)
         if (!dir.exists()) {
             dir.mkdirs()
         }
-        val dest = File(dir, source.name)
+        val name = (displayName?.trim()?.takeIf { it.isNotEmpty() } ?: source.name)
+        val dest = File(dir, name)
         FileInputStream(source).use { input ->
             FileOutputStream(dest).use { out ->
                 input.copyTo(out)

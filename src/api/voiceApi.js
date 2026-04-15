@@ -11,7 +11,6 @@
  *  - Handle network connectivity issues
  */
 
-import axios from 'axios';
 import { Platform } from 'react-native';
 import { FileSystem } from 'react-native-file-access';
 import { apiUtils } from './apiClient';
@@ -19,35 +18,38 @@ import apiClient from './apiClient';
 import { VOICE_ENDPOINTS } from './endpoints';
 import { buildEasyVoiceUrl } from '../config/api';
 
-// Dedicated axios instance for multipart audio upload with better error handling
-const uploadClient = axios.create({
-  baseURL: buildEasyVoiceUrl(''),  // Use Easy Voice server for voice operations
-  timeout: 120000, // 2 minutes – audio upload can be slow on LAN
-  headers: {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-  },
-});
+// Helper function for fetch with timeout
+const fetchWithTimeout = async (url, options = {}, timeout = 120000) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-// Add request interceptor for better debugging
-uploadClient.interceptors.request.use(
-  (config) => {
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// Add response interceptor for better debugging
-uploadClient.interceptors.response.use(
-  (response) => {
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
     return response;
-  },
-  (error) => {
-    return Promise.reject(error);
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
   }
-);
+};
+
+// Helper function to handle fetch responses
+const handleFetchResponse = async (response) => {
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw {
+      response: {
+        status: response.status,
+        data: errorData,
+      },
+      message: errorData.message || errorData.error || `HTTP ${response.status}`,
+    };
+  }
+  return await response.json();
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -96,6 +98,12 @@ const createResponse = (success = false, data = null, error = null) => {
   return { success, data, error };
 };
 
+/** Paths from native may be `/sdcard/...` or `file:///...` — FileSystem helpers need no scheme. */
+const toLocalFsPath = (filePath) => {
+  if (!filePath || typeof filePath !== 'string') return filePath;
+  return filePath.startsWith('file://') ? filePath.replace(/^file:\/\//, '') : filePath;
+};
+
 // ─── Core upload function ─────────────────────────────────────────────────────
 
 /**
@@ -110,24 +118,26 @@ const uploadAudio = async (filePath, options = {}) => {
     return createResponse(false, null, 'Audio file path is required');
   }
 
+  const fsPath = toLocalFsPath(filePath);
+
   // 2. Verify file exists and get file info
-  const exists = await FileSystem.exists(filePath);
+  const exists = await FileSystem.exists(fsPath);
   if (!exists) {
-    return createResponse(false, null, `Audio file not found: ${filePath}`);
+    return createResponse(false, null, `Audio file not found: ${fsPath}`);
   }
 
-  const stat = await FileSystem.stat(filePath);
+  const stat = await FileSystem.stat(fsPath);
   if (stat.size === 0) {
     return createResponse(false, null, 'Audio file is empty (0 bytes). Recording may have failed.');
   }
 
   // 3. Read file as binary data
   try {
-    const fileData = await FileSystem.readFile(filePath, 'base64');
+    const fileData = await FileSystem.readFile(fsPath, 'base64');
 
     // 4. Build FormData with binary data
-    const mimeType = getMimeType(filePath);
-    const fileName = filePath.split('/').pop() || `recording_${Date.now()}.m4a`;
+    const mimeType = getMimeType(fsPath);
+    const fileName = fsPath.split('/').pop() || `recording_${Date.now()}.m4a`;
 
     const formData = new FormData();
 
@@ -148,16 +158,23 @@ const uploadAudio = async (filePath, options = {}) => {
     formData.append('enablePunctuation', enablePunctuation);
     formData.append('enableTimestamps', enableTimestamps);
 
-    // 5. POST the file with proper headers
-    const response = await uploadClient.post('/voice/transcribe', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        'Accept': 'application/json',
+    // 5. POST file with proper headers
+    const response = await fetchWithTimeout(
+      buildEasyVoiceUrl('/voice/transcribe'),
+      {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'multipart/form-data',
+          // Note: Don't set Content-Type for FormData - browser sets it with boundary
+        },
       },
-      timeout: 180000, // 3 minutes
-    });
+      180000 // 3 minutes
+    );
 
-    return createResponse(true, response.data);
+    const responseData = await handleFetchResponse(response);
+    return createResponse(true, responseData);
   } catch (error) {
     if (error.response) {
       // Server replied with an error status
@@ -167,16 +184,16 @@ const uploadAudio = async (filePath, options = {}) => {
       return createResponse(false, null, msg);
     }
 
-    if (error.request) {
-      // Request made but no response received – network issue
-      return createResponse(
-        false,
-        null,
-        `Network error – cannot reach backend.\n\nError details: ${error.message}\n\nCheck:\n1. Backend is running on st0x556n-4000.inc1.devtunnels.ms\n2. Device has internet connection\n3. SSL certificate is valid\n4. CORS is properly configured\n5. DNS resolution works`,
-      );
+    if (error.name === 'AbortError') {
+      return createResponse(false, null, 'Request timed out. Please try again.');
     }
 
-    return createResponse(false, null, error.message || 'Unknown upload error');
+    // Network issue or other error
+    return createResponse(
+      false,
+      null,
+      `Network error – cannot reach backend.\n\nError details: ${error.message}\n\nCheck:\n1. Backend is running on st0x556n-4000.inc1.devtunnels.ms\n2. Device has internet connection\n3. SSL certificate is valid\n4. CORS is properly configured\n5. DNS resolution works`,
+    );
   }
 };
 
@@ -197,18 +214,65 @@ export const transcribeAudio = async (fileUri, options = {}) => {
     return createResponse(false, null, result.error);
   }
 
-  // Normalise response – handle different backend shapes
-  const data = result.data || {};
-
-  const normalizedData = {
-    rawTranscript: data.rawTranscript || data.transcript || data.text || '',
-    refinedTranscript: data.refinedTranscript || data.rawTranscript || data.transcript || data.text || '',
-    voiceAssetId: data.voiceAssetId || data.id || null,
-    timestamp: new Date().toISOString(),
-  };
+  const normalizedData = normalizeTranscribeServerPayload(result.data);
 
   return createResponse(true, normalizedData);
 };
+
+/**
+ * Map /voice/transcribe JSON into { rawTranscript, refinedTranscript, voiceAssetId }.
+ * Handles plain string bodies, nested `data`, and common key names.
+ */
+function normalizeTranscribeServerPayload(raw) {
+  const ts = new Date().toISOString();
+  if (raw == null) {
+    return { rawTranscript: '', refinedTranscript: '', voiceAssetId: null, timestamp: ts };
+  }
+  if (typeof raw === 'string') {
+    const t = raw.trim();
+    return { rawTranscript: t, refinedTranscript: t, voiceAssetId: null, timestamp: ts };
+  }
+  if (typeof raw !== 'object') {
+    return { rawTranscript: '', refinedTranscript: '', voiceAssetId: null, timestamp: ts };
+  }
+
+  const d = raw;
+  const inner = d.data && typeof d.data === 'object' ? d.data : null;
+  const pickFirst = (...candidates) => {
+    for (const c of candidates) {
+      if (c == null) continue;
+      if (typeof c === 'object') continue;
+      const s = String(c).trim();
+      if (s) return s;
+    }
+    return '';
+  };
+
+  const coarse = pickFirst(
+    d.refinedTranscript,
+    d.rawTranscript,
+    d.transcript,
+    d.text,
+    typeof d.result === 'string' ? d.result : '',
+    inner?.refinedTranscript,
+    inner?.rawTranscript,
+    inner?.transcript,
+    inner?.text,
+  );
+
+  const refined = pickFirst(d.refinedTranscript, d.rawTranscript, d.transcript, d.text, coarse, inner?.transcript, inner?.text);
+  const rawT = pickFirst(d.rawTranscript, d.transcript, d.text, coarse, inner?.rawTranscript, inner?.transcript);
+
+  const voiceAssetId =
+    d.voiceAssetId ?? d.easyVoiceAssetId ?? d.id ?? inner?.voiceAssetId ?? inner?.id ?? null;
+
+  return {
+    rawTranscript: rawT || coarse,
+    refinedTranscript: refined || coarse,
+    voiceAssetId,
+    timestamp: ts,
+  };
+}
 
 // ─── Other voice API endpoints ────────────────────────────────────────────────
 
@@ -221,16 +285,23 @@ export const updateTranscript = async (voiceAssetId, finalTranscript) => {
       return createResponse(false, null, 'Transcript text cannot be empty');
     }
 
-    const response = await apiClient.put(
-      VOICE_ENDPOINTS.TRANSCRIPT,
+    const response = await fetchWithTimeout(
+      buildEasyVoiceUrl(VOICE_ENDPOINTS.TRANSCRIPT),
       {
-        finalTranscript: finalTranscript.trim(),
-        voiceAssetId: voiceAssetId
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          finalTranscript: finalTranscript.trim(),
+          voiceAssetId: voiceAssetId
+        }),
       },
-      { headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, timeout: 30000 },
+      30000
     );
 
-    const { data } = response;
+    const data = await handleFetchResponse(response);
     if (!data?.voiceAssetId) {
       return createResponse(false, null, 'Invalid response from server');
     }
@@ -254,13 +325,24 @@ export const executeVoiceCommand = async (voiceAssetId, options = {}) => {
       return createResponse(false, null, 'Voice asset ID is required');
     }
 
-    const response = await apiClient.post(
-      VOICE_ENDPOINTS.EXECUTE,
-      { easyVoiceAssetId: voiceAssetId, executeAt: new Date().toISOString(), ...options },
-      { headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, timeout: 45000 },
+    const response = await fetchWithTimeout(
+      buildEasyVoiceUrl(VOICE_ENDPOINTS.EXECUTE),
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          easyVoiceAssetId: voiceAssetId,
+          executeAt: new Date().toISOString(),
+          ...options
+        }),
+      },
+      45000
     );
 
-    const { data } = response;
+    const data = await handleFetchResponse(response);
     if (!data || typeof data !== 'object') {
       return createResponse(false, null, 'Invalid response from server');
     }
@@ -281,18 +363,23 @@ export const executeVoiceCommand = async (voiceAssetId, options = {}) => {
 
 export const getVoiceHistory = async (filters = {}) => {
   try {
-    const response = await apiClient.get(VOICE_ENDPOINTS.HISTORY, {
-      headers: { Accept: 'application/json' },
-      params: {
-        limit: filters.limit || 20,
-        offset: filters.offset || 0,
-        startDate: filters.startDate,
-        endDate: filters.endDate,
-      },
-      timeout: 30000,
+    const params = new URLSearchParams({
+      limit: filters.limit || 20,
+      offset: filters.offset || 0,
+      startDate: filters.startDate || '',
+      endDate: filters.endDate || '',
     });
 
-    const { data } = response;
+    const response = await fetchWithTimeout(
+      `${buildEasyVoiceUrl(VOICE_ENDPOINTS.HISTORY)}?${params.toString()}`,
+      {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      },
+      30000
+    );
+
+    const data = await handleFetchResponse(response);
     if (!Array.isArray(data?.records)) {
       return createResponse(false, null, 'Invalid response from server');
     }
@@ -316,11 +403,16 @@ export const deleteVoiceRecording = async (voiceAssetId) => {
       return createResponse(false, null, 'Voice asset ID is required');
     }
 
-    await apiClient.delete(`${VOICE_ENDPOINTS.DELETE}/${voiceAssetId}`, {
-      headers: { Accept: 'application/json' },
-      timeout: 30000,
-    });
+    const response = await fetchWithTimeout(
+      `${buildEasyVoiceUrl(VOICE_ENDPOINTS.DELETE)}/${voiceAssetId}`,
+      {
+        method: 'DELETE',
+        headers: { Accept: 'application/json' },
+      },
+      30000
+    );
 
+    await handleFetchResponse(response);
     return createResponse(true, { deleted: true, deletedAt: new Date().toISOString() });
   } catch (error) {
     if (apiUtils.isCancel(error)) {
@@ -343,16 +435,24 @@ const testAPI = async () => {
 // Test connectivity to the backend
 export const testBackendConnectivity = async () => {
   try {
-    const response = await uploadClient.get('/health', {
-      timeout: 10000,
-    });
+    const response = await fetchWithTimeout(
+      buildEasyVoiceUrl('/health'),
+      {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      },
+      10000
+    );
 
-    return createResponse(true, response.data);
+    const data = await handleFetchResponse(response);
+    return createResponse(true, data);
   } catch (error) {
     let errorMessage = 'Backend connectivity test failed';
     if (error.response) {
       errorMessage = `Backend responded with error: ${error.response.status}`;
-    } else if (error.request) {
+    } else if (error.name === 'AbortError') {
+      errorMessage = 'Backend connectivity test timed out';
+    } else {
       errorMessage = `Cannot reach backend: ${error.message}`;
     }
 

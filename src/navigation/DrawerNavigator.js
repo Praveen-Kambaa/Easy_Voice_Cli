@@ -3,16 +3,14 @@ import { createDrawerNavigator } from '@react-navigation/drawer';
 import { DrawerContent } from '../components/Drawer/DrawerContent';
 import { Colors } from '../theme/Colors';
 
-import HomeScreen from '../screens/Home/HomeScreen';
 import VoiceRecorderScreen from '../screens/VoiceRecorder/VoiceRecorderScreen';
 import VoiceRecorderHistoryScreen from '../screens/VoiceRecorder/VoiceRecorderHistoryScreen';
 import RecordedAudioScreen from '../screens/Recordings/RecordedAudioScreen';
-import SettingsScreen from '../screens/Settings/SettingsScreen';
-import FloatingMicScreen from '../screens/FloatingMic/FloatingMicScreen';
 import FloatingMicHistoryScreen from '../screens/FloatingMic/FloatingMicHistoryScreen';
-import TranslatorStack from './TranslatorStack';
-import AskQuestionStack from './AskQuestionStack';
 import CallLogsScreen from '../screens/CallLogs/CallLogsScreen';
+import BottomTabsNavigator from './BottomTabsNavigator';
+import TabRedirectScreen from './TabRedirectScreen';
+import ProfileScreen from '../screens/Profile/ProfileScreen';
 
 const Drawer = createDrawerNavigator();
 
@@ -51,13 +49,40 @@ export const AppNavigator = () => {
       id="AppDrawer"
       drawerContent={(props) => <DrawerContent {...props} />}
       screenOptions={screenOptions}
-      initialRouteName="Home"
+      initialRouteName="MainTabs"
     >
       <Drawer.Screen
-        name="Home"
-        component={HomeScreen}
+        name="MainTabs"
+        component={BottomTabsNavigator}
         options={{ drawerLabel: 'Home' }}
       />
+
+      {/* Drawer aliases for tabs (keep app user-friendly + fixes navigate('Settings') etc.) */}
+      <Drawer.Screen
+        name="FloatingMic"
+        component={TabRedirectScreen}
+        initialParams={{ tab: 'FloatingMicTab' }}
+        options={{ drawerLabel: 'Floating Mic' }}
+      />
+      <Drawer.Screen
+        name="Translator"
+        component={TabRedirectScreen}
+        initialParams={{ tab: 'TranslatorTab' }}
+        options={{ drawerLabel: 'Translator' }}
+      />
+      <Drawer.Screen
+        name="AskQuestion"
+        component={TabRedirectScreen}
+        initialParams={{ tab: 'AskQuestionTab' }}
+        options={{ drawerLabel: 'Ask Question' }}
+      />
+      <Drawer.Screen
+        name="Settings"
+        component={TabRedirectScreen}
+        initialParams={{ tab: 'SettingsTab' }}
+        options={{ drawerLabel: 'Settings' }}
+      />
+
       <Drawer.Screen
         name="VoiceRecorder"
         component={VoiceRecorderScreen}
@@ -72,14 +97,15 @@ export const AppNavigator = () => {
         }}
       />
       <Drawer.Screen
-        name="FloatingMic"
-        component={FloatingMicScreen}
-        options={{ drawerLabel: 'Floating Mic' }}
-      />
-      <Drawer.Screen
         name="RecordedAudio"
         component={RecordedAudioScreen}
         options={{ drawerLabel: 'My Recordings' }}
+      />
+
+      <Drawer.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{ drawerLabel: 'Profile' }}
       />
 
       <Drawer.Screen
@@ -88,24 +114,9 @@ export const AppNavigator = () => {
         options={{ drawerLabel: 'Speech History' }}
       />
       <Drawer.Screen
-        name="AskQuestion"
-        component={AskQuestionStack}
-        options={{ drawerLabel: 'Ask Question' }}
-      />
-      <Drawer.Screen
         name="CallLogs"
         component={CallLogsScreen}
         options={{ drawerLabel: 'Calls' }}
-      />
-      <Drawer.Screen
-        name="Translator"
-        component={TranslatorStack}
-        options={{ drawerLabel: 'Translator' }}
-      />
-      <Drawer.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={{ drawerLabel: 'Settings' }}
       />
     </Drawer.Navigator>
   );

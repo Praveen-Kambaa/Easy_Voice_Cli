@@ -33,7 +33,7 @@ function AskQuestionNavigator({ initialRouteName, historyInitialParams, savedIni
 }
 
 /**
- * Ask Question stack (Android): floating mic service running + Ask Question overlay toggle in Settings.
+ * Ask Question stack (Android): Ask Question overlay toggle enabled in Settings only.
  */
 const AskQuestionStack = ({ route, navigation }) => {
   const [phase, setPhase] = useState('loading');

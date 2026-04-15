@@ -9,8 +9,10 @@ import {
   NativeModules,
   DeviceEventEmitter,
   TouchableOpacity,
+  Animated,
+  Easing,
 } from 'react-native';
-import { History, ChevronRight } from 'lucide-react-native';
+import { History, ChevronRight, ShieldCheck, Radio, SlidersHorizontal } from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { AppCard } from '../../components/common/AppCard';
@@ -24,6 +26,7 @@ const { FloatingMicModule } = NativeModules;
 
 const FloatingMicScreen = ({ navigation }) => {
   const [lastTranscription, setLastTranscription] = useState('');
+  const orbAnim = React.useRef(new Animated.Value(0)).current;
 
   const {
     isServiceActive,
@@ -68,12 +71,34 @@ const FloatingMicScreen = ({ navigation }) => {
     return () => listeners.forEach(l => l.remove());
   }, []);
 
+  useEffect(() => {
+    if (!isServiceActive) {
+      orbAnim.stopAnimation();
+      orbAnim.setValue(0);
+      return undefined;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(orbAnim, { toValue: 1, duration: 1400, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(orbAnim, { toValue: 0, duration: 1400, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [isServiceActive, orbAnim]);
+
   const permissionRows = [
     { label: 'Overlay Permission', value: permissions.overlay },
     { label: 'Record Audio', value: permissions.recordAudio },
     { label: 'Accessibility Service', value: permissions.accessibility, labels: ['Enabled', 'Disabled'] },
     { label: 'All Permissions', value: permissions.allGranted, labels: ['Ready', 'Setup Required'] },
   ];
+
+  const headlineStatus = needsPermissions
+    ? 'Complete setup to enable the floating mic overlay.'
+    : isServiceActive
+      ? 'Running in the background. Tap the floating icon to record.'
+      : 'Start the service to show the floating mic overlay.';
 
   return (
     <ScreenContainer>
@@ -84,11 +109,74 @@ const FloatingMicScreen = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Hero (signature) */}
+        <View style={styles.hero}>
+          <View style={styles.heroCard}>
+            <View style={styles.heroGlowA} pointerEvents="none" />
+            <View style={styles.heroGlowB} pointerEvents="none" />
+
+            <View style={styles.heroTop}>
+              <View style={styles.heroTitleCol}>
+                <Text style={styles.heroTitle}>Floating Mic</Text>
+                <Text style={styles.heroSub}>{headlineStatus}</Text>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.orbWrap, needsPermissions && styles.orbWrapDisabled]}
+                activeOpacity={0.9}
+                onPress={() => {
+                  if (needsPermissions) {
+                    handleMissingPermissions();
+                    return;
+                  }
+                  toggleFloatingMic();
+                }}
+              >
+                <Animated.View
+                  style={[
+                    styles.orbPulse,
+                    {
+                      opacity: orbAnim.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.55] }),
+                      transform: [{ scale: orbAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] }) }],
+                    },
+                  ]}
+                />
+                <View style={[styles.orb, isServiceActive && styles.orbActive]}>
+                  <Radio size={18} color="#FFFFFF" strokeWidth={2.4} />
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.heroMetaRow}>
+              <StatusBadge
+                status={needsPermissions ? 'blocked' : isServiceActive ? 'granted' : 'denied'}
+                label={needsPermissions ? 'Setup required' : isServiceActive ? 'Active' : 'Inactive'}
+              />
+              <Text style={styles.heroMetaText}>
+                {lastTranscription ? `Last heard: ${lastTranscription}` : 'Last heard: —'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
         {/* Permission Status */}
-        <AppCard>
-          <Text style={styles.sectionTitle}>Permissions Status</Text>
+        {/* <AppCard>
+          <View style={styles.sectionTitleRow}>
+            <View style={styles.sectionTitleLeft}>
+              <ShieldCheck size={18} color={Colors.primary} strokeWidth={2.2} />
+              <Text style={styles.sectionTitle}>Permissions</Text>
+            </View>
+            <StatusBadge
+              status={permissions.allGranted ? 'granted' : 'blocked'}
+              label={permissions.allGranted ? 'Ready' : 'Setup'}
+            />
+          </View>
+
           {permissionRows.map((row, idx) => (
-            <View key={idx} style={[styles.statusRow, idx < permissionRows.length - 1 && styles.rowDivider]}>
+            <View
+              key={`perm-${row.label}`}
+              style={[styles.infoRow, idx < permissionRows.length - 1 && styles.rowDivider]}
+            >
               <Text style={styles.rowLabel}>{row.label}</Text>
               <StatusBadge
                 status={row.value ? 'granted' : 'blocked'}
@@ -96,19 +184,22 @@ const FloatingMicScreen = ({ navigation }) => {
               />
             </View>
           ))}
-        </AppCard>
+        </AppCard> */}
 
         {/* Service Status */}
-        <AppCard>
-          <Text style={styles.sectionTitle}>Service Status</Text>
-          <View style={[styles.statusRow, styles.rowDivider]}>
-            <Text style={styles.rowLabel}>Floating Mic Service</Text>
-            <StatusBadge
-              status={isServiceActive ? 'granted' : 'denied'}
-              label={isServiceActive ? 'Active' : 'Inactive'}
-            />
+        {/* <AppCard>
+          <View style={styles.sectionTitleRow}>
+            <View style={styles.sectionTitleLeft}>
+              <Radio size={18} color={Colors.primary} strokeWidth={2.2} />
+              <Text style={styles.sectionTitle}>Status</Text>
+            </View>
           </View>
-          <View style={styles.statusRow}>
+
+          <View style={[styles.infoRow, styles.rowDivider]}>
+            <Text style={styles.rowLabel}>Floating Mic Service</Text>
+            <StatusBadge status={isServiceActive ? 'granted' : 'denied'} label={isServiceActive ? 'Active' : 'Inactive'} />
+          </View>
+          <View style={styles.infoRow}>
             <Text style={styles.rowLabel}>Recording State</Text>
             <StatusBadge
               status={
@@ -143,7 +234,7 @@ const FloatingMicScreen = ({ navigation }) => {
               <Text style={styles.transcriptionText}>{lastTranscription}</Text>
             </View>
           ) : null}
-        </AppCard>
+        </AppCard> */}
 
         <TouchableOpacity
           style={styles.historyRow}
@@ -159,8 +250,13 @@ const FloatingMicScreen = ({ navigation }) => {
         </TouchableOpacity>
 
         {/* Controls */}
-        <AppCard>
-          <Text style={styles.sectionTitle}>Controls</Text>
+        {/* <AppCard>
+          <View style={styles.sectionTitleRow}>
+            <View style={styles.sectionTitleLeft}>
+              <SlidersHorizontal size={18} color={Colors.primary} strokeWidth={2.2} />
+              <Text style={styles.sectionTitle}>Controls</Text>
+            </View>
+          </View>
 
           <PrimaryButton
             title={isServiceActive ? 'Stop Floating Mic' : 'Start Floating Mic'}
@@ -170,22 +266,27 @@ const FloatingMicScreen = ({ navigation }) => {
             style={styles.mainControlBtn}
           />
 
-          {needsPermissions && (
-            <PrimaryButton
-              title="Setup Permissions"
-              onPress={handleMissingPermissions}
-              variant="outline"
-              style={styles.secondaryControlBtn}
-            />
-          )}
-
-          <PrimaryButton
-            title="Refresh Permissions"
-            onPress={checkPermissions}
-            variant="ghost"
-            style={styles.refreshBtn}
-          />
-        </AppCard>
+          <View style={styles.secondaryActionsRow}>
+            {needsPermissions ? (
+              <View style={styles.secondaryActionCol}>
+                <PrimaryButton
+                  title="Setup"
+                  onPress={handleMissingPermissions}
+                  variant="outline"
+                  style={styles.secondaryBtn}
+                />
+              </View>
+            ) : null}
+            <View style={[styles.secondaryActionCol, !needsPermissions && styles.secondaryActionColFull]}>
+              <PrimaryButton
+                title="Refresh"
+                onPress={checkPermissions}
+                variant="ghost"
+                style={styles.secondaryBtn}
+              />
+            </View>
+          </View>
+        </AppCard> */}
 
         {/* Instructions */}
         <AppCard>
@@ -215,20 +316,145 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 16,
     paddingBottom: 40,
+    gap: 14,
+  },
+
+  hero: {
+    paddingTop: 6,
+    paddingBottom: 4,
+  },
+  heroCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.07,
+    shadowRadius: 20,
+    elevation: 3,
+  },
+  heroGlowA: {
+    position: 'absolute',
+    top: -140,
+    right: -120,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: 'rgba(30, 136, 255, 0.14)',
+  },
+  heroGlowB: {
+    position: 'absolute',
+    bottom: -160,
+    left: -150,
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    backgroundColor: 'rgba(96, 165, 250, 0.10)',
+  },
+  heroTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  heroTitleCol: {
+    flex: 1,
+  },
+  heroTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: Colors.text.primary,
+    letterSpacing: -0.7,
+    lineHeight: 32,
+  },
+  heroSub: {
+    marginTop: 6,
+    fontSize: 13,
+    color: Colors.text.secondary,
+    lineHeight: 19,
+  },
+  orbWrap: {
+    width: 54,
+    height: 54,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  orbWrapDisabled: {
+    opacity: 0.6,
+  },
+  orbPulse: {
+    position: 'absolute',
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: Colors.primary,
+  },
+  orb: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.20,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  orbActive: {
+    shadowOpacity: 0.28,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  heroMetaRow: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  heroMetaText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.text.secondary,
+  },
+
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  sectionTitleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
 
   historyRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: Colors.border,
     padding: 16,
     marginBottom: 16,
     gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+    elevation: 3,
   },
   historyRowText: {
     flex: 1,
@@ -248,10 +474,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: Colors.text.primary,
-    marginBottom: 14,
   },
 
-  statusRow: {
+  infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -330,11 +555,18 @@ const styles = StyleSheet.create({
   mainControlBtn: {
     marginBottom: 10,
   },
-  secondaryControlBtn: {
-    marginBottom: 10,
+  secondaryActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
   },
-  refreshBtn: {
-    marginBottom: 0,
+  secondaryActionCol: {
+    flex: 1,
+  },
+  secondaryActionColFull: {
+    flex: 1,
+  },
+  secondaryBtn: {
+    minHeight: 46,
   },
 
   instructionRow: {

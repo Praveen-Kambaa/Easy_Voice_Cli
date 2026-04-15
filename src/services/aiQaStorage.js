@@ -84,7 +84,7 @@ export async function getSavedAiQa() {
 }
 
 export async function isAiQaSaved(question, answer) {
-  const key = entryKey(question, answer);
+  const key = getAiQaPairKey(question, answer);
   const list = await getSavedAiQa();
   return list.some((s) => s.key === key);
 }
