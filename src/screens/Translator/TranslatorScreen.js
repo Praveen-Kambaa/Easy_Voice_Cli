@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useDebounce } from '../../utils/debounce';
 import {
   View,
   Text,
@@ -23,7 +24,7 @@ import {
   getLanguageName,
   normalizeStoredLanguageCode,
 } from '../../constants/translationLanguages';
-import { translateOffline, translateEnglishToTarget } from '../../services/translationService';
+import { translateViaApi } from '../../services/translationService';
 import {
   startTranslatorRecording,
   stopTranslatorRecordingAndTranscribe,
@@ -42,6 +43,7 @@ import { askQuestion } from '../../services/aiService';
 import { Colors } from '../../theme/Colors';
 import { logActivity, ActivityCategory } from '../../services/appActivityHistoryService';
 import { useAlert } from '../../context/AlertContext';
+import { useAuth } from '../../context/AuthContext';
 import {
   speakTranslatedText,
   stopTranslationSpeech,
@@ -49,6 +51,7 @@ import {
 
 const TranslatorScreen = ({ navigation }) => {
   const showAlert = useAlert();
+  const { user } = useAuth();
   const isFocused = useIsFocused();
   const [fromCode, setFromCode] = useState('en');
   const [toCode, setToCode] = useState('ta');
@@ -63,7 +66,6 @@ const TranslatorScreen = ({ navigation }) => {
   const [languagePickerFor, setLanguagePickerFor] = useState(null);
 
   const requestIdRef = useRef(0);
-  const debounceTimerRef = useRef(null);
   const hasFocusedOnceRef = useRef(false);
   const wasFocusedRef = useRef(false);
   /** After voice input, source text is English until the user edits the field */
@@ -129,7 +131,7 @@ const TranslatorScreen = ({ navigation }) => {
     if (!gainedFocus) return;
 
     if (hasFocusedOnceRef.current) {
-      clearTimeout(debounceTimerRef.current);
+      debouncedRunTranslation.cancel();
       requestIdRef.current += 1;
       sttSourceLangRef.current = null;
       skipNextSourceTranslateRef.current = false;
@@ -171,12 +173,12 @@ const TranslatorScreen = ({ navigation }) => {
       const sourceAppCode = sttSourceLangRef.current ?? fromCode;
       setTranslating(true);
       setTranslateError('');
-      console.log('[Translator] runTranslation', { sourceAppCode, fromCode, toCode, len: trimmed.length });
+      console.log('[Translator] runTranslation via API', { sourceAppCode, toCode, len: trimmed.length });
       try {
-        const result = await translateOffline({
+        const result = await translateViaApi({
           text: trimmed,
-          sourceAppCode,
-          targetAppCode: toCode,
+          targetLangCode: toCode,
+          userId: user?.userId,
         });
         if (id !== requestIdRef.current) return;
         if (result.success) {
@@ -195,8 +197,14 @@ const TranslatorScreen = ({ navigation }) => {
         if (id === requestIdRef.current) setTranslating(false);
       }
     },
-    [fromCode, toCode],
+    [fromCode, toCode, user],
   );
+
+  /** Fires the API call 500 ms after the user stops typing. */
+  const debouncedRunTranslation = useDebounce((trimmed) => {
+    const id = ++requestIdRef.current;
+    runTranslation(trimmed, id);
+  }, 2000);
 
   useEffect(() => {
     if (skipNextSourceTranslateRef.current) {
@@ -205,20 +213,15 @@ const TranslatorScreen = ({ navigation }) => {
     }
     const trimmed = sourceText.trim();
     if (!trimmed) {
+      debouncedRunTranslation.cancel();
       setTranslatedText('');
       setTranslateError('');
       setTranslating(false);
       return;
     }
 
-    clearTimeout(debounceTimerRef.current);
-    debounceTimerRef.current = setTimeout(() => {
-      const id = ++requestIdRef.current;
-      runTranslation(trimmed, id);
-    }, 480);
-
-    return () => clearTimeout(debounceTimerRef.current);
-  }, [sourceText, fromCode, toCode, runTranslation]);
+    debouncedRunTranslation(trimmed);
+  }, [sourceText, fromCode, toCode, debouncedRunTranslation]);
 
   useEffect(() => {
     let cancelled = false;
@@ -272,7 +275,7 @@ const TranslatorScreen = ({ navigation }) => {
       setTranscribingVoice(true);
       setTranslateError('');
       const id = ++requestIdRef.current;
-      clearTimeout(debounceTimerRef.current);
+      debouncedRunTranslation.cancel();
       try {
         const tx = await stopTranslatorRecordingAndTranscribe({ language: 'en-US' });
         if (id !== requestIdRef.current) return;
@@ -285,8 +288,12 @@ const TranslatorScreen = ({ navigation }) => {
         setTranslatedText('');
         setTranslating(true);
         setTranslateError('');
-        console.log('[Translator] voice → ML Kit (en → target)', toCode);
-        const tr = await translateEnglishToTarget(tx.transcript, toCode);
+        console.log('[Translator] voice → API translate (en → target)', toCode);
+        const tr = await translateViaApi({
+          text: tx.transcript,
+          targetLangCode: toCode,
+          userId: user?.userId,
+        });
         if (id !== requestIdRef.current) return;
         if (tr.success) {
           setTranslatedText(tr.translatedText);
@@ -307,7 +314,7 @@ const TranslatorScreen = ({ navigation }) => {
       return;
     }
 
-    clearTimeout(debounceTimerRef.current);
+    debouncedRunTranslation.cancel();
     setTranslateError('');
     setTranslatedText('');
     const started = await startTranslatorRecording();
@@ -328,7 +335,7 @@ const TranslatorScreen = ({ navigation }) => {
       setAskBusyPhase('transcribe');
       setTranslateError('');
       const id = ++requestIdRef.current;
-      clearTimeout(debounceTimerRef.current);
+      debouncedRunTranslation.cancel();
       try {
         const tx = await stopTranslatorRecordingAndTranscribe({ language: 'en-US' });
         if (id !== requestIdRef.current) return;
@@ -365,7 +372,7 @@ const TranslatorScreen = ({ navigation }) => {
       return;
     }
 
-    clearTimeout(debounceTimerRef.current);
+    debouncedRunTranslation.cancel();
     setTranslateError('');
     setTranslatedText('');
     const started = await startTranslatorRecording();

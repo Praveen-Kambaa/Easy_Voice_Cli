@@ -14,6 +14,8 @@ import {
   Mic,
   Music,
   User,
+  Bell,
+  SpellCheck,
 } from 'lucide-react-native';
 import { Colors } from '../../theme/Colors';
 import { APP_NAME, APP_TAGLINE } from '../../constants';
@@ -27,7 +29,14 @@ const MENU_ITEMS = [
   { title: 'Voice Command', description: 'Record your voice', Icon: Mic, screen: 'VoiceRecorder' },
   { title: 'Calls', description: 'Call log & recordings', Icon: Phone, screen: 'CallLogs' },
   { title: 'My Recordings', description: 'View saved audio', Icon: Music, screen: 'RecordedAudio' },
+  {
+    title: 'Voice Reminders',
+    description: 'Voice note & time alarm',
+    Icon: Bell,
+    screen: 'VoiceReminders',
+  },
   { title: 'Speech History', description: 'Floating mic transcripts', Icon: History, screen: 'FloatingMicHistory' },
+  { title: 'Grammar Check', description: 'Fix grammar instantly', Icon: SpellCheck, screen: 'GrammarCheck' },
   { title: 'Profile', description: 'Account & usage', Icon: User, screen: 'Profile' },
 ];
 

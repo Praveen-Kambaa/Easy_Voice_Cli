@@ -8,6 +8,9 @@ import {
   Platform,
   Switch,
   TextInput,
+  ActivityIndicator,
+  NativeModules,
+  Clipboard,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { AppHeader } from '../../components/Header/AppHeader';
@@ -23,6 +26,7 @@ import { useAlert } from '../../context/AlertContext';
 import { Colors } from '../../theme/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildEasyVoiceUrl } from '../../config/api';
+import { offlineWhisperService } from '../../services/offlineWhisperService';
 import {
   getInternalTranscribeEnabled,
   setInternalTranscribeEnabled,
@@ -39,7 +43,7 @@ import {
   getOverlayAskQuestionEnabled,
   setOverlayAskQuestionEnabled,
 } from '../../services/floatingMicConfig';
-import { ChevronDown } from 'lucide-react-native';
+import { ChevronDown, Copy } from 'lucide-react-native';
 import {
   TRANSLATION_LANGUAGES as languages,
   getLanguageName,
@@ -61,6 +65,14 @@ const SettingsScreen = () => {
   const [aiProviderKeySaving, setAiProviderKeySaving] = useState(false);
   /** null | 'from' | 'to' — which translation language picker is open */
   const [languagePickerFor, setLanguagePickerFor] = useState(null);
+
+  // ── Upload & transcribe audio (for Settings card) ───────────────────────────
+  const [pickedAudioUri, setPickedAudioUri] = useState('');
+  const [pickedTranscript, setPickedTranscript] = useState('');
+  const [pickedTranscriptError, setPickedTranscriptError] = useState('');
+  const [pickedTranscribing, setPickedTranscribing] = useState(false);
+  const [modelDownloadPct, setModelDownloadPct] = useState(null);
+  const [pickedTranscriptCopied, setPickedTranscriptCopied] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -368,6 +380,94 @@ const SettingsScreen = () => {
     checkSysPermissions();
   };
 
+  const handlePickAndTranscribeAudio = useCallback(async () => {
+    try {
+      if (pickedTranscribing) return;
+
+      const pickedUri = await NativeModules.AudioPickerModule?.pickAudio?.();
+      if (!pickedUri) {
+        showAlert('Upload audio', 'Could not access the selected file.');
+        return;
+      }
+
+      setPickedAudioUri(pickedUri);
+      setPickedTranscript('');
+      setPickedTranscriptError('');
+      setPickedTranscribing(true);
+      setModelDownloadPct(null);
+      setPickedTranscriptCopied(false);
+
+      if (Platform.OS !== 'android') {
+        throw new Error('Internal file transcription is currently supported only on Android.');
+      }
+
+      let audioForWhisper = pickedUri;
+      if (typeof NativeModules.AudioTranscodeModule?.convertToWav16kMono === 'function') {
+        const wavUri = await NativeModules.AudioTranscodeModule.convertToWav16kMono(pickedUri);
+        if (wavUri) {
+          audioForWhisper = wavUri;
+          setPickedAudioUri(wavUri);
+        }
+      }
+
+      const text = String(
+        (await offlineWhisperService.transcribeFile(audioForWhisper, {
+          // Use the app’s default source language when available, else auto-detect.
+          language: (fromLanguage || 'auto').toLowerCase(),
+          onModelDownloadProgress: (bytesRead, contentLength, done) => {
+            if (!contentLength || contentLength <= 0) {
+              setModelDownloadPct(done ? 100 : null);
+              return;
+            }
+            const pct = Math.max(0, Math.min(100, Math.round((bytesRead / contentLength) * 100)));
+            setModelDownloadPct(done ? 100 : pct);
+          },
+        })) ?? '',
+      ).trim();
+
+      if (!text) {
+        setPickedTranscript('');
+        setPickedTranscriptError('No speech detected in this audio.');
+        return;
+      }
+
+      setPickedTranscript(text);
+      setPickedTranscriptError('');
+      setPickedTranscriptCopied(false);
+    } catch (e) {
+      if (/cancel/i.test(e?.message || '')) return;
+      const msg = e?.message || 'Could not transcribe this audio.';
+      setPickedTranscript('');
+      setPickedTranscriptError(msg);
+      showAlert('Transcription', msg);
+    } finally {
+      setPickedTranscribing(false);
+    }
+  }, [pickedTranscribing, showAlert]);
+
+  const clearPickedTranscript = useCallback(() => {
+    setPickedAudioUri('');
+    setPickedTranscript('');
+    setPickedTranscriptError('');
+    setPickedTranscribing(false);
+    setModelDownloadPct(null);
+    setPickedTranscriptCopied(false);
+  }, []);
+
+  const copyPickedTranscript = useCallback(() => {
+    const value = String(pickedTranscript || '').trim();
+    if (!value) {
+      showAlert('Copy', 'No transcript to copy.');
+      return;
+    }
+    try {
+      Clipboard.setString(value);
+      setPickedTranscriptCopied(true);
+    } catch {
+      showAlert('Copy', 'Could not copy transcript.');
+    }
+  }, [pickedTranscript, showAlert]);
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -433,6 +533,79 @@ const SettingsScreen = () => {
               style={styles.groupPrimaryBtn}
             />
           </View>
+        </AppCard>
+
+        {/* ── Audio Transcription Card ───────────────────────────────────── */}
+        <Text style={[styles.sectionLabel, { marginTop: 18 }]}>Audio</Text>
+        <AppCard style={styles.transcribeCard}>
+          <Text style={styles.transcribeTitle}>Upload audio → Transcribe</Text>
+          <Text style={styles.transcribeDesc}>
+            Pick any recorded audio file. The transcript will appear below.
+          </Text>
+
+          <View style={styles.transcribeActionsRow}>
+            <PrimaryButton
+              title={pickedTranscribing ? 'Transcribing…' : 'Upload audio'}
+              onPress={handlePickAndTranscribeAudio}
+              loading={pickedTranscribing}
+              disabled={pickedTranscribing}
+              variant="primary"
+              style={styles.transcribeBtn}
+            />
+            <PrimaryButton
+              title="Clear"
+              onPress={clearPickedTranscript}
+              disabled={pickedTranscribing || (!pickedTranscript && !pickedTranscriptError && !pickedAudioUri)}
+              variant="outline"
+              style={styles.transcribeBtn}
+            />
+          </View>
+
+          {!!pickedAudioUri && (
+            <Text style={styles.transcribeFileHint} numberOfLines={2}>
+              Selected: {pickedAudioUri}
+            </Text>
+          )}
+
+          {pickedTranscribing && (
+            <View style={styles.transcribeLoadingRow}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+              <Text style={styles.transcribeLoadingText}>
+                {typeof modelDownloadPct === 'number' && modelDownloadPct < 100
+                  ? `Downloading model… ${modelDownloadPct}%`
+                  : 'Transcribing…'}
+              </Text>
+            </View>
+          )}
+
+          {!!pickedTranscriptError && !pickedTranscribing && (
+            <View style={styles.transcribeErrorBox}>
+              <Text style={styles.transcribeErrorText}>{pickedTranscriptError}</Text>
+            </View>
+          )}
+
+          {!!pickedTranscript && !pickedTranscribing && (
+            <View style={styles.transcribeResultBox}>
+              <View style={styles.transcribeResultHeader}>
+                <Text style={styles.transcribeResultLabel}>Transcript</Text>
+                <View style={styles.transcribeHeaderActions}>
+                  {pickedTranscriptCopied ? (
+                    <Text style={styles.transcribeCopiedText}>Copied</Text>
+                  ) : null}
+                  <TouchableOpacity
+                    style={styles.transcribeCopyIconBtn}
+                    onPress={copyPickedTranscript}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Copy transcript"
+                  >
+                    <Copy size={16} color={Colors.primary} strokeWidth={2.1} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <Text style={styles.transcribeResultText}>{pickedTranscript}</Text>
+            </View>
+          )}
         </AppCard>
 
         {Platform.OS === 'android' && (
@@ -1019,6 +1192,109 @@ const styles = StyleSheet.create({
     color: Colors.text.primary,
     backgroundColor: Colors.backgroundAlt,
     marginBottom: 12,
+  },
+
+  // Audio transcription card
+  transcribeCard: {
+    marginBottom: 16,
+  },
+  transcribeTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    marginBottom: 6,
+    letterSpacing: -0.2,
+  },
+  transcribeDesc: {
+    fontSize: 13,
+    color: Colors.text.secondary,
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  transcribeActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  transcribeBtn: {
+    flex: 1,
+    minHeight: 44,
+    paddingVertical: 0,
+  },
+  transcribeFileHint: {
+    marginTop: 12,
+    fontSize: 12,
+    color: Colors.text.secondary,
+    lineHeight: 16,
+  },
+  transcribeLoadingRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  transcribeLoadingText: {
+    fontSize: 13,
+    color: Colors.text.secondary,
+    fontWeight: '600',
+  },
+  transcribeErrorBox: {
+    marginTop: 12,
+    backgroundColor: Colors.status.blockedBg,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.status.blocked + '22',
+  },
+  transcribeErrorText: {
+    fontSize: 13,
+    color: Colors.status.blocked,
+    lineHeight: 18,
+  },
+  transcribeResultBox: {
+    marginTop: 12,
+    backgroundColor: Colors.backgroundAlt,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  transcribeResultHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    gap: 10,
+  },
+  transcribeResultLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.text.secondary,
+    letterSpacing: 0.2,
+  },
+  transcribeResultText: {
+    fontSize: 14,
+    color: Colors.text.primary,
+    lineHeight: 20,
+  },
+  transcribeHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  transcribeCopyIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  transcribeCopiedText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.status.granted,
   },
 });
 

@@ -13,6 +13,7 @@ const DRAWER_ROUTE_MARKERS = [
   'VoiceRecorder',
   'VoiceRecorderHistory',
   'RecordedAudio',
+  'VoiceReminders',
   'FloatingMicHistory',
   'CallLogs',
 ];

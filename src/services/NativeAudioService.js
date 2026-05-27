@@ -164,7 +164,11 @@ class NativeAudioService {
     }
   }
 
-  async stopRecording() {
+  /**
+   * @param {{ persist?: boolean }} [options] - Set `persist: false` to skip adding to "My Recordings" (e.g. voice-only reminders).
+   */
+  async stopRecording(options) {
+    const persist = options?.persist !== false;
     try {
       if (!this.isRecording) {
         throw new Error('No active recording to stop');
@@ -190,7 +194,9 @@ class NativeAudioService {
         voiceAssetId: null,
       };
 
-      await this.saveRecording(recordingData);
+      if (persist) {
+        await this.saveRecording(recordingData);
+      }
 
       return {
         success: true,

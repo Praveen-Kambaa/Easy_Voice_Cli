@@ -433,6 +433,9 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
           `Voice command processed successfully.\n\n${hasChanged ? '(Transcript was updated before execution)' : '(Original transcript used)'}`,
           [{ text: 'OK' }],
         );
+        if (homeEmbedded) {
+          resetVoiceCommandState();
+        }
       } else {
         throw new Error(executeResult.error);
       }
@@ -447,6 +450,19 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
     setIsEditingTranscript(false);
     setEditableTranscript(transcript);
   };
+
+  const resetVoiceCommandState = useCallback(() => {
+    setLastRecording(null);
+    setFilePath('');
+    setDuration(0);
+    setTranscript(null);
+    setTranscriptError(null);
+    setEditableTranscript('');
+    setIsEditingTranscript(false);
+    setVoiceAssetId(null);
+    setIsPlaying(false);
+    recordingStartTime.current = null;
+  }, []);
 
   const hasRecording = Boolean(lastRecording?.filePath || filePath);
 
@@ -621,25 +637,27 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
                 placeholder="Edit transcript…"
                 autoFocus
               />
-              <View style={styles.editActionsRow}>
+              <View style={[styles.editActionsRow, homeEmbedded && styles.editActionsRowHome]}>
                 <PrimaryButton
                   title="Save"
                   onPress={handleSaveTranscript}
                   variant="ghost"
-                  style={styles.editActionBtn}
-                  textStyle={{ color: Colors.status.granted }}
+                  style={[styles.editActionBtn, homeEmbedded && styles.editActionBtnHome]}
+                  textStyle={[{ color: Colors.status.granted }, homeEmbedded && styles.editActionTextHome]}
                 />
                 <PrimaryButton
                   title="Send"
                   onPress={handleExecuteVoiceCommand}
                   loading={isExecuting}
-                  style={[styles.editActionBtn, { backgroundColor: Colors.primary }]}
+                  style={[styles.editActionBtn, homeEmbedded && styles.editActionBtnHome, { backgroundColor: Colors.primary }]}
+                  textStyle={homeEmbedded ? styles.editActionTextHomeLight : undefined}
                 />
                 <PrimaryButton
                   title="Cancel"
                   onPress={handleCancelEdit}
                   variant="danger"
-                  style={styles.editActionBtn}
+                  style={[styles.editActionBtn, homeEmbedded && styles.editActionBtnHome]}
+                  textStyle={homeEmbedded ? styles.editActionTextHomeLight : undefined}
                 />
               </View>
             </>
@@ -1142,10 +1160,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
+  editActionsRowHome: {
+    gap: 6,
+  },
   editActionBtn: {
     flex: 1,
     minHeight: 40,
     paddingVertical: 0,
+  },
+  editActionBtnHome: {
+    minHeight: 38,
+    paddingHorizontal: 8,
+  },
+  editActionTextHome: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  editActionTextHomeLight: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   errorCard: {
     marginBottom: 20,

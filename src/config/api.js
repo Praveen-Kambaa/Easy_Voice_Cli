@@ -6,6 +6,12 @@ export const API_SERVERS = {
 
 // API Endpoints - Organized by server
 export const API_ENDPOINTS = {
+  // Translation endpoint (TypeEasy server)
+  TRANSLATE: '/translate',
+
+  // Grammar check endpoint (TypeEasy server)
+  GRAMMAR_CHECK: '/grammar-check',
+
   // Authentication Server Endpoints
   AUTH: {
     LOGIN: '/auth/user-login',

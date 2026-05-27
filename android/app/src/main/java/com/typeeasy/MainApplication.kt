@@ -13,6 +13,7 @@ import com.typeeasy.VoiceKeyboardPackage
 import com.typeeasy.AudioRecorderPackage
 import com.typeeasy.PhoneCallsPackage
 import com.typeeasy.AudioPickerPackage
+import com.typeeasy.AudioTranscodePackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -31,6 +32,7 @@ class MainApplication : Application(), ReactApplication {
           add(AudioRecorderPackage())
           add(PhoneCallsPackage())
           add(AudioPickerPackage())
+          add(AudioTranscodePackage())
         },
     )
   }

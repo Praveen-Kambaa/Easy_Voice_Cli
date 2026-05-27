@@ -8,9 +8,11 @@ import VoiceRecorderHistoryScreen from '../screens/VoiceRecorder/VoiceRecorderHi
 import RecordedAudioScreen from '../screens/Recordings/RecordedAudioScreen';
 import FloatingMicHistoryScreen from '../screens/FloatingMic/FloatingMicHistoryScreen';
 import CallLogsScreen from '../screens/CallLogs/CallLogsScreen';
+import VoiceRemindersScreen from '../screens/VoiceReminders/VoiceRemindersScreen';
 import BottomTabsNavigator from './BottomTabsNavigator';
 import TabRedirectScreen from './TabRedirectScreen';
 import ProfileScreen from '../screens/Profile/ProfileScreen';
+import GrammarCheckStack from './GrammarCheckStack';
 
 const Drawer = createDrawerNavigator();
 
@@ -117,6 +119,16 @@ export const AppNavigator = () => {
         name="CallLogs"
         component={CallLogsScreen}
         options={{ drawerLabel: 'Calls' }}
+      />
+      <Drawer.Screen
+        name="VoiceReminders"
+        component={VoiceRemindersScreen}
+        options={{ drawerLabel: 'Voice Reminders' }}
+      />
+      <Drawer.Screen
+        name="GrammarCheck"
+        component={GrammarCheckStack}
+        options={{ drawerLabel: 'Grammar Check' }}
       />
     </Drawer.Navigator>
   );

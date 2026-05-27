@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import TranslateText from '@react-native-ml-kit/translate-text';
 import { appLanguageToMlKit, isAppLanguageSupportedByMlKit } from './mlKitLanguageMap';
+import { API_SERVERS, API_ENDPOINTS } from '../config/api';
 
 /** @type {Set<string>} language pairs that already completed download this app session */
 const downloadedModelPairs = new Set();
@@ -118,3 +119,78 @@ export function translateEnglishToTarget(englishText, targetAppCode) {
 }
 
 export { isAppLanguageSupportedByMlKit };
+
+/**
+ * Translate text via the TypeEasy REST API.
+ *
+ * POST https://easyvoice.kambaaincorporation.in/apiv2/translate
+ * Form fields: user_id, text, target_language
+ *
+ * @param {object} params
+ * @param {string} params.text          - Source text to translate
+ * @param {string} params.targetLangCode - Target language code (e.g. 'ta', 'hi', 'fr')
+ * @param {string | number} params.userId - Authenticated user's ID
+ * @returns {Promise<{ success: true, translatedText: string } | { success: false, error: string }>}
+ */
+export async function translateViaApi({ text, targetLangCode, userId }) {
+  const trimmed = (text ?? '').trim();
+  if (!trimmed) {
+    return { success: false, error: 'Nothing to translate' };
+  }
+
+  const url = `${API_SERVERS.TYPE_EASY}${API_ENDPOINTS.TRANSLATE}`;
+
+  const body = new FormData();
+  body.append('user_id', String(userId ?? ''));
+  body.append('text', trimmed);
+  body.append('target_language', targetLangCode);
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
+    const response = await fetch(url, {
+      method: 'POST',
+      body,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+
+    if (!response.ok) {
+      const msg =
+        data?.message ||
+        data?.error ||
+        `Translation API error (${response.status})`;
+      return { success: false, error: msg };
+    }
+
+    // Accept common response shapes: { translated_text }, { translation }, { result }, { data }
+    const translatedText = String(
+      data?.translated_text ??
+      data?.translation ??
+      data?.result ??
+      data?.data ??
+      '',
+    ).trim();
+
+    if (!translatedText) {
+      return { success: false, error: 'API returned an empty translation' };
+    }
+
+    return { success: true, translatedText };
+  } catch (e) {
+    const msg =
+      e?.name === 'AbortError'
+        ? 'Translation request timed out'
+        : e?.message || 'Translation API request failed';
+    return { success: false, error: msg };
+  }
+}

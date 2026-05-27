@@ -2,11 +2,13 @@ package com.typeeasy
 
 import android.content.Context
 import android.content.Intent
+import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import com.facebook.react.bridge.*
+import com.facebook.react.bridge.UiThreadUtil
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.typeeasy.speech.VoiceSpeechRecognitionManager
 import java.io.File
@@ -16,6 +18,8 @@ class FloatingMicModule(reactContext: ReactApplicationContext) : ReactContextBas
 
     private var speechManager: VoiceSpeechRecognitionManager? = null
     private val speechInFlight = AtomicBoolean(false)
+    private val fileSpeechInFlight = AtomicBoolean(false)
+    private var fileMediaPlayer: MediaPlayer? = null
 
     override fun getName(): String {
         return "FloatingMicModule"
@@ -266,6 +270,130 @@ class FloatingMicModule(reactContext: ReactApplicationContext) : ReactContextBas
         }
     }
 
+    /**
+     * Best-effort "internal" transcription for an existing audio file, without any backend API.
+     *
+     * IMPORTANT LIMITATION:
+     * Android SpeechRecognizer does not accept an audio file as input.
+     * This method plays the file locally and runs offline SpeechRecognizer listening on-device.
+     * Results depend on device capabilities, volume, and environment.
+     *
+     * @param fileUri file:// URI returned by AudioPickerModule
+     * @returns recognized text (String)
+     */
+    @ReactMethod
+    fun transcribeAudioFileInternally(fileUri: String, promise: Promise) {
+        try {
+            val context = reactApplicationContext
+            if (!hasRecordAudioPermission(context)) {
+                promise.reject("RECORD_AUDIO_PERMISSION_DENIED", "Record audio permission not granted")
+                return
+            }
+            if (fileUri.isBlank()) {
+                promise.reject("NO_FILE", "Audio file URI is required")
+                return
+            }
+            if (!fileSpeechInFlight.compareAndSet(false, true)) {
+                promise.reject("SPEECH_BUSY", "File transcription is already running")
+                return
+            }
+
+            val localPath = if (fileUri.startsWith("file://")) fileUri.removePrefix("file://") else fileUri
+            val f = File(localPath)
+            if (!f.exists() || f.length() <= 0L) {
+                fileSpeechInFlight.set(false)
+                promise.reject("FILE_MISSING", "Audio file not found or empty: $localPath")
+                return
+            }
+
+            UiThreadUtil.runOnUiThread {
+                try {
+                    if (speechManager == null) {
+                        speechManager = VoiceSpeechRecognitionManager(context)
+                    }
+
+                    // Ensure any prior player is released
+                    try {
+                        fileMediaPlayer?.stop()
+                    } catch (_: Exception) {
+                    }
+                    try {
+                        fileMediaPlayer?.release()
+                    } catch (_: Exception) {
+                    }
+                    fileMediaPlayer = null
+
+                    val mp = MediaPlayer()
+                    fileMediaPlayer = mp
+
+                    // Start offline speech recognition first, then play.
+                    speechManager?.startRecording(
+                        onResult = { text ->
+                            try {
+                                runCatching { fileMediaPlayer?.stop() }
+                                runCatching { fileMediaPlayer?.release() }
+                            } finally {
+                                fileMediaPlayer = null
+                                fileSpeechInFlight.set(false)
+                                promise.resolve(text)
+                            }
+                        },
+                        onError = { msg ->
+                            try {
+                                runCatching { fileMediaPlayer?.stop() }
+                                runCatching { fileMediaPlayer?.release() }
+                            } finally {
+                                fileMediaPlayer = null
+                                fileSpeechInFlight.set(false)
+                                promise.reject("SPEECH_ERROR", msg)
+                            }
+                        }
+                    )
+
+                    mp.setOnCompletionListener {
+                        // Give recognizer a brief moment to finalize results
+                        try {
+                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                runCatching { speechManager?.stopRecording() }
+                            }, 400L)
+                        } catch (_: Exception) {
+                        }
+                    }
+
+                    mp.setOnErrorListener { _, _, _ ->
+                        try {
+                            runCatching { speechManager?.stopRecording() }
+                        } finally {
+                            runCatching { mp.release() }
+                            fileMediaPlayer = null
+                            fileSpeechInFlight.set(false)
+                            promise.reject("PLAYBACK_ERROR", "Failed to play selected audio")
+                        }
+                        true
+                    }
+
+                    mp.setDataSource(context, Uri.fromFile(f))
+                    mp.setAudioStreamType(android.media.AudioManager.STREAM_MUSIC)
+                    mp.setOnPreparedListener { player ->
+                        player.start()
+                    }
+                    mp.prepareAsync()
+                } catch (e: Exception) {
+                    try {
+                        runCatching { fileMediaPlayer?.release() }
+                    } finally {
+                        fileMediaPlayer = null
+                        fileSpeechInFlight.set(false)
+                        promise.reject("SPEECH_START_ERROR", "Failed to transcribe file: ${e.message}")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            fileSpeechInFlight.set(false)
+            promise.reject("SPEECH_START_ERROR", "Failed to transcribe file: ${e.message}")
+        }
+    }
+
     override fun onCatalystInstanceDestroy() {
         try {
             speechManager?.destroy()
@@ -274,6 +402,13 @@ class FloatingMicModule(reactContext: ReactApplicationContext) : ReactContextBas
         } finally {
             speechManager = null
             speechInFlight.set(false)
+            fileSpeechInFlight.set(false)
+            try {
+                fileMediaPlayer?.release()
+            } catch (_: Exception) {
+            } finally {
+                fileMediaPlayer = null
+            }
         }
         super.onCatalystInstanceDestroy()
     }

@@ -14,6 +14,7 @@ import { AuthProvider } from './src/context/AuthContext';
 import { FloatingSpeechHistorySync } from './src/components/FloatingSpeechHistorySync';
 import { AiQaHistorySync } from './src/components/AiQaHistorySync';
 import { syncFloatingMicSettingsToNative } from './src/services/floatingMicConfig';
+import { initVoiceReminderNotifications } from './src/services/voiceReminderService';
 import RequiredPermissionsGate from './src/components/RequiredPermissionsGate';
 
 function FloatingMicNativeSync() {
@@ -28,6 +29,10 @@ function App() {
 
   useEffect(() => {
     return subscribeCallRecordingServiceOnAppActive();
+  }, []);
+
+  useEffect(() => {
+    initVoiceReminderNotifications();
   }, []);
 
   return (

@@ -9,11 +9,15 @@ import {
   Platform,
   NativeEventEmitter,
   ActivityIndicator,
+  Modal,
+  ScrollView,
+  Clipboard,
+  NativeModules,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, Play, Pause } from 'lucide-react-native';
+import { Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, Play, Pause, FileText, Copy, X } from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { Colors } from '../../theme/Colors';
@@ -22,6 +26,7 @@ import { formatDateTime } from '../../utils/dateTimeFormat';
 import NativeAudioService from '../../services/NativeAudioService';
 import { uploadCallRecording } from '../../services/callRecordingsApi';
 import { syncCallLogsToBackend } from '../../services/callLogsApi';
+import { offlineWhisperService } from '../../services/offlineWhisperService';
 import {
   getSyncedCallLogIdSet,
   markCallLogIdsSynced,
@@ -37,8 +42,24 @@ import {
   PERMISSIONS,
 } from 'react-native-permissions';
 import { getAndroidFeaturePermissionList } from '../../utils/androidRuntimePermissions';
+import { normalizeStoredLanguageCode } from '../../constants/translationLanguages';
 
 const PREFS_RECORDING = '@call_recording_service_enabled';
+const CALL_TRANSCRIPTS_STORAGE = '@call_recording_transcripts_v1';
+
+async function readCallTranscriptCache() {
+  try {
+    const raw = await AsyncStorage.getItem(CALL_TRANSCRIPTS_STORAGE);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+async function writeCallTranscriptCache(map) {
+  await AsyncStorage.setItem(CALL_TRANSCRIPTS_STORAGE, JSON.stringify(map || {}));
+}
 
 async function ensureCallRecordingPermissions() {
   if (Platform.OS !== 'android') {
@@ -141,6 +162,7 @@ export default function CallLogsScreen() {
   const showAlert = useAlert();
   const insets = useSafeAreaInsets();
   const featurePermsOnce = useRef(false);
+  const transcriptJobsRef = useRef(new Set());
   const [callLogs, setCallLogs] = useState([]);
   const [recordings, setRecordings] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -152,6 +174,65 @@ export default function CallLogsScreen() {
   const [syncingCallLogs, setSyncingCallLogs] = useState(false);
   const [playingPath, setPlayingPath] = useState(null);
   const [speakerBoostEnabled, setSpeakerBoostEnabled] = useState(false);
+  const [recordingTranscriptMap, setRecordingTranscriptMap] = useState({});
+  const [transcribingMap, setTranscribingMap] = useState({});
+  const [transcriptModal, setTranscriptModal] = useState({ visible: false, title: '', text: '' });
+  const [transcriptCopied, setTranscriptCopied] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      setRecordingTranscriptMap(await readCallTranscriptCache());
+    })();
+  }, []);
+
+  const saveTranscriptForPath = useCallback(async (path, transcript) => {
+    if (!path) return;
+    const next = {
+      ...(await readCallTranscriptCache()),
+      [path]: String(transcript || '').trim(),
+    };
+    await writeCallTranscriptCache(next);
+    setRecordingTranscriptMap(next);
+  }, []);
+
+  const getPreferredTranscriptLanguage = useCallback(async () => {
+    try {
+      const raw = await AsyncStorage.getItem('@from_language');
+      return normalizeStoredLanguageCode(raw || 'auto', 'auto').toLowerCase();
+    } catch {
+      return 'auto';
+    }
+  }, []);
+
+  const ensureRecordingTranscript = useCallback(async (item) => {
+    const path = item?.audioPath;
+    if (!path) return;
+    if (recordingTranscriptMap[path]) return;
+    if (transcriptJobsRef.current.has(path)) return;
+
+    transcriptJobsRef.current.add(path);
+    setTranscribingMap((prev) => ({ ...prev, [path]: true }));
+    try {
+      let audioForWhisper = path.startsWith('file://') ? path : `file://${path}`;
+      if (typeof NativeModules.AudioTranscodeModule?.convertToWav16kMono === 'function') {
+        audioForWhisper = await NativeModules.AudioTranscodeModule.convertToWav16kMono(audioForWhisper);
+      }
+
+      const transcript = await offlineWhisperService.transcribeFile(audioForWhisper, {
+        language: await getPreferredTranscriptLanguage(),
+      });
+
+      const finalText = String(transcript || '').trim();
+      if (finalText) {
+        await saveTranscriptForPath(path, finalText);
+      }
+    } catch (e) {
+      console.warn('[CallLogsScreen] Call transcription failed:', e?.message || e);
+    } finally {
+      transcriptJobsRef.current.delete(path);
+      setTranscribingMap((prev) => ({ ...prev, [path]: false }));
+    }
+  }, [getPreferredTranscriptLanguage, recordingTranscriptMap, saveTranscriptForPath]);
 
   const loadPrefs = useCallback(async () => {
     try {
@@ -294,7 +375,13 @@ export default function CallLogsScreen() {
         setUploadingPath(null);
       }
     }
-  }, []);
+
+    for (const item of list) {
+      if (item?.audioPath && !recordingTranscriptMap[item.audioPath]) {
+        await ensureRecordingTranscript(item);
+      }
+    }
+  }, [ensureRecordingTranscript, recordingTranscriptMap]);
 
   const refreshAll = useCallback(async () => {
     if (!isPhoneCallsSupported()) {
@@ -511,6 +598,35 @@ export default function CallLogsScreen() {
     ]);
   };
 
+  const openTranscriptModal = useCallback((item) => {
+    const path = item?.audioPath;
+    const transcript = path ? recordingTranscriptMap[path] : '';
+    if (!transcript) {
+      showAlert('Transcript', transcribingMap[path] ? 'Transcription is in progress.' : 'Transcript is not available yet.', [{ text: 'OK' }]);
+      return;
+    }
+    setTranscriptModal({
+      visible: true,
+      title: item?.contactName || item?.phoneNumber || 'Call transcript',
+      text: transcript,
+    });
+    setTranscriptCopied(false);
+  }, [recordingTranscriptMap, showAlert, transcribingMap]);
+
+  const copyTranscriptText = useCallback(() => {
+    const text = String(transcriptModal.text || '').trim();
+    if (!text) {
+      showAlert('Copy', 'No transcript to copy.', [{ text: 'OK' }]);
+      return;
+    }
+    try {
+      Clipboard.setString(text);
+      setTranscriptCopied(true);
+    } catch {
+      showAlert('Copy', 'Could not copy transcript.', [{ text: 'OK' }]);
+    }
+  }, [showAlert, transcriptModal.text]);
+
   const findRecordingForLog = useCallback(
     (logItem) => {
       if (!logItem) return null;
@@ -574,6 +690,8 @@ export default function CallLogsScreen() {
     const pkey = rec ? playbackKey(rec) : null;
     const isPlaying = rec ? playingPath === pkey && NativeAudioService.isPlaying : false;
     const recDuration = rec?.durationMs != null ? formatDurationMs(rec.durationMs) : null;
+    const transcript = rec?.audioPath ? recordingTranscriptMap[rec.audioPath] : '';
+    const transcriptBusy = rec?.audioPath ? !!transcribingMap[rec.audioPath] : false;
 
     return (
       <View style={styles.card}>
@@ -600,29 +718,48 @@ export default function CallLogsScreen() {
         </View>
 
         {rec ? (
-          <TouchableOpacity
-            style={[styles.recordRow, isPlaying && styles.recordRowActive]}
-            onPress={() => togglePlayback(rec)}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel={isPlaying ? 'Pause call recording' : 'Play call recording'}
-          >
-            <View style={[styles.recordPlay, isPlaying && styles.recordPlayActive]}>
-              {isPlaying ? (
-                <Pause size={16} color="#FFFFFF" strokeWidth={2.4} fill="#FFFFFF" />
-              ) : (
-                <Play size={16} color="#FFFFFF" strokeWidth={2.4} fill="#FFFFFF" />
-              )}
-            </View>
-            <View style={styles.recordRowText}>
-              <Text style={styles.recordRowTitle} numberOfLines={1}>
-                Call recording
-              </Text>
-              <Text style={styles.recordRowSub} numberOfLines={1}>
-                Duration: {recDuration || '—'}
-              </Text>
-            </View>
-          </TouchableOpacity>
+          <View style={[styles.recordRow, isPlaying && styles.recordRowActive]}>
+            <TouchableOpacity
+              style={styles.recordPlayArea}
+              onPress={() => togglePlayback(rec)}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={isPlaying ? 'Pause call recording' : 'Play call recording'}
+            >
+              <View style={[styles.recordPlay, isPlaying && styles.recordPlayActive]}>
+                {isPlaying ? (
+                  <Pause size={16} color="#FFFFFF" strokeWidth={2.4} fill="#FFFFFF" />
+                ) : (
+                  <Play size={16} color="#FFFFFF" strokeWidth={2.4} fill="#FFFFFF" />
+                )}
+              </View>
+              <View style={styles.recordRowText}>
+                <Text style={styles.recordRowTitle} numberOfLines={1}>
+                  Call recording
+                </Text>
+                <Text style={styles.recordRowSub} numberOfLines={1}>
+                  {transcriptBusy ? 'Transcribing…' : `Duration: ${recDuration || '—'}`}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.transcriptIconBtn,
+                (transcript || transcriptBusy) && styles.transcriptIconBtnActive,
+              ]}
+              onPress={() => openTranscriptModal(rec)}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Open call transcript"
+            >
+              <FileText
+                size={16}
+                color={(transcript || transcriptBusy) ? Colors.primary : Colors.text.secondary}
+                strokeWidth={2.2}
+              />
+            </TouchableOpacity>
+          </View>
         ) : null}
       </View>
     );
@@ -678,6 +815,57 @@ export default function CallLogsScreen() {
           }
         />
       )}
+
+      <Modal
+        visible={transcriptModal.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setTranscriptModal({ visible: false, title: '', text: '' });
+          setTranscriptCopied(false);
+        }}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle} numberOfLines={1}>{transcriptModal.title || 'Call transcript'}</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setTranscriptModal({ visible: false, title: '', text: '' });
+                  setTranscriptCopied(false);
+                }}
+                style={styles.modalCloseBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X size={18} color={Colors.text.secondary} strokeWidth={2.2} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalBodyContent}>
+              <Text style={styles.modalTranscriptText}>{transcriptModal.text || 'No transcript available.'}</Text>
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              {transcriptCopied ? (
+                <Text style={styles.modalCopiedText}>Copied</Text>
+              ) : null}
+              <TouchableOpacity style={styles.modalCopyIconBtn} onPress={copyTranscriptText} activeOpacity={0.85}>
+                <Copy size={16} color={Colors.primary} strokeWidth={2.1} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalPrimaryBtn}
+                onPress={() => {
+                  setTranscriptModal({ visible: false, title: '', text: '' });
+                  setTranscriptCopied(false);
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.modalPrimaryBtnText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 }
@@ -767,7 +955,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 8,
     padding: 6,
     borderRadius: 16,
     backgroundColor: Colors.backgroundAlt,
@@ -789,6 +977,12 @@ const styles = StyleSheet.create({
   recordPlayActive: {
     backgroundColor: Colors.primary,
   },
+  recordPlayArea: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
   recordRowText: {
     flex: 1,
   },
@@ -802,6 +996,20 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontSize: 11,
     color: Colors.text.secondary,
+  },
+  transcriptIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  transcriptIconBtnActive: {
+    borderColor: Colors.primary + '55',
+    backgroundColor: Colors.primary + '10',
   },
   listEmpty: {
     textAlign: 'center',
@@ -830,5 +1038,84 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     paddingTop: 48,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.38)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  modalCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 16,
+    maxHeight: '70%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 12,
+  },
+  modalTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.text.primary,
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.backgroundAlt,
+  },
+  modalBody: {
+    maxHeight: 320,
+  },
+  modalBodyContent: {
+    paddingBottom: 8,
+  },
+  modalTranscriptText: {
+    fontSize: 15,
+    color: Colors.text.primary,
+    lineHeight: 22,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 14,
+  },
+  modalCopyIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCopiedText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.status.granted,
+  },
+  modalPrimaryBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+  },
+  modalPrimaryBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
