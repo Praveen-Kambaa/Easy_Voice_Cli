@@ -21,7 +21,7 @@ export const ELEVENLABS_API_KEY_PLACEHOLDER = 'sk_b421402b1344b82c0b9e392cb59fac
 /** Floating overlay: Ask Question (speech → AI reply injected as returned). Default OFF. */
 export const OVERLAY_ASK_QUESTION_STORAGE = '@overlay_floating_ask_question_enabled';
 
-const { FloatingMicModule } = NativeModules;
+const { FloatingMicModule, KeyboardModule } = NativeModules;
 
 /**
  * Relative path on the Easy Voice server for speech → translate.
@@ -151,6 +151,68 @@ export async function getAiProviderApiKey() {
   return (AI_PROVIDER_API_KEY ?? '').trim();
 }
 
+async function getStoredAuthUserId() {
+  try {
+    const raw = await AsyncStorage.getItem('@auth_user_data');
+    if (!raw) return '';
+    const parsed = JSON.parse(raw);
+    return String(parsed?.userId ?? parsed?.id ?? parsed?.user?.id ?? '').trim();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Push auth/language settings to the Android keyboard service. The keyboard runs
+ * outside React Native, so it cannot reliably read AsyncStorage directly.
+ */
+export async function syncKeyboardSettingsToNative(userIdOverride) {
+  if (Platform.OS !== 'android' || typeof KeyboardModule?.syncKeyboardSettings !== 'function') return;
+  try {
+    const fromLang = (await AsyncStorage.getItem('@from_language')) || 'en';
+    const toLang = (await AsyncStorage.getItem('@to_language')) || 'ta';
+    const userId =
+      userIdOverride !== undefined && userIdOverride !== null
+        ? String(userIdOverride).trim()
+        : await getStoredAuthUserId();
+    await KeyboardModule.syncKeyboardSettings(userId, fromLang, toLang);
+  } catch (e) {
+    console.warn('[floatingMicConfig] keyboard sync failed:', e?.message || e);
+  }
+}
+
+export async function syncTranslationLanguagesFromKeyboard() {
+  if (Platform.OS !== 'android' || typeof KeyboardModule?.getKeyboardSettings !== 'function') {
+    const fromLang = (await AsyncStorage.getItem('@from_language')) || 'en';
+    const toLang = (await AsyncStorage.getItem('@to_language')) || 'ta';
+    return { fromLang, toLang, changed: false };
+  }
+
+  try {
+    const currentFrom = (await AsyncStorage.getItem('@from_language')) || 'en';
+    const currentTo = (await AsyncStorage.getItem('@to_language')) || 'ta';
+    const native = await KeyboardModule.getKeyboardSettings();
+    const fromLang = (native?.hasFromLang ? native?.fromLang : currentFrom || 'en').trim();
+    const toLang = (native?.hasToLang ? native?.toLang : currentTo || 'ta').trim();
+    const changed = fromLang !== currentFrom || toLang !== currentTo;
+
+    if (changed) {
+      await AsyncStorage.setItem('@from_language', fromLang);
+      await AsyncStorage.setItem('@to_language', toLang);
+      await syncFloatingMicSettingsToNative();
+    } else if (!native?.hasFromLang || !native?.hasToLang) {
+      await syncKeyboardSettingsToNative();
+    }
+
+    return { fromLang, toLang, changed };
+  } catch (e) {
+    console.warn('[floatingMicConfig] keyboard language pull failed:', e?.message || e);
+    const fromLang = (await AsyncStorage.getItem('@from_language')) || 'en';
+    const toLang = (await AsyncStorage.getItem('@to_language')) || 'ta';
+    return { fromLang, toLang, changed: false };
+  }
+}
+
 /**
  * Push mode, voice base URL, translate path, and Settings languages to Android
  * so the overlay works over other apps without JS.
@@ -195,5 +257,7 @@ export async function syncFloatingMicSettingsToNative() {
     }
   } catch (e) {
     console.warn('[floatingMicConfig] sync to native failed:', e?.message || e);
+  } finally {
+    await syncKeyboardSettingsToNative();
   }
 }

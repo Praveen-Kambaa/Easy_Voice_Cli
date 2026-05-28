@@ -119,6 +119,20 @@
         </intent-filter>
       </receiver>
       
+      <service
+        android:name=".MyKeyboardService"
+        android:permission="android.permission.BIND_INPUT_METHOD"
+        android:exported="true">
+
+        <intent-filter>
+            <action android:name="android.view.InputMethod"/>
+        </intent-filter>
+
+        <meta-data
+          android:name="android.view.im"
+          android:resource="@xml/method"/>
+      </service>
+
       <!-- Voice Keyboard Service -->
       <service
         android:name=".services.VoiceKeyboardService"

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildTypeEasyUrl, API_ENDPOINTS } from '../config/api';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import { syncKeyboardSettingsToNative } from '../services/floatingMicConfig';
 
 const STORAGE_KEYS = {
   USER_DATA: '@auth_user_data',
@@ -27,6 +28,10 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     restoreSession();
   }, []);
+
+  useEffect(() => {
+    syncKeyboardSettingsToNative(user?.userId || '');
+  }, [user?.userId]);
 
   const restoreSession = async () => {
     try {

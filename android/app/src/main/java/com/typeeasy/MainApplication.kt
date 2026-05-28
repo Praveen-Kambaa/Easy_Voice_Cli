@@ -14,6 +14,7 @@ import com.typeeasy.AudioRecorderPackage
 import com.typeeasy.PhoneCallsPackage
 import com.typeeasy.AudioPickerPackage
 import com.typeeasy.AudioTranscodePackage
+import com.typeeasy.KeyboardPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -22,9 +23,6 @@ class MainApplication : Application(), ReactApplication {
       context = applicationContext,
       packageList =
         PackageList(this).packages.apply {
-          // Packages that cannot be autolinked yet can be added manually here, for example:
-          // add(MyReactNativePackage())
-          // Temporarily disabled to isolate build issues
           add(AndroidPermissionsPackage())
           add(VoiceAssistantPackage())
           add(FloatingMicPackage())
@@ -33,6 +31,7 @@ class MainApplication : Application(), ReactApplication {
           add(PhoneCallsPackage())
           add(AudioPickerPackage())
           add(AudioTranscodePackage())
+          add(KeyboardPackage())
         },
     )
   }

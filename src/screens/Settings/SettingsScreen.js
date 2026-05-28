@@ -31,6 +31,7 @@ import {
   getInternalTranscribeEnabled,
   setInternalTranscribeEnabled,
   syncFloatingMicSettingsToNative,
+  syncTranslationLanguagesFromKeyboard,
   ELEVENLABS_API_KEY_STORAGE,
   ELEVENLABS_API_KEY_PLACEHOLDER,
   setElevenLabsApiKey,
@@ -43,7 +44,7 @@ import {
   getOverlayAskQuestionEnabled,
   setOverlayAskQuestionEnabled,
 } from '../../services/floatingMicConfig';
-import { ChevronDown, Copy } from 'lucide-react-native';
+import { ChevronDown, Copy, Keyboard } from 'lucide-react-native';
 import {
   TRANSLATION_LANGUAGES as languages,
   getLanguageName,
@@ -65,6 +66,22 @@ const SettingsScreen = () => {
   const [aiProviderKeySaving, setAiProviderKeySaving] = useState(false);
   /** null | 'from' | 'to' — which translation language picker is open */
   const [languagePickerFor, setLanguagePickerFor] = useState(null);
+
+  // ── Keyboard status ──────────────────────────────────────────────────────
+  const [keyboardEnabled, setKeyboardEnabled] = useState(false);
+  const [keyboardSelected, setKeyboardSelected] = useState(false);
+
+  const checkKeyboardStatus = useCallback(async () => {
+    if (Platform.OS !== 'android') return;
+    try {
+      const enabled = await NativeModules.KeyboardModule?.isKeyboardEnabled?.();
+      const selected = await NativeModules.KeyboardModule?.isKeyboardSelected?.();
+      if (enabled != null) setKeyboardEnabled(!!enabled);
+      if (selected != null) setKeyboardSelected(!!selected);
+    } catch {
+      // module may not expose these methods yet — silently ignore
+    }
+  }, []);
 
   // ── Upload & transcribe audio (for Settings card) ───────────────────────────
   const [pickedAudioUri, setPickedAudioUri] = useState('');
@@ -205,8 +222,9 @@ const SettingsScreen = () => {
 
   const loadTranslationPreference = useCallback(async () => {
     try {
-      const savedFrom = await AsyncStorage.getItem('@from_language');
-      const savedTo = await AsyncStorage.getItem('@to_language');
+      const synced = await syncTranslationLanguagesFromKeyboard();
+      const savedFrom = synced?.fromLang || (await AsyncStorage.getItem('@from_language'));
+      const savedTo = synced?.toLang || (await AsyncStorage.getItem('@to_language'));
       if (savedFrom) setFromLanguage(normalizeStoredLanguageCode(savedFrom, 'en'));
       if (savedTo) setToLanguage(normalizeStoredLanguageCode(savedTo, 'ta'));
     } catch (error) {
@@ -284,10 +302,10 @@ const SettingsScreen = () => {
 
   useFocusEffect(
     useCallback(() => {
-      syncFloatingMicSettingsToNative();
       checkStdPermissions();
       checkSysPermissions();
       loadTranslationPreference();
+      checkKeyboardStatus();
       (async () => {
         try {
           setInternalTranscribe(await getInternalTranscribeEnabled());
@@ -301,7 +319,7 @@ const SettingsScreen = () => {
           // ignore
         }
       })();
-    }, [checkStdPermissions, checkSysPermissions, loadTranslationPreference]),
+    }, [checkStdPermissions, checkSysPermissions, loadTranslationPreference, checkKeyboardStatus]),
   );
 
   // ── Standard permission handlers ──────────────────────────────────────────
@@ -378,6 +396,7 @@ const SettingsScreen = () => {
   const refreshAll = () => {
     checkStdPermissions();
     checkSysPermissions();
+    checkKeyboardStatus();
   };
 
   const handlePickAndTranscribeAudio = useCallback(async () => {
@@ -715,6 +734,80 @@ const SettingsScreen = () => {
             </AppCard> */}
           </>
         )}
+
+        {/* ── Section: Type Easy Keyboard ────────────────────────────────── */}
+        <>
+          <Text style={[styles.sectionLabel, { marginTop: 18 }]}>Type Easy Keyboard</Text>
+          <AppCard style={styles.keyboardCard}>
+            <View style={styles.keyboardCardHeader}>
+              <View style={styles.keyboardIconWrap}>
+                <Keyboard size={22} color={Colors.primary} strokeWidth={2} />
+              </View>
+              <View style={styles.keyboardCardText}>
+                <Text style={styles.keyboardCardTitle}>Advanced Keyboard</Text>
+                <Text style={styles.keyboardCardSub}>
+                  Full QWERTY with Translate, Grammar Check and Voice input built in
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.keyboardFeatureList}>
+              {[
+                '🌐  Translate text while typing',
+                '✓   Grammar check in one tap',
+                '🎤  Voice input — speak to type',
+                '⇧   Shift, Caps Lock, Symbols layer',
+                '💡  Word suggestions bar',
+                ...(Platform.OS === 'ios'
+                  ? ['📱  Floating mic features available via keyboard on iOS']
+                  : []),
+              ].map((f) => (
+                <Text key={f} style={styles.keyboardFeatureItem}>{f}</Text>
+              ))}
+            </View>
+
+            <View style={styles.keyboardToggleRow}>
+              <View style={styles.toggleTextCol}>
+                <Text style={styles.toggleLabel}>Enable Keyboard</Text>
+                <Text style={styles.toggleSubLabel}>
+                  {Platform.OS === 'ios'
+                    ? 'Opens iOS Settings → General → Keyboard → Add New Keyboard'
+                    : 'Opens Android keyboard settings to enable Type Easy'}
+                </Text>
+              </View>
+              <Switch
+                value={keyboardEnabled}
+                onValueChange={() => {
+                  NativeModules.KeyboardModule?.openKeyboardSettings?.();
+                  // Re-check status after user returns from settings
+                  setTimeout(() => checkKeyboardStatus(), 1500);
+                }}
+                trackColor={{ false: Colors.border, true: Colors.primary + '88' }}
+                thumbColor={keyboardEnabled ? Colors.primary : Colors.text.light}
+              />
+            </View>
+
+            <View style={[styles.keyboardToggleRow, styles.keyboardToggleRowLast]}>
+              <View style={styles.toggleTextCol}>
+                <Text style={styles.toggleLabel}>Select Keyboard</Text>
+                <Text style={styles.toggleSubLabel}>
+                  {Platform.OS === 'ios'
+                    ? 'Opens Settings to switch your active keyboard'
+                    : 'Opens the keyboard picker to switch to Type Easy'}
+                </Text>
+              </View>
+              <Switch
+                value={keyboardSelected}
+                onValueChange={() => {
+                  NativeModules.KeyboardModule?.showKeyboardPicker?.();
+                  setTimeout(() => checkKeyboardStatus(), 1500);
+                }}
+                trackColor={{ false: Colors.border, true: Colors.primary + '88' }}
+                thumbColor={keyboardSelected ? Colors.primary : Colors.text.light}
+              />
+            </View>
+          </AppCard>
+        </>
 
         {/* Refresh button */}
         <View style={styles.refreshRow}>
@@ -1295,6 +1388,86 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: Colors.status.granted,
+  },
+
+  // Keyboard section
+  keyboardCard: {
+    marginBottom: 16,
+  },
+  keyboardCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 14,
+  },
+  keyboardIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(30, 136, 255, 0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(30, 136, 255, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  keyboardCardText: {
+    flex: 1,
+  },
+  keyboardCardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    letterSpacing: -0.2,
+  },
+  keyboardCardSub: {
+    marginTop: 3,
+    fontSize: 13,
+    color: Colors.text.secondary,
+    lineHeight: 18,
+  },
+  keyboardFeatureList: {
+    backgroundColor: Colors.backgroundAlt,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 6,
+    marginBottom: 14,
+  },
+  keyboardFeatureItem: {
+    fontSize: 13,
+    color: Colors.text.secondary,
+    lineHeight: 20,
+  },
+  keyboardBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 10,
+  },
+  keyboardBtn: {
+    flex: 1,
+    minHeight: 44,
+    paddingVertical: 0,
+  },
+  keyboardHint: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    lineHeight: 17,
+    textAlign: 'center',
+  },
+  keyboardToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.borderLight,
+  },
+  keyboardToggleRowLast: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.borderLight,
   },
 });
 

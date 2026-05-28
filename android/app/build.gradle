@@ -4,8 +4,77 @@ apply plugin: "com.facebook.react"
 
 react {
     autolinkLibrariesWithApp()
-
 }
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+// ── Auto-generate ApiConfig.kt from src/config/api.js ────────────────────────
+// This keeps Android in sync with the JS API config — single source of truth.
+task generateApiConfig {
+    def jsApiFile   = rootProject.file("../src/config/api.js")
+    def outDir      = file("src/main/java/com/typeeasy/generated")
+    def outFile     = new File(outDir, "ApiConfig.kt")
+
+    inputs.file jsApiFile
+    outputs.file outFile
+
+    doLast {
+        def js = jsApiFile.text
+
+        // Extract server URLs
+        def typeEasy  = (js =~ /TYPE_EASY\s*:\s*['"]([^'"]+)['"]/)[0][1]
+        def easyVoice = (js =~ /EASY_VOICE\s*:\s*['"]([^'"]+)['"]/)[0][1]
+
+        // Extract top-level endpoints (TRANSLATE, GRAMMAR_CHECK)
+        def translate    = (js =~ /TRANSLATE\s*:\s*['"]([^'"]+)['"]/)[0][1]
+        def grammarCheck = (js =~ /GRAMMAR_CHECK\s*:\s*['"]([^'"]+)['"]/)[0][1]
+
+        outDir.mkdirs()
+        outFile.text = """\
+package com.typeeasy.generated
+
+/**
+ * AUTO-GENERATED — do not edit manually.
+ * Generated from src/config/api.js by the generateApiConfig Gradle task.
+ * Re-runs automatically on every build whenever api.js changes.
+ */
+object ApiConfig {
+
+    object Servers {
+        const val TYPE_EASY  = "$typeEasy"
+        const val EASY_VOICE = "$easyVoice"
+    }
+
+    object Endpoints {
+        const val TRANSLATE     = "$translate"
+        const val GRAMMAR_CHECK = "$grammarCheck"
+    }
+
+    fun typeEasyUrl(endpoint: String)  = "\${Servers.TYPE_EASY}\$endpoint"
+    fun easyVoiceUrl(endpoint: String) = "\${Servers.EASY_VOICE}\$endpoint"
+}
+"""
+        println "[generateApiConfig] Generated ApiConfig.kt from api.js"
+        println "  TYPE_EASY  = $typeEasy"
+        println "  EASY_VOICE = $easyVoice"
+        println "  TRANSLATE  = $translate"
+        println "  GRAMMAR_CHECK = $grammarCheck"
+    }
+}
+
+// Wire the task to run before Kotlin compilation
+tasks.whenTaskAdded { task ->
+    if (task.name.startsWith("compile") && task.name.endsWith("Kotlin")) {
+        task.dependsOn generateApiConfig
+    }
+}
+
+// Add the generated sources directory to the Kotlin source set
+android.sourceSets.main.java.srcDirs += ["src/main/java/com/typeeasy/generated"]
+// ─────────────────────────────────────────────────────────────────────────────
 
 repositories {
     google()

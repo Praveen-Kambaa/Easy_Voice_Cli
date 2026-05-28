@@ -37,6 +37,7 @@ import {
 import { addAiQaHistory } from '../../services/aiQaStorage';
 import {
   syncFloatingMicSettingsToNative,
+  syncTranslationLanguagesFromKeyboard,
   getOverlayAskQuestionEnabled,
 } from '../../services/floatingMicConfig';
 import { askQuestion } from '../../services/aiService';
@@ -83,8 +84,9 @@ const TranslatorScreen = ({ navigation }) => {
 
   const loadLanguages = useCallback(async () => {
     try {
-      const f = await AsyncStorage.getItem('@from_language');
-      const t = await AsyncStorage.getItem('@to_language');
+      const synced = await syncTranslationLanguagesFromKeyboard();
+      const f = synced?.fromLang || (await AsyncStorage.getItem('@from_language'));
+      const t = synced?.toLang || (await AsyncStorage.getItem('@to_language'));
       if (f) setFromCode(normalizeStoredLanguageCode(f, 'en'));
       if (t) setToCode(normalizeStoredLanguageCode(t, 'ta'));
       if (Platform.OS === 'android') {

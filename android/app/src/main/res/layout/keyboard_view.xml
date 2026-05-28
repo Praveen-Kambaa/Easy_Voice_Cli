@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/keyboard_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="#1A1A2E">
+
+    <!-- ── Suggestion / candidate bar ─────────────────────────────────── -->
+    <HorizontalScrollView
+        android:id="@+id/suggestion_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:scrollbars="none"
+        android:background="#16213E"
+        android:visibility="visible">
+
+        <LinearLayout
+            android:id="@+id/suggestion_bar"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:gravity="center_vertical"/>
+    </HorizontalScrollView>
+
+    <!-- ── App feature toolbar (Translate · Grammar · Voice) ──────────── -->
+    <LinearLayout
+        android:id="@+id/feature_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:orientation="horizontal"
+        android:background="#0F3460"
+        android:gravity="center_vertical"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp">
+
+        <TextView
+            android:id="@+id/btn_translate"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1"
+            android:text="🌐 Translate"
+            android:textColor="#E0E0E0"
+            android:textSize="12sp"
+            android:gravity="center"
+            android:background="@drawable/key_feature_bg"
+            android:layout_marginEnd="4dp"
+            android:clickable="true"
+            android:focusable="true"/>
+
+        <TextView
+            android:id="@+id/btn_grammar"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1"
+            android:text="✓ Grammar"
+            android:textColor="#E0E0E0"
+            android:textSize="12sp"
+            android:gravity="center"
+            android:background="@drawable/key_feature_bg"
+            android:layout_marginEnd="4dp"
+            android:clickable="true"
+            android:focusable="true"/>
+
+        <TextView
+            android:id="@+id/btn_voice"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1"
+            android:text="🎤 Voice"
+            android:textColor="#E0E0E0"
+            android:textSize="12sp"
+            android:gravity="center"
+            android:background="@drawable/key_feature_bg"
+            android:clickable="true"
+            android:focusable="true"/>
+    </LinearLayout>
+
+    <!-- ── Result bar (shown after translate / grammar) ───────────────── -->
+    <LinearLayout
+        android:id="@+id/result_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="#0D0D1A"
+        android:paddingStart="10dp"
+        android:paddingEnd="6dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/result_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:maxLines="3"/>
+
+        <TextView
+            android:id="@+id/btn_insert_result"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Insert"
+            android:textColor="#1E88FF"
+            android:textSize="13sp"
+            android:fontFamily="sans-serif-medium"
+            android:paddingStart="10dp"
+            android:paddingEnd="4dp"
+            android:gravity="center_vertical"
+            android:clickable="true"
+            android:focusable="true"/>
+
+        <TextView
+            android:id="@+id/btn_dismiss_result"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="✕"
+            android:textColor="#888888"
+            android:textSize="16sp"
+            android:paddingStart="6dp"
+            android:paddingEnd="4dp"
+            android:gravity="center_vertical"
+            android:clickable="true"
+            android:focusable="true"/>
+    </LinearLayout>
+
+    <!-- ── Voice recording indicator ──────────────────────────────────── -->
+    <LinearLayout
+        android:id="@+id/voice_bar"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:background="#1A0A2E"
+        android:gravity="center"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/voice_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🎤  Listening…"
+            android:textColor="#ff0000"
+            android:textSize="14sp"
+            android:fontFamily="sans-serif-medium"/>
+
+        <TextView
+            android:id="@+id/btn_stop_voice"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:text="Stop"
+            android:textColor="#CF6679"
+            android:textSize="13sp"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:paddingStart="16dp"
+            android:paddingEnd="8dp"
+            android:clickable="true"
+            android:focusable="true"/>
+    </LinearLayout>
+
+    <!-- ── The actual KeyboardView ─────────────────────────────────────── -->
+    <android.inputmethodservice.KeyboardView
+        android:id="@+id/keyboard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:keyBackground="@drawable/key_bg"
+        android:keyTextColor="#FFFFFF"
+        android:keyTextSize="18sp"
+        android:labelTextSize="14sp"
+        android:shadowColor="#00000000"
+        android:shadowRadius="0"
+        android:background="#1A1A2E"/>
+
+</LinearLayout>
