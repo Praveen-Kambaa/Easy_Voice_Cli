@@ -19,3 +19,22 @@ buildscript {
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+// Notifee ships its Android AAR in node_modules — Gradle must resolve from this local repo.
+allprojects {
+    repositories {
+        exclusiveContent {
+            forRepository {
+                maven {
+                    url("$rootDir/../node_modules/@notifee/react-native/android/libs")
+                }
+            }
+            filter {
+                includeGroup "app.notifee"
+            }
+        }
+        google()
+        mavenCentral()
+        maven { url "https://www.jitpack.io" }
+    }
+}

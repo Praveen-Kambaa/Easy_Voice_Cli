@@ -2,6 +2,12 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildTypeEasyUrl, API_ENDPOINTS } from '../config/api';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import { Platform } from 'react-native';
+import {
+  GOOGLE_IOS_CLIENT_ID,
+  GOOGLE_WEB_CLIENT_ID,
+  isGoogleSignInConfigured,
+} from '../config/googleAuth';
 import { syncKeyboardSettingsToNative } from '../services/floatingMicConfig';
 import { readJsonResponse, getApiErrorMessage } from '../utils/parseApiResponse';
 
@@ -21,14 +27,23 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Configure Google Sign-In
+  // Configure Google Sign-In when client IDs or GoogleService-Info.plist are set up.
   useEffect(() => {
-    GoogleSignin.configure({
-      webClientId: 'YOUR_WEB_CLIENT_ID', // Replace with your actual web client ID
-      // NOTE: `androidClientId` is not a valid config option on Android for this library.
-      // Use `webClientId` (OAuth client type "Web application") instead.
-      offlineAccess: true,
-    });
+    if (!isGoogleSignInConfigured()) {
+      console.warn(
+        '[Auth] Google Sign-In skipped: set GOOGLE_WEB_CLIENT_ID / GOOGLE_IOS_CLIENT_ID in src/config/googleAuth.js ' +
+          'or add ios/evcli/GoogleService-Info.plist (see file comments).',
+      );
+      return;
+    }
+    const config = { offlineAccess: true };
+    if (GOOGLE_WEB_CLIENT_ID) {
+      config.webClientId = GOOGLE_WEB_CLIENT_ID;
+    }
+    if (Platform.OS === 'ios' && GOOGLE_IOS_CLIENT_ID) {
+      config.iosClientId = GOOGLE_IOS_CLIENT_ID;
+    }
+    GoogleSignin.configure(config);
   }, []);
 
   useEffect(() => {
@@ -278,11 +293,20 @@ export const AuthProvider = ({ children }) => {
   };
 
   const signInWithGoogle = async () => {
+    if (!isGoogleSignInConfigured()) {
+      return {
+        success: false,
+        error:
+          'Google Sign-In is not configured yet. Add Google OAuth client IDs in src/config/googleAuth.js ' +
+          'or GoogleService-Info.plist in ios/evcli/.',
+      };
+    }
     try {
-      // Check if device supports Google Play Services
-      await GoogleSignin.hasPlayServices({
-        showPlayServicesUpdateDialog: true,
-      });
+      if (Platform.OS === 'android') {
+        await GoogleSignin.hasPlayServices({
+          showPlayServicesUpdateDialog: true,
+        });
+      }
 
       // Sign in with Google
       const userInfo = await GoogleSignin.signIn();

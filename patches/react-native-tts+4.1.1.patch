@@ -1,3 +1,96 @@
+diff --git a/node_modules/react-native-tts/android/.classpath b/node_modules/react-native-tts/android/.classpath
+new file mode 100644
+index 0000000..bbe97e5
+--- /dev/null
++++ b/node_modules/react-native-tts/android/.classpath
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<classpath>
++	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-17/"/>
++	<classpathentry kind="con" path="org.eclipse.buildship.core.gradleclasspathcontainer"/>
++	<classpathentry kind="output" path="bin/default"/>
++</classpath>
+diff --git a/node_modules/react-native-tts/android/.gradle/8.9/checksums/checksums.lock b/node_modules/react-native-tts/android/.gradle/8.9/checksums/checksums.lock
+new file mode 100644
+index 0000000..159e07b
+Binary files /dev/null and b/node_modules/react-native-tts/android/.gradle/8.9/checksums/checksums.lock differ
+diff --git a/node_modules/react-native-tts/android/.gradle/8.9/dependencies-accessors/gc.properties b/node_modules/react-native-tts/android/.gradle/8.9/dependencies-accessors/gc.properties
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/react-native-tts/android/.gradle/8.9/fileChanges/last-build.bin b/node_modules/react-native-tts/android/.gradle/8.9/fileChanges/last-build.bin
+new file mode 100644
+index 0000000..f76dd23
+Binary files /dev/null and b/node_modules/react-native-tts/android/.gradle/8.9/fileChanges/last-build.bin differ
+diff --git a/node_modules/react-native-tts/android/.gradle/8.9/fileHashes/fileHashes.lock b/node_modules/react-native-tts/android/.gradle/8.9/fileHashes/fileHashes.lock
+new file mode 100644
+index 0000000..0b6d96e
+Binary files /dev/null and b/node_modules/react-native-tts/android/.gradle/8.9/fileHashes/fileHashes.lock differ
+diff --git a/node_modules/react-native-tts/android/.gradle/8.9/gc.properties b/node_modules/react-native-tts/android/.gradle/8.9/gc.properties
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/react-native-tts/android/.gradle/buildOutputCleanup/buildOutputCleanup.lock b/node_modules/react-native-tts/android/.gradle/buildOutputCleanup/buildOutputCleanup.lock
+new file mode 100644
+index 0000000..761d674
+Binary files /dev/null and b/node_modules/react-native-tts/android/.gradle/buildOutputCleanup/buildOutputCleanup.lock differ
+diff --git a/node_modules/react-native-tts/android/.gradle/buildOutputCleanup/cache.properties b/node_modules/react-native-tts/android/.gradle/buildOutputCleanup/cache.properties
+new file mode 100644
+index 0000000..035e435
+--- /dev/null
++++ b/node_modules/react-native-tts/android/.gradle/buildOutputCleanup/cache.properties
+@@ -0,0 +1,2 @@
++#Fri May 29 10:23:35 IST 2026
++gradle.version=8.9
+diff --git a/node_modules/react-native-tts/android/.gradle/vcs-1/gc.properties b/node_modules/react-native-tts/android/.gradle/vcs-1/gc.properties
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/react-native-tts/android/.project b/node_modules/react-native-tts/android/.project
+new file mode 100644
+index 0000000..b3786f4
+--- /dev/null
++++ b/node_modules/react-native-tts/android/.project
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>react-native-tts</name>
++	<comment>Project react-native-tts created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.jdt.core.javabuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.jdt.core.javanature</nature>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1775551554277</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/react-native-tts/android/.settings/org.eclipse.buildship.core.prefs b/node_modules/react-native-tts/android/.settings/org.eclipse.buildship.core.prefs
+new file mode 100644
+index 0000000..1675490
+--- /dev/null
++++ b/node_modules/react-native-tts/android/.settings/org.eclipse.buildship.core.prefs
+@@ -0,0 +1,2 @@
++connection.project.dir=../../../android
++eclipse.preferences.version=1
 diff --git a/node_modules/react-native-tts/android/build.gradle b/node_modules/react-native-tts/android/build.gradle
 index dbbe046..703c30f 100644
 --- a/node_modules/react-native-tts/android/build.gradle
@@ -19,3 +112,413 @@ index dbbe046..703c30f 100644
  apply plugin: 'com.android.library'
  
  android {
+diff --git a/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/results.bin b/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/results.bin
+new file mode 100644
+index 0000000..7ed749e
+--- /dev/null
++++ b/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/results.bin
+@@ -0,0 +1 @@
++o/bundleLibRuntimeToDirDebug
+diff --git a/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/net/no_mad/tts/BuildConfig.dex b/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/net/no_mad/tts/BuildConfig.dex
+new file mode 100644
+index 0000000..5a4d394
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/net/no_mad/tts/BuildConfig.dex differ
+diff --git a/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/net/no_mad/tts/TextToSpeechModule$1.dex b/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/net/no_mad/tts/TextToSpeechModule$1.dex
+new file mode 100644
+index 0000000..7238579
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/net/no_mad/tts/TextToSpeechModule$1.dex differ
+diff --git a/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/net/no_mad/tts/TextToSpeechModule$2.dex b/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/net/no_mad/tts/TextToSpeechModule$2.dex
+new file mode 100644
+index 0000000..5c9d67b
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/net/no_mad/tts/TextToSpeechModule$2.dex differ
+diff --git a/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/net/no_mad/tts/TextToSpeechModule$3.dex b/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/net/no_mad/tts/TextToSpeechModule$3.dex
+new file mode 100644
+index 0000000..232111c
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/net/no_mad/tts/TextToSpeechModule$3.dex differ
+diff --git a/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/net/no_mad/tts/TextToSpeechModule.dex b/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/net/no_mad/tts/TextToSpeechModule.dex
+new file mode 100644
+index 0000000..8505496
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/net/no_mad/tts/TextToSpeechModule.dex differ
+diff --git a/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/net/no_mad/tts/TextToSpeechPackage.dex b/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/net/no_mad/tts/TextToSpeechPackage.dex
+new file mode 100644
+index 0000000..3c67370
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/net/no_mad/tts/TextToSpeechPackage.dex differ
+diff --git a/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/desugar_graph.bin b/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/desugar_graph.bin
+new file mode 100644
+index 0000000..18b402a
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/.transforms/112075ae242b019d12f5e1bb27e7b8e8/transformed/bundleLibRuntimeToDirDebug/desugar_graph.bin differ
+diff --git a/node_modules/react-native-tts/android/build/.transforms/ad80b6cca49db2cfb627dde643b347ba/results.bin b/node_modules/react-native-tts/android/build/.transforms/ad80b6cca49db2cfb627dde643b347ba/results.bin
+new file mode 100644
+index 0000000..0d259dd
+--- /dev/null
++++ b/node_modules/react-native-tts/android/build/.transforms/ad80b6cca49db2cfb627dde643b347ba/results.bin
+@@ -0,0 +1 @@
++o/classes
+diff --git a/node_modules/react-native-tts/android/build/.transforms/ad80b6cca49db2cfb627dde643b347ba/transformed/classes/classes_dex/classes.dex b/node_modules/react-native-tts/android/build/.transforms/ad80b6cca49db2cfb627dde643b347ba/transformed/classes/classes_dex/classes.dex
+new file mode 100644
+index 0000000..351eecd
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/.transforms/ad80b6cca49db2cfb627dde643b347ba/transformed/classes/classes_dex/classes.dex differ
+diff --git a/node_modules/react-native-tts/android/build/generated/source/buildConfig/debug/net/no_mad/tts/BuildConfig.java b/node_modules/react-native-tts/android/build/generated/source/buildConfig/debug/net/no_mad/tts/BuildConfig.java
+new file mode 100644
+index 0000000..63ca074
+--- /dev/null
++++ b/node_modules/react-native-tts/android/build/generated/source/buildConfig/debug/net/no_mad/tts/BuildConfig.java
+@@ -0,0 +1,10 @@
++/**
++ * Automatically generated file. DO NOT MODIFY
++ */
++package net.no_mad.tts;
++
++public final class BuildConfig {
++  public static final boolean DEBUG = Boolean.parseBoolean("true");
++  public static final String LIBRARY_PACKAGE_NAME = "net.no_mad.tts";
++  public static final String BUILD_TYPE = "debug";
++}
+diff --git a/node_modules/react-native-tts/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml b/node_modules/react-native-tts/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml
+new file mode 100644
+index 0000000..863ea35
+--- /dev/null
++++ b/node_modules/react-native-tts/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="net.no_mad.tts" >
++
++    <uses-sdk android:minSdkVersion="24" />
++
++</manifest>
+\ No newline at end of file
+diff --git a/node_modules/react-native-tts/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json b/node_modules/react-native-tts/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json
+new file mode 100644
+index 0000000..ca76882
+--- /dev/null
++++ b/node_modules/react-native-tts/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json
+@@ -0,0 +1,18 @@
++{
++  "version": 3,
++  "artifactType": {
++    "type": "AAPT_FRIENDLY_MERGED_MANIFESTS",
++    "kind": "Directory"
++  },
++  "applicationId": "net.no_mad.tts",
++  "variantName": "debug",
++  "elements": [
++    {
++      "type": "SINGLE",
++      "filters": [],
++      "attributes": [],
++      "outputFile": "AndroidManifest.xml"
++    }
++  ],
++  "elementType": "File"
++}
+\ No newline at end of file
+diff --git a/node_modules/react-native-tts/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties b/node_modules/react-native-tts/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties
+new file mode 100644
+index 0000000..1211b1e
+--- /dev/null
++++ b/node_modules/react-native-tts/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties
+@@ -0,0 +1,6 @@
++aarFormatVersion=1.0
++aarMetadataVersion=1.0
++minCompileSdk=1
++minCompileSdkExtension=0
++minAndroidGradlePluginVersion=1.0.0
++coreLibraryDesugaringEnabled=false
+diff --git a/node_modules/react-native-tts/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json b/node_modules/react-native-tts/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json
+new file mode 100644
+index 0000000..9e26dfe
+--- /dev/null
++++ b/node_modules/react-native-tts/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json
+@@ -0,0 +1 @@
++{}
+\ No newline at end of file
+diff --git a/node_modules/react-native-tts/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar b/node_modules/react-native-tts/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar
+new file mode 100644
+index 0000000..8c17de9
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar differ
+diff --git a/node_modules/react-native-tts/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar b/node_modules/react-native-tts/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar
+new file mode 100644
+index 0000000..43d354b
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar differ
+diff --git a/node_modules/react-native-tts/android/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt b/node_modules/react-native-tts/android/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/react-native-tts/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties b/node_modules/react-native-tts/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties
+new file mode 100644
+index 0000000..15e6511
+--- /dev/null
++++ b/node_modules/react-native-tts/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties
+@@ -0,0 +1 @@
++#Fri May 29 16:17:26 IST 2026
+diff --git a/node_modules/react-native-tts/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml b/node_modules/react-native-tts/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml
+new file mode 100644
+index 0000000..e5d1afc
+--- /dev/null
++++ b/node_modules/react-native-tts/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/main/res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main" generated-set="main$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/main/res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="debug$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/debug/res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="debug" generated-set="debug$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/debug/res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/build/generated/res/resValues/debug"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated" generated-set="generated$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/build/generated/res/resValues/debug"/></dataSet><mergedItems/></merger>
+\ No newline at end of file
+diff --git a/node_modules/react-native-tts/android/build/intermediates/incremental/mergeDebugAssets/merger.xml b/node_modules/react-native-tts/android/build/intermediates/incremental/mergeDebugAssets/merger.xml
+new file mode 100644
+index 0000000..e9a9185
+--- /dev/null
++++ b/node_modules/react-native-tts/android/build/intermediates/incremental/mergeDebugAssets/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/main/assets"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/debug/assets"/></dataSet><dataSet config="generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/build/intermediates/shader_assets/debug/compileDebugShaders/out"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/react-native-tts/android/build/intermediates/incremental/mergeDebugJniLibFolders/merger.xml b/node_modules/react-native-tts/android/build/intermediates/incremental/mergeDebugJniLibFolders/merger.xml
+new file mode 100644
+index 0000000..560058d
+--- /dev/null
++++ b/node_modules/react-native-tts/android/build/intermediates/incremental/mergeDebugJniLibFolders/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/main/jniLibs"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/debug/jniLibs"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/react-native-tts/android/build/intermediates/incremental/mergeDebugShaders/merger.xml b/node_modules/react-native-tts/android/build/intermediates/incremental/mergeDebugShaders/merger.xml
+new file mode 100644
+index 0000000..e238894
+--- /dev/null
++++ b/node_modules/react-native-tts/android/build/intermediates/incremental/mergeDebugShaders/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/main/shaders"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/debug/shaders"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/react-native-tts/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/net/no_mad/tts/BuildConfig.class b/node_modules/react-native-tts/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/net/no_mad/tts/BuildConfig.class
+new file mode 100644
+index 0000000..eb9c4ab
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/net/no_mad/tts/BuildConfig.class differ
+diff --git a/node_modules/react-native-tts/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/net/no_mad/tts/TextToSpeechModule$1.class b/node_modules/react-native-tts/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/net/no_mad/tts/TextToSpeechModule$1.class
+new file mode 100644
+index 0000000..1874ea8
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/net/no_mad/tts/TextToSpeechModule$1.class differ
+diff --git a/node_modules/react-native-tts/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/net/no_mad/tts/TextToSpeechModule$2.class b/node_modules/react-native-tts/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/net/no_mad/tts/TextToSpeechModule$2.class
+new file mode 100644
+index 0000000..c0f63f2
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/net/no_mad/tts/TextToSpeechModule$2.class differ
+diff --git a/node_modules/react-native-tts/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/net/no_mad/tts/TextToSpeechModule$3.class b/node_modules/react-native-tts/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/net/no_mad/tts/TextToSpeechModule$3.class
+new file mode 100644
+index 0000000..689529c
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/net/no_mad/tts/TextToSpeechModule$3.class differ
+diff --git a/node_modules/react-native-tts/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/net/no_mad/tts/TextToSpeechModule.class b/node_modules/react-native-tts/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/net/no_mad/tts/TextToSpeechModule.class
+new file mode 100644
+index 0000000..2c55898
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/net/no_mad/tts/TextToSpeechModule.class differ
+diff --git a/node_modules/react-native-tts/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/net/no_mad/tts/TextToSpeechPackage.class b/node_modules/react-native-tts/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/net/no_mad/tts/TextToSpeechPackage.class
+new file mode 100644
+index 0000000..14d559b
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/net/no_mad/tts/TextToSpeechPackage.class differ
+diff --git a/node_modules/react-native-tts/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt b/node_modules/react-native-tts/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt
+new file mode 100644
+index 0000000..78ac5b8
+--- /dev/null
++++ b/node_modules/react-native-tts/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt
+@@ -0,0 +1,2 @@
++R_DEF: Internal format may change without notice
++local
+diff --git a/node_modules/react-native-tts/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt b/node_modules/react-native-tts/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt
+new file mode 100644
+index 0000000..23fcd91
+--- /dev/null
++++ b/node_modules/react-native-tts/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt
+@@ -0,0 +1,7 @@
++1<?xml version="1.0" encoding="utf-8"?>
++2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++3    package="net.no_mad.tts" >
++4
++5    <uses-sdk android:minSdkVersion="24" />
++6
++7</manifest>
+diff --git a/node_modules/react-native-tts/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml b/node_modules/react-native-tts/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml
+new file mode 100644
+index 0000000..863ea35
+--- /dev/null
++++ b/node_modules/react-native-tts/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="net.no_mad.tts" >
++
++    <uses-sdk android:minSdkVersion="24" />
++
++</manifest>
+\ No newline at end of file
+diff --git a/node_modules/react-native-tts/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json b/node_modules/react-native-tts/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json
+new file mode 100644
+index 0000000..0637a08
+--- /dev/null
++++ b/node_modules/react-native-tts/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json
+@@ -0,0 +1 @@
++[]
+\ No newline at end of file
+diff --git a/node_modules/react-native-tts/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt b/node_modules/react-native-tts/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt
+new file mode 100644
+index 0000000..08f4ebe
+--- /dev/null
++++ b/node_modules/react-native-tts/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt
+@@ -0,0 +1 @@
++0 Warning/Error
+\ No newline at end of file
+diff --git a/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/net/no_mad/tts/BuildConfig.class b/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/net/no_mad/tts/BuildConfig.class
+new file mode 100644
+index 0000000..eb9c4ab
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/net/no_mad/tts/BuildConfig.class differ
+diff --git a/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/net/no_mad/tts/TextToSpeechModule$1.class b/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/net/no_mad/tts/TextToSpeechModule$1.class
+new file mode 100644
+index 0000000..1874ea8
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/net/no_mad/tts/TextToSpeechModule$1.class differ
+diff --git a/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/net/no_mad/tts/TextToSpeechModule$2.class b/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/net/no_mad/tts/TextToSpeechModule$2.class
+new file mode 100644
+index 0000000..c0f63f2
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/net/no_mad/tts/TextToSpeechModule$2.class differ
+diff --git a/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/net/no_mad/tts/TextToSpeechModule$3.class b/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/net/no_mad/tts/TextToSpeechModule$3.class
+new file mode 100644
+index 0000000..689529c
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/net/no_mad/tts/TextToSpeechModule$3.class differ
+diff --git a/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/net/no_mad/tts/TextToSpeechModule.class b/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/net/no_mad/tts/TextToSpeechModule.class
+new file mode 100644
+index 0000000..2c55898
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/net/no_mad/tts/TextToSpeechModule.class differ
+diff --git a/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/net/no_mad/tts/TextToSpeechPackage.class b/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/net/no_mad/tts/TextToSpeechPackage.class
+new file mode 100644
+index 0000000..14d559b
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/net/no_mad/tts/TextToSpeechPackage.class differ
+diff --git a/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar b/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar
+new file mode 100644
+index 0000000..14c4d3f
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar differ
+diff --git a/node_modules/react-native-tts/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt b/node_modules/react-native-tts/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt
+new file mode 100644
+index 0000000..0bace5b
+--- /dev/null
++++ b/node_modules/react-native-tts/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt
+@@ -0,0 +1 @@
++net.no_mad.tts
+diff --git a/node_modules/react-native-tts/android/build/outputs/logs/manifest-merger-debug-report.txt b/node_modules/react-native-tts/android/build/outputs/logs/manifest-merger-debug-report.txt
+new file mode 100644
+index 0000000..0d6e4a7
+--- /dev/null
++++ b/node_modules/react-native-tts/android/build/outputs/logs/manifest-merger-debug-report.txt
+@@ -0,0 +1,17 @@
++-- Merging decision tree log ---
++manifest
++ADDED from /Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/main/AndroidManifest.xml:1:1-2:12
++INJECTED from /Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/main/AndroidManifest.xml:1:1-2:12
++	package
++		ADDED from /Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/main/AndroidManifest.xml:1:70-94
++		INJECTED from /Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/main/AndroidManifest.xml
++	xmlns:android
++		ADDED from /Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/main/AndroidManifest.xml:1:11-69
++uses-sdk
++INJECTED from /Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/main/AndroidManifest.xml reason: use-sdk injection requested
++INJECTED from /Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/main/AndroidManifest.xml
++INJECTED from /Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/main/AndroidManifest.xml
++	android:targetSdkVersion
++		INJECTED from /Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/main/AndroidManifest.xml
++	android:minSdkVersion
++		INJECTED from /Users/kambaa/Documents/crm/Easy_Voice_Cli/node_modules/react-native-tts/android/src/main/AndroidManifest.xml
+diff --git a/node_modules/react-native-tts/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin b/node_modules/react-native-tts/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin
+new file mode 100644
+index 0000000..3ccff17
+Binary files /dev/null and b/node_modules/react-native-tts/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin differ
+diff --git a/node_modules/react-native-tts/index.js b/node_modules/react-native-tts/index.js
+index 6da7573..acd1793 100644
+--- a/node_modules/react-native-tts/index.js
++++ b/node_modules/react-native-tts/index.js
+@@ -93,19 +93,19 @@ class Tts extends NativeEventEmitter {
+     }
+   }
+ 
+-  stop(onWordBoundary) {
++  stop(onWordBoundary = false) {
+     if (Platform.OS === 'ios') {
+-      return TextToSpeech.stop(onWordBoundary);
+-    } else {
+-      return TextToSpeech.stop();
++      // Legacy native module: BOOL args crash under RN New Architecture.
++      return Promise.resolve(false);
+     }
++    return TextToSpeech.stop();
+   }
+ 
+-  pause(onWordBoundary) {
++  pause(onWordBoundary = false) {
+     if (Platform.OS === 'ios') {
+-      return TextToSpeech.pause(onWordBoundary);
++      return Promise.resolve(false);
+     }
+-    return Promise.resolve(false);
++    return TextToSpeech.pause(!!onWordBoundary);
+   }
+ 
+   resume() {
+diff --git a/node_modules/react-native-tts/ios/TextToSpeech/TextToSpeech.m b/node_modules/react-native-tts/ios/TextToSpeech/TextToSpeech.m
+index 1e769cc..04f5110 100644
+--- a/node_modules/react-native-tts/ios/TextToSpeech/TextToSpeech.m
++++ b/node_modules/react-native-tts/ios/TextToSpeech/TextToSpeech.m
+@@ -94,33 +94,17 @@ + (BOOL)requiresMainQueueSetup
+     resolve([NSNumber numberWithUnsignedLong:utterance.hash]);
+ }
+ 
+-RCT_EXPORT_METHOD(stop:(BOOL *)onWordBoundary resolve:(RCTPromiseResolveBlock)resolve reject:(__unused RCTPromiseRejectBlock)reject)
++RCT_EXPORT_METHOD(stop:(BOOL)onWordBoundary resolve:(RCTPromiseResolveBlock)resolve reject:(__unused RCTPromiseRejectBlock)reject)
+ {
+-    AVSpeechBoundary boundary;
+-
+-    if(onWordBoundary != NULL && onWordBoundary) {
+-        boundary = AVSpeechBoundaryWord;
+-    } else {
+-        boundary = AVSpeechBoundaryImmediate;
+-    }
+-
++    AVSpeechBoundary boundary = onWordBoundary ? AVSpeechBoundaryWord : AVSpeechBoundaryImmediate;
+     BOOL stopped = [self.synthesizer stopSpeakingAtBoundary:boundary];
+-
+     resolve([NSNumber numberWithBool:stopped]);
+ }
+ 
+-RCT_EXPORT_METHOD(pause:(BOOL *)onWordBoundary resolve:(RCTPromiseResolveBlock)resolve reject:(__unused RCTPromiseRejectBlock)reject)
++RCT_EXPORT_METHOD(pause:(BOOL)onWordBoundary resolve:(RCTPromiseResolveBlock)resolve reject:(__unused RCTPromiseRejectBlock)reject)
+ {
+-    AVSpeechBoundary boundary;
+-
+-    if(onWordBoundary != NULL && onWordBoundary) {
+-        boundary = AVSpeechBoundaryWord;
+-    } else {
+-        boundary = AVSpeechBoundaryImmediate;
+-    }
+-
++    AVSpeechBoundary boundary = onWordBoundary ? AVSpeechBoundaryWord : AVSpeechBoundaryImmediate;
+     BOOL paused = [self.synthesizer pauseSpeakingAtBoundary:boundary];
+-
+     resolve([NSNumber numberWithBool:paused]);
+ }
+ 
+@@ -132,13 +116,13 @@ + (BOOL)requiresMainQueueSetup
+ }
+ 
+ 
+-RCT_EXPORT_METHOD(setDucking:(BOOL *)ducking
++RCT_EXPORT_METHOD(setDucking:(BOOL)ducking
+                   resolve:(RCTPromiseResolveBlock)resolve
+                   reject:(__unused RCTPromiseRejectBlock)reject)
+ {
+     _ducking = ducking;
+ 
+-    if(ducking) {
++    if (ducking) {
+         AVAudioSession *session = [AVAudioSession sharedInstance];
+         [session setCategory:AVAudioSessionCategoryPlayback
+                  withOptions:AVAudioSessionCategoryOptionDuckOthers
+@@ -178,7 +162,7 @@ + (BOOL)requiresMainQueueSetup
+ }
+ 
+ RCT_EXPORT_METHOD(setDefaultRate:(float)rate
+-                  skipTransform:(BOOL *)skipTransform // not used, compatibility with Android native module signature
++                  skipTransform:(BOOL)skipTransform // not used, compatibility with Android native module signature
+                   resolve:(RCTPromiseResolveBlock)resolve
+                   reject:(RCTPromiseRejectBlock)reject)
+ {

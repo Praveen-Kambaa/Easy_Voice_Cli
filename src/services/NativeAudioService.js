@@ -1,4 +1,5 @@
 import { NativeModules, DeviceEventEmitter, Platform, Alert, Linking } from 'react-native';
+import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FileSystem, Dirs } from 'react-native-file-access';
 import { formatDateTime } from '../utils/dateTimeFormat';
@@ -62,8 +63,20 @@ class NativeAudioService {
   }
 
   async requestAudioPermission() {
-    // For Android, we'll handle permissions in the native module
+    if (Platform.OS === 'ios') {
+      const perm = PERMISSIONS.IOS.MICROPHONE;
+      const current = await check(perm);
+      if (current === RESULTS.GRANTED || current === RESULTS.LIMITED) {
+        return true;
+      }
+      const next = await request(perm);
+      return next === RESULTS.GRANTED || next === RESULTS.LIMITED;
+    }
     return true;
+  }
+
+  isNativeRecorderAvailable() {
+    return AudioRecorderModule != null && typeof AudioRecorderModule.startRecording === 'function';
   }
 
   /**
@@ -139,8 +152,21 @@ class NativeAudioService {
 
   async startRecording() {
     try {
+      if (!this.isNativeRecorderAvailable()) {
+        throw new Error(
+          Platform.OS === 'ios'
+            ? 'Audio recording is not available. Rebuild the iOS app after installing pods.'
+            : 'Audio recorder native module is not available.',
+        );
+      }
+
       if (this.isRecording) {
         throw new Error('Recording is already in progress');
+      }
+
+      const hasMic = await this.requestAudioPermission();
+      if (!hasMic) {
+        throw new Error('Microphone permission is required to record audio.');
       }
 
       const timestamp = Date.now();
@@ -148,7 +174,6 @@ class NativeAudioService {
 
       console.log('[NativeAudioService] startRecording → fileName:', fileName);
 
-      // Call native method with Promise
       const filePath = await AudioRecorderModule.startRecording(fileName);
 
       this.isRecording = true;
@@ -231,6 +256,9 @@ class NativeAudioService {
           ? filePath.replace(/^file:\/\//, '')
           : filePath;
 
+      if (!this.isNativeRecorderAvailable()) {
+        throw new Error('Audio playback is not available on this device.');
+      }
       await AudioRecorderModule.startPlayback(pathForNative);
 
       this.isPlaying = true;

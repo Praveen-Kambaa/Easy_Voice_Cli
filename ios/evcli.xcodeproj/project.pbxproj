@@ -7,38 +7,37 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0C80B921A6F3F58F76C31292 /* libPods-evcli.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DCACB8F33CDC322A6C60F78 /* libPods-evcli.a */; };
-		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
-		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		8B0B07128DCF68960187661E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
+		AR0100011A68108700A75B9A /* AudioRecorderModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = AR0100111A68108700A75B9A /* AudioRecorderModule.swift */; };
+		AR0100021A68108700A75B9A /* AudioRecorderModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = AR0100121A68108700A75B9A /* AudioRecorderModuleBridge.m */; };
+		CA6C5CA7066AB677D18557D3 /* libPods-evcli.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DCACB8F33CDC322A6C60F78 /* libPods-evcli.a */; };
 		KB0100011A68108700A75B9A /* KeyboardModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100111A68108700A75B9A /* KeyboardModule.swift */; };
 		KB0100021A68108700A75B9A /* KeyboardModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = KB0100121A68108700A75B9A /* KeyboardModuleBridge.m */; };
 		KB0100031A68108700A75B9A /* KeyboardSharedConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100131A68108700A75B9A /* KeyboardSharedConfig.swift */; };
 		KB0100041A68108700A75B9A /* KeyboardTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100141A68108700A75B9A /* KeyboardTheme.swift */; };
-		KB0100051A68108700A75B9A /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100151A68108700A75B9A /* KeyboardViewController.swift */; };
 		KB0100071A68108700A75B9A /* TypeEasyKeyboard.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = KB0100171A68108700A75B9A /* TypeEasyKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		KB0100081A68108700A75B9A /* KeyboardTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100141A68108700A75B9A /* KeyboardTheme.swift */; };
+		KB0100081A68108700A75B9A /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100151A68108700A75B9A /* KeyboardViewController.swift */; };
+		KB0100091A68108700A75B9A /* KeyboardTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100141A68108700A75B9A /* KeyboardTheme.swift */; };
+		KB0100361A68108700A75B9A /* KeyboardDictationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100321A68108700A75B9A /* KeyboardDictationStore.swift */; };
+		KB0100371A68108700A75B9A /* KeyboardDictationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100321A68108700A75B9A /* KeyboardDictationStore.swift */; };
+		KB0100381A68108700A75B9A /* KeyboardDictationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100331A68108700A75B9A /* KeyboardDictationService.swift */; };
+		KB0100391A68108700A75B9A /* KeyboardSharedConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100131A68108700A75B9A /* KeyboardSharedConfig.swift */; };
+		KB0100411A68108700A75B9A /* KeyboardApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100401A68108700A75B9A /* KeyboardApiClient.swift */; };
+		KB0100431A68108700A75B9A /* KeyboardHostLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100421A68108700A75B9A /* KeyboardHostLink.swift */; };
+		KB0100441A68108700A75B9A /* KeyboardLanguages.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100451A68108700A75B9A /* KeyboardLanguages.swift */; };
+		KB0100461A68108700A75B9A /* KeyboardEmojiData.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100471A68108700A75B9A /* KeyboardEmojiData.swift */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXFileReference section */
-		13B07F961A680F5B00A75B9A /* evcli.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = evcli.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = evcli/Images.xcassets; sourceTree = "<group>"; };
-		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = evcli/Info.plist; sourceTree = "<group>"; };
-		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = evcli/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		3B4392A12AC88292D35C810B /* Pods-evcli.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-evcli.debug.xcconfig"; path = "Target Support Files/Pods-evcli/Pods-evcli.debug.xcconfig"; sourceTree = "<group>"; };
-		5709B34CF0A7D63546082F79 /* Pods-evcli.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-evcli.release.xcconfig"; path = "Target Support Files/Pods-evcli/Pods-evcli.release.xcconfig"; sourceTree = "<group>"; };
-		5DCACB8F33CDC322A6C60F78 /* libPods-evcli.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-evcli.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = evcli/AppDelegate.swift; sourceTree = "<group>"; };
-		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = evcli/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
-		KB0100111A68108700A75B9A /* KeyboardModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardModule.swift; path = evcli/KeyboardModule.swift; sourceTree = "<group>"; };
-		KB0100121A68108700A75B9A /* KeyboardModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = KeyboardModuleBridge.m; path = evcli/KeyboardModuleBridge.m; sourceTree = "<group>"; };
-		KB0100131A68108700A75B9A /* KeyboardSharedConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardSharedConfig.swift; path = Shared/KeyboardSharedConfig.swift; sourceTree = "<group>"; };
-		KB0100141A68108700A75B9A /* KeyboardTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardTheme.swift; path = Shared/KeyboardTheme.swift; sourceTree = "<group>"; };
-		KB0100151A68108700A75B9A /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardViewController.swift; path = TypeEasyKeyboard/KeyboardViewController.swift; sourceTree = "<group>"; };
-		KB0100161A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = TypeEasyKeyboard/Info.plist; sourceTree = "<group>"; };
-		KB0100171A68108700A75B9A /* TypeEasyKeyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TypeEasyKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-/* End PBXFileReference section */
+/* Begin PBXContainerItemProxy section */
+		KB0100291A68108700A75B9A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = KB0100241A68108700A75B9A;
+			remoteInfo = TypeEasyKeyboard;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
 		KB0100201A68108700A75B9A /* Embed App Extensions */ = {
@@ -54,12 +53,49 @@
 		};
 /* End PBXCopyFilesBuildPhase section */
 
+/* Begin PBXFileReference section */
+		13B07F961A680F5B00A75B9A /* evcli.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = evcli.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = evcli/Images.xcassets; sourceTree = "<group>"; };
+		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = evcli/Info.plist; sourceTree = "<group>"; };
+		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = evcli/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		3B4392A12AC88292D35C810B /* Pods-evcli.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-evcli.debug.xcconfig"; path = "Target Support Files/Pods-evcli/Pods-evcli.debug.xcconfig"; sourceTree = "<group>"; };
+		5709B34CF0A7D63546082F79 /* Pods-evcli.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-evcli.release.xcconfig"; path = "Target Support Files/Pods-evcli/Pods-evcli.release.xcconfig"; sourceTree = "<group>"; };
+		5DCACB8F33CDC322A6C60F78 /* libPods-evcli.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-evcli.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = evcli/AppDelegate.swift; sourceTree = "<group>"; };
+		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = evcli/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		AR0100111A68108700A75B9A /* AudioRecorderModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AudioRecorderModule.swift; path = evcli/AudioRecorderModule.swift; sourceTree = "<group>"; };
+		AR0100121A68108700A75B9A /* AudioRecorderModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = AudioRecorderModuleBridge.m; path = evcli/AudioRecorderModuleBridge.m; sourceTree = "<group>"; };
+		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		KB0100111A68108700A75B9A /* KeyboardModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardModule.swift; path = evcli/KeyboardModule.swift; sourceTree = "<group>"; };
+		KB0100121A68108700A75B9A /* KeyboardModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = KeyboardModuleBridge.m; path = evcli/KeyboardModuleBridge.m; sourceTree = "<group>"; };
+		KB0100131A68108700A75B9A /* KeyboardSharedConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardSharedConfig.swift; path = Shared/KeyboardSharedConfig.swift; sourceTree = "<group>"; };
+		KB0100141A68108700A75B9A /* KeyboardTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardTheme.swift; path = Shared/KeyboardTheme.swift; sourceTree = "<group>"; };
+		KB0100151A68108700A75B9A /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardViewController.swift; path = TypeEasyKeyboard/KeyboardViewController.swift; sourceTree = "<group>"; };
+		KB0100161A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = TypeEasyKeyboard/Info.plist; sourceTree = "<group>"; };
+		KB0100171A68108700A75B9A /* TypeEasyKeyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TypeEasyKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		KB0100321A68108700A75B9A /* KeyboardDictationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardDictationStore.swift; path = Shared/KeyboardDictationStore.swift; sourceTree = "<group>"; };
+		KB0100331A68108700A75B9A /* KeyboardDictationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardDictationService.swift; path = evcli/KeyboardDictationService.swift; sourceTree = "<group>"; };
+		KB0100341A68108700A75B9A /* evcli.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = evcli.entitlements; path = evcli/evcli.entitlements; sourceTree = "<group>"; };
+		KB0100351A68108700A75B9A /* TypeEasyKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = TypeEasyKeyboard.entitlements; path = TypeEasyKeyboard/TypeEasyKeyboard.entitlements; sourceTree = "<group>"; };
+		KB0100401A68108700A75B9A /* KeyboardApiClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardApiClient.swift; path = Shared/KeyboardApiClient.swift; sourceTree = "<group>"; };
+		KB0100421A68108700A75B9A /* KeyboardHostLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardHostLink.swift; path = Shared/KeyboardHostLink.swift; sourceTree = "<group>"; };
+		KB0100451A68108700A75B9A /* KeyboardLanguages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardLanguages.swift; path = Shared/KeyboardLanguages.swift; sourceTree = "<group>"; };
+		KB0100471A68108700A75B9A /* KeyboardEmojiData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardEmojiData.swift; path = Shared/KeyboardEmojiData.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
 /* Begin PBXFrameworksBuildPhase section */
-		13B07F8C1A680F5B00A75B9A /* Frameworks */ = {
+		7443811516C7A3AC1827DE1F /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				0C80B921A6F3F58F76C31292 /* libPods-evcli.a in Frameworks */,
+				CA6C5CA7066AB677D18557D3 /* libPods-evcli.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		KB0100271A68108700A75B9A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -73,29 +109,15 @@
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
 				KB0100111A68108700A75B9A /* KeyboardModule.swift */,
 				KB0100121A68108700A75B9A /* KeyboardModuleBridge.m */,
+				AR0100111A68108700A75B9A /* AudioRecorderModule.swift */,
+				AR0100121A68108700A75B9A /* AudioRecorderModuleBridge.m */,
+				KB0100331A68108700A75B9A /* KeyboardDictationService.swift */,
+				KB0100341A68108700A75B9A /* evcli.entitlements */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
 			);
 			name = evcli;
-			sourceTree = "<group>";
-		};
-		KB0100211A68108700A75B9A /* Shared */ = {
-			isa = PBXGroup;
-			children = (
-				KB0100131A68108700A75B9A /* KeyboardSharedConfig.swift */,
-				KB0100141A68108700A75B9A /* KeyboardTheme.swift */,
-			);
-			name = Shared;
-			sourceTree = "<group>";
-		};
-		KB0100221A68108700A75B9A /* TypeEasyKeyboard */ = {
-			isa = PBXGroup;
-			children = (
-				KB0100151A68108700A75B9A /* KeyboardViewController.swift */,
-				KB0100161A68108700A75B9A /* Info.plist */,
-			);
-			name = TypeEasyKeyboard;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
@@ -148,6 +170,30 @@
 			path = Pods;
 			sourceTree = "<group>";
 		};
+		KB0100211A68108700A75B9A /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				KB0100131A68108700A75B9A /* KeyboardSharedConfig.swift */,
+				KB0100321A68108700A75B9A /* KeyboardDictationStore.swift */,
+				KB0100141A68108700A75B9A /* KeyboardTheme.swift */,
+				KB0100401A68108700A75B9A /* KeyboardApiClient.swift */,
+				KB0100421A68108700A75B9A /* KeyboardHostLink.swift */,
+				KB0100451A68108700A75B9A /* KeyboardLanguages.swift */,
+				KB0100471A68108700A75B9A /* KeyboardEmojiData.swift */,
+			);
+			name = Shared;
+			sourceTree = "<group>";
+		};
+		KB0100221A68108700A75B9A /* TypeEasyKeyboard */ = {
+			isa = PBXGroup;
+			children = (
+				KB0100151A68108700A75B9A /* KeyboardViewController.swift */,
+				KB0100161A68108700A75B9A /* Info.plist */,
+				KB0100351A68108700A75B9A /* TypeEasyKeyboard.entitlements */,
+			);
+			name = TypeEasyKeyboard;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -157,12 +203,12 @@
 			buildPhases = (
 				C38B50BA6285516D6DCD4F65 /* [CP] Check Pods Manifest.lock */,
 				13B07F871A680F5B00A75B9A /* Sources */,
-				13B07F8C1A680F5B00A75B9A /* Frameworks */,
-				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				00EEFC60759A1932668264C0 /* [CP] Embed Pods Frameworks */,
 				E235C05ADACE081382539298 /* [CP] Copy Pods Resources */,
 				KB0100201A68108700A75B9A /* Embed App Extensions */,
+				F66428D37937F2E9279ADC19 /* Resources */,
+				7443811516C7A3AC1827DE1F /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -200,10 +246,14 @@
 				LastUpgradeCheck = 1210;
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
+						DevelopmentTeam = D828566AL3;
 						LastSwiftMigration = 1120;
+						ProvisioningStyle = Automatic;
 					};
 					KB0100241A68108700A75B9A = {
 						CreatedOnToolsVersion = 15.0;
+						DevelopmentTeam = D828566AL3;
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -227,30 +277,14 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		13B07F8E1A680F5B00A75B9A /* Resources */ = {
+		F66428D37937F2E9279ADC19 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */,
-				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
+				8B0B07128DCF68960187661E /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-/* End PBXResourcesBuildPhase section */
-
-/* Begin PBXSourcesBuildPhase section */
-		KB0100261A68108700A75B9A /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				KB0100051A68108700A75B9A /* KeyboardViewController.swift in Sources */,
-				KB0100081A68108700A75B9A /* KeyboardTheme.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXSourcesBuildPhase section */
-
-/* Begin PBXResourcesBuildPhase section */
 		KB0100281A68108700A75B9A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -259,34 +293,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXFrameworksBuildPhase section */
-		KB0100271A68108700A75B9A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXFrameworksBuildPhase section */
-
-/* Begin PBXTargetDependency section */
-		KB0100231A68108700A75B9A /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = KB0100241A68108700A75B9A /* TypeEasyKeyboard */;
-			targetProxy = KB0100291A68108700A75B9A /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
-
-/* Begin PBXContainerItemProxy section */
-		KB0100291A68108700A75B9A /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = KB0100241A68108700A75B9A;
-			remoteInfo = TypeEasyKeyboard;
-		};
-/* End PBXContainerItemProxy section */
 
 /* Begin PBXShellScriptBuildPhase section */
 		00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */ = {
@@ -371,12 +377,39 @@
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
 				KB0100011A68108700A75B9A /* KeyboardModule.swift in Sources */,
 				KB0100021A68108700A75B9A /* KeyboardModuleBridge.m in Sources */,
+				AR0100011A68108700A75B9A /* AudioRecorderModule.swift in Sources */,
+				AR0100021A68108700A75B9A /* AudioRecorderModuleBridge.m in Sources */,
 				KB0100031A68108700A75B9A /* KeyboardSharedConfig.swift in Sources */,
 				KB0100041A68108700A75B9A /* KeyboardTheme.swift in Sources */,
+				KB0100361A68108700A75B9A /* KeyboardDictationStore.swift in Sources */,
+				KB0100381A68108700A75B9A /* KeyboardDictationService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		KB0100261A68108700A75B9A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				KB0100081A68108700A75B9A /* KeyboardViewController.swift in Sources */,
+				KB0100091A68108700A75B9A /* KeyboardTheme.swift in Sources */,
+				KB0100371A68108700A75B9A /* KeyboardDictationStore.swift in Sources */,
+				KB0100391A68108700A75B9A /* KeyboardSharedConfig.swift in Sources */,
+				KB0100411A68108700A75B9A /* KeyboardApiClient.swift in Sources */,
+				KB0100431A68108700A75B9A /* KeyboardHostLink.swift in Sources */,
+				KB0100441A68108700A75B9A /* KeyboardLanguages.swift in Sources */,
+				KB0100461A68108700A75B9A /* KeyboardEmojiData.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		KB0100231A68108700A75B9A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = KB0100241A68108700A75B9A /* TypeEasyKeyboard */;
+			targetProxy = KB0100291A68108700A75B9A /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
@@ -385,9 +418,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = evcli/evcli.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D828566AL3;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = evcli/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Type Easy";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -399,12 +437,13 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "org.reactjs.native.example.$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.type.easy;
 				PRODUCT_NAME = evcli;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = "evcli/evcli-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
-				SWIFT_OBJC_BRIDGING_HEADER = "evcli/evcli-Bridging-Header.h";
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 			};
@@ -416,8 +455,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = evcli/evcli.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D828566AL3;
 				INFOPLIST_FILE = evcli/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Type Easy";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -429,11 +473,12 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "org.reactjs.native.example.$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.type.easy;
 				PRODUCT_NAME = evcli;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SWIFT_VERSION = 5.0;
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_OBJC_BRIDGING_HEADER = "evcli/evcli-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 			};
@@ -500,6 +545,10 @@
 				);
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				OTHER_CFLAGS = (
+					"$(inherited)",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
+				);
 				OTHER_CPLUSPLUSFLAGS = (
 					"$(OTHER_CFLAGS)",
 					"-DFOLLY_NO_CONFIG",
@@ -507,8 +556,13 @@
 					"-DFOLLY_USE_LIBCPP=1",
 					"-DFOLLY_CFG_NO_COROUTINES=1",
 					"-DFOLLY_HAVE_CLOCK_GETTIME=1",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
 				);
+				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
+				USE_HERMES = true;
 			};
 			name = Debug;
 		};
@@ -565,6 +619,10 @@
 					"\"$(inherited)\"",
 				);
 				MTL_ENABLE_DEBUG_INFO = NO;
+				OTHER_CFLAGS = (
+					"$(inherited)",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
+				);
 				OTHER_CPLUSPLUSFLAGS = (
 					"$(OTHER_CFLAGS)",
 					"-DFOLLY_NO_CONFIG",
@@ -572,8 +630,12 @@
 					"-DFOLLY_USE_LIBCPP=1",
 					"-DFOLLY_CFG_NO_COROUTINES=1",
 					"-DFOLLY_HAVE_CLOCK_GETTIME=1",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
 				);
+				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
+				USE_HERMES = true;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
@@ -581,20 +643,24 @@
 		KB0100301A68108700A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TypeEasyKeyboard/TypeEasyKeyboard.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D828566AL3;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TypeEasyKeyboard/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.5;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "org.reactjs.native.example.evcli.TypeEasyKeyboard";
+				PRODUCT_BUNDLE_IDENTIFIER = com.type.easy.keyboard;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -603,20 +669,24 @@
 		KB0100311A68108700A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TypeEasyKeyboard/TypeEasyKeyboard.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D828566AL3;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TypeEasyKeyboard/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.5;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "org.reactjs.native.example.evcli.TypeEasyKeyboard";
+				PRODUCT_BUNDLE_IDENTIFIER = com.type.easy.keyboard;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -634,20 +704,20 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		KB0100251A68108700A75B9A /* Build configuration list for PBXNativeTarget "TypeEasyKeyboard" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				KB0100301A68108700A75B9A /* Debug */,
-				KB0100311A68108700A75B9A /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "evcli" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				83CBBA201A601CBA00E9B192 /* Debug */,
 				83CBBA211A601CBA00E9B192 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		KB0100251A68108700A75B9A /* Build configuration list for PBXNativeTarget "TypeEasyKeyboard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				KB0100301A68108700A75B9A /* Debug */,
+				KB0100311A68108700A75B9A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

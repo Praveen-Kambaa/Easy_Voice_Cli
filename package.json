@@ -7,7 +7,9 @@
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "postinstall": "patch-package",
-    "start": "react-native start",
+    "start": "react-native start --host 0.0.0.0",
+    "start:usb": "bash scripts/ios-usb-metro.sh",
+    "start:android:usb": "bash scripts/android-usb-metro.sh",
     "test": "jest"
   },
   "dependencies": {

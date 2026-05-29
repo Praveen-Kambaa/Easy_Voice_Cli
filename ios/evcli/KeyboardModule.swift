@@ -49,6 +49,14 @@ class KeyboardModule: NSObject {
   }
 
   @objc
+  func consumePendingDeepLink(
+    _ resolve: RCTPromiseResolveBlock,
+    rejecter reject: RCTPromiseRejectBlock
+  ) {
+    resolve(KeyboardSharedConfig.consumePendingDeepLink() as Any? ?? NSNull())
+  }
+
+  @objc
   func getKeyboardSettings(
     _ resolve: RCTPromiseResolveBlock,
     rejecter reject: RCTPromiseRejectBlock

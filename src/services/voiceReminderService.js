@@ -1,13 +1,14 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import notifee, {
-  AndroidImportance,
-  AndroidVisibility,
-  AuthorizationStatus,
-  EventType,
-  TriggerType,
-} from '@notifee/react-native';
 import { FileSystem, Dirs } from 'react-native-file-access';
+
+/** @notifee/react-native has no iOS native module — load only on Android. */
+function getNotifee() {
+  if (Platform.OS !== 'android') {
+    return null;
+  }
+  return require('@notifee/react-native');
+}
 
 const STORAGE_KEY = '@voice_reminders_v1';
 /** New channel id so alarm-style settings apply (Android channels are immutable after creation). */
@@ -37,23 +38,27 @@ async function ensureReminderDir() {
 }
 
 async function createAndroidChannel() {
-  if (Platform.OS !== 'android') return;
-  await notifee.createChannel({
+  const nf = getNotifee();
+  if (!nf) return;
+  await nf.default.createChannel({
     id: CHANNEL_ID,
     name: 'Voice alarms',
     description: 'Rings like an alarm until you open or dismiss the reminder.',
-    importance: AndroidImportance.HIGH,
+    importance: nf.AndroidImportance.HIGH,
     sound: 'default',
     vibration: true,
     vibrationPattern: [50, 700, 300, 700, 300, 700, 300, 1200],
     lights: true,
-    visibility: AndroidVisibility.PUBLIC,
+    visibility: nf.AndroidVisibility.PUBLIC,
     /** Break through Do Not Disturb when the user allows it for this channel (API 29+). */
     bypassDnd: true,
   });
 }
 
 async function scheduleTrigger(reminder) {
+  const nf = getNotifee();
+  if (!nf) return;
+
   const fireMs = new Date(reminder.scheduledAt).getTime();
   if (Number.isNaN(fireMs) || fireMs <= Date.now()) {
     return;
@@ -78,8 +83,8 @@ async function scheduleTrigger(reminder) {
     data: { reminderId: reminder.id, type: 'voice_reminder' },
     android: {
       channelId: CHANNEL_ID,
-      importance: AndroidImportance.HIGH,
-      visibility: AndroidVisibility.PUBLIC,
+      importance: nf.AndroidImportance.HIGH,
+      visibility: nf.AndroidVisibility.PUBLIC,
       /** Repeat alert tone until the notification is dismissed (Notification.FLAG_INSISTENT). */
       loopSound: true,
       lightUpScreen: true,
@@ -110,30 +115,33 @@ async function scheduleTrigger(reminder) {
   };
 
   const trigger = {
-    type: TriggerType.TIMESTAMP,
+    type: nf.TriggerType.TIMESTAMP,
     timestamp: fireMs,
   };
 
-  await notifee.createTriggerNotification(payload, trigger);
+  await nf.default.createTriggerNotification(payload, trigger);
 }
 
 /**
  * One-time app startup: channel, optional POST_NOTIFICATIONS, reschedule stored future reminders.
  */
 export async function initVoiceReminderNotifications() {
-  if (Platform.OS === 'web') {
+  if (Platform.OS !== 'android') {
     return;
   }
   await createAndroidChannel();
 
+  const nf = getNotifee();
+  if (!nf) return;
+
   if (!foregroundEventUnsub) {
-    foregroundEventUnsub = notifee.onForegroundEvent(async ({ type, detail }) => {
-      if (type === EventType.ACTION_PRESS) {
+    foregroundEventUnsub = nf.default.onForegroundEvent(async ({ type, detail }) => {
+      if (type === nf.EventType.ACTION_PRESS) {
         const pressId = detail?.pressAction?.id;
         const notifId = detail?.notification?.id;
         if (pressId === DISMISS_ACTION_ID && notifId) {
           try {
-            await notifee.cancelNotification(notifId);
+            await nf.default.cancelNotification(notifId);
           } catch {
             // ignore
           }
@@ -142,12 +150,12 @@ export async function initVoiceReminderNotifications() {
     });
   }
 
-  const settings = await notifee.getNotificationSettings();
+  const settings = await nf.default.getNotificationSettings();
   if (
-    settings.authorizationStatus !== AuthorizationStatus.AUTHORIZED &&
-    settings.authorizationStatus !== AuthorizationStatus.PROVISIONAL
+    settings.authorizationStatus !== nf.AuthorizationStatus.AUTHORIZED &&
+    settings.authorizationStatus !== nf.AuthorizationStatus.PROVISIONAL
   ) {
-    await notifee.requestPermission();
+    await nf.default.requestPermission();
   }
 
   const list = await loadReminders();
@@ -155,7 +163,7 @@ export async function initVoiceReminderNotifications() {
   for (const r of list) {
     if (new Date(r.scheduledAt).getTime() > now) {
       try {
-        await notifee.cancelTriggerNotification(ensureNotifId(r.id));
+        await nf.default.cancelTriggerNotification(ensureNotifId(r.id));
       } catch {
         // ignore
       }
@@ -248,15 +256,18 @@ export async function removeVoiceReminder(id) {
   const next = list.filter((r) => r.id !== id);
   await writeReminders(next);
 
-  try {
-    await notifee.cancelTriggerNotification(ensureNotifId(id));
-  } catch {
-    // may not exist
-  }
-  try {
-    await notifee.cancelNotification(ensureNotifId(id));
-  } catch {
-    // ignore
+  const nf = getNotifee();
+  if (nf) {
+    try {
+      await nf.default.cancelTriggerNotification(ensureNotifId(id));
+    } catch {
+      // may not exist
+    }
+    try {
+      await nf.default.cancelNotification(ensureNotifId(id));
+    } catch {
+      // ignore
+    }
   }
 
   if (rem.filePath) {

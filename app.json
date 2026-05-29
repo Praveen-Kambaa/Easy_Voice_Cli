@@ -1,4 +1,11 @@
 {
   "name": "evcli",
-  "displayName": "Type Easy"
+  "displayName": "Type Easy",
+  "ios": {
+    "bundleIdentifier": "com.type.easy",
+    "appleTeamId": "D828566AL3"
+  },
+  "android": {
+    "package": "com.type.easy"
+  }
 }

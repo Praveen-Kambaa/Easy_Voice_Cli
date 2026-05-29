@@ -163,11 +163,11 @@ async function getStoredAuthUserId() {
 }
 
 /**
- * Push auth/language settings to the Android keyboard service. The keyboard runs
- * outside React Native, so it cannot reliably read AsyncStorage directly.
+ * Push auth/language settings to the native keyboard (Android service + iOS app group).
+ * The keyboard runs outside React Native, so it cannot read AsyncStorage directly.
  */
 export async function syncKeyboardSettingsToNative(userIdOverride) {
-  if (Platform.OS !== 'android' || typeof KeyboardModule?.syncKeyboardSettings !== 'function') return;
+  if (typeof KeyboardModule?.syncKeyboardSettings !== 'function') return;
   try {
     const fromLang = (await AsyncStorage.getItem('@from_language')) || 'en';
     const toLang = (await AsyncStorage.getItem('@to_language')) || 'ta';
@@ -182,7 +182,7 @@ export async function syncKeyboardSettingsToNative(userIdOverride) {
 }
 
 export async function syncTranslationLanguagesFromKeyboard() {
-  if (Platform.OS !== 'android' || typeof KeyboardModule?.getKeyboardSettings !== 'function') {
+  if (typeof KeyboardModule?.getKeyboardSettings !== 'function') {
     const fromLang = (await AsyncStorage.getItem('@from_language')) || 'en';
     const toLang = (await AsyncStorage.getItem('@to_language')) || 'ta';
     return { fromLang, toLang, changed: false };
@@ -218,8 +218,8 @@ export async function syncTranslationLanguagesFromKeyboard() {
  * so the overlay works over other apps without JS.
  */
 export async function syncFloatingMicSettingsToNative() {
-  if (Platform.OS !== 'android') return;
   try {
+    if (Platform.OS !== 'android') return;
     const internal = await getInternalTranscribeEnabled();
     const baseUrl = buildEasyVoiceUrl('');
     const fromLang = (await AsyncStorage.getItem('@from_language')) || 'en';

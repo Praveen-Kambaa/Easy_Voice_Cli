@@ -14,6 +14,17 @@ enum KeyboardTheme {
   static let grammarIcon = "A✓"
   static let settingsIcon = "⚙"
 
+  static func toolbarSettingsButton() -> UIButton {
+    let button = UIButton(type: .system)
+    let config = UIImage.SymbolConfiguration(pointSize: 18, weight: .bold)
+    let image = UIImage(systemName: "gearshape.fill", withConfiguration: config)
+    button.setImage(image, for: .normal)
+    button.tintColor = toolbarText
+    button.backgroundColor = .clear
+    button.accessibilityLabel = "Settings"
+    return button
+  }
+
   static func toolbarTextButton(title: String) -> UIButton {
     let button = UIButton(type: .system)
     button.setTitle(title, for: .normal)

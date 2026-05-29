@@ -123,7 +123,9 @@ const TranslatorScreen = ({ navigation }) => {
     useCallback(() => {
       loadLanguages();
       return () => {
-        stopTranslationSpeech();
+        if (Platform.OS === 'android') {
+          stopTranslationSpeech();
+        }
       };
     }, [loadLanguages]),
   );
@@ -476,6 +478,8 @@ const TranslatorScreen = ({ navigation }) => {
       {Platform.OS === 'ios' ? (
         <KeyboardAvoidingView style={styles.kav} behavior="padding" keyboardVerticalOffset={8}>
           <TranslatorScrollBody
+            styles={styles}
+            colors={colors}
             navigation={navigation}
             fromName={fromName}
             toName={toName}
@@ -509,6 +513,8 @@ const TranslatorScreen = ({ navigation }) => {
       ) : (
         <View style={styles.kav}>
           <TranslatorScrollBody
+            styles={styles}
+            colors={colors}
             navigation={navigation}
             fromName={fromName}
             toName={toName}
@@ -546,6 +552,8 @@ const TranslatorScreen = ({ navigation }) => {
 
 /** Scrollable body: keeps footer reachable when the keyboard resizes the window (Android adjustResize). */
 function TranslatorScrollBody({
+  styles,
+  colors,
   navigation,
   fromName,
   toName,

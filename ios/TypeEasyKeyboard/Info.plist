@@ -20,6 +20,10 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>typeeasy</string>
+	</array>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionAttributes</key>
@@ -42,5 +46,7 @@
 	<string>Type Easy needs microphone access for voice typing.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Type Easy uses speech recognition for voice typing.</string>
+	<key>RCTNewArchEnabled</key>
+	<true/>
 </dict>
 </plist>

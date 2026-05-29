@@ -9,6 +9,7 @@ react {
 repositories {
     google()
     mavenCentral()
+    maven { url("$rootDir/../../node_modules/@notifee/react-native/android/libs") }
 }
 
 // ── Auto-generate ApiConfig.kt from src/config/api.js ────────────────────────
@@ -79,6 +80,7 @@ android.sourceSets.main.java.srcDirs += ["src/main/java/com/typeeasy/generated"]
 repositories {
     google()
     mavenCentral()
+    maven { url("$rootDir/../../node_modules/@notifee/react-native/android/libs") }
 }
 
 /**
@@ -111,7 +113,7 @@ android {
 
     namespace "com.typeeasy"
     defaultConfig { 
-        applicationId "com.typeeasy"
+        applicationId "com.type.easy"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

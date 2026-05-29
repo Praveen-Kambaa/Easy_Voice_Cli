@@ -4,15 +4,29 @@ import { appCodeToTtsLocale } from '../constants/ttsLanguageLocales';
 
 let configured = false;
 
+/**
+ * react-native-tts `stop()` uses a BOOL on iOS; RN New Architecture cannot bridge it
+ * (crashes even with `false`). Skip native stop on iOS — `speak()` replaces playback.
+ */
+function stopTts() {
+  if (Platform.OS === 'ios') {
+    return Promise.resolve();
+  }
+  return Tts.stop();
+}
+
 async function ensureReady() {
   if (Platform.OS === 'android') {
     await Tts.getInitStatus();
   }
   if (!configured) {
-    try {
-      await Tts.setDefaultRate(0.48);
-    } catch {
-      // ignore
+    // setDefaultRate uses BOOL on iOS native bridge — only safe after TextToSpeech.m patch (RN New Arch).
+    if (Platform.OS === 'android') {
+      try {
+        await Tts.setDefaultRate(0.48);
+      } catch {
+        // ignore
+      }
     }
     configured = true;
   }
@@ -31,7 +45,7 @@ export async function speakTranslatedText(text, targetAppCode) {
   }
   try {
     await ensureReady();
-    await Tts.stop();
+    await stopTts();
     const locale = appCodeToTtsLocale(targetAppCode);
     await Tts.setDefaultLanguage(locale);
     await Tts.speak(t);
@@ -43,5 +57,5 @@ export async function speakTranslatedText(text, targetAppCode) {
 }
 
 export function stopTranslationSpeech() {
-  return Tts.stop().catch(() => undefined);
+  return stopTts().catch(() => undefined);
 }
