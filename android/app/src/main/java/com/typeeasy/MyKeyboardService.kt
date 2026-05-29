@@ -443,7 +443,7 @@ class MyKeyboardService : InputMethodService() {
         row.addView(TextView(this).apply {
             text = "Translation :"
             textSize = 14f
-            setTextColor(Color.parseColor("#757575"))
+            setTextColor(C_HINT_TEXT)
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(0, WRAP, 1f)
         })
@@ -460,9 +460,9 @@ class MyKeyboardService : InputMethodService() {
             textSize = 13f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
-            setTextColor(C_KEY_TEXT)
-            background = roundRect(Color.WHITE, dp(18)).apply {
-                setStroke(dp(1), Color.parseColor("#DADDE8"))
+            setTextColor(theme.pillText)
+            background = roundRect(theme.pillBg, dp(18)).apply {
+                setStroke(dp(1), theme.pillBorder)
             }
             contentDescription = name
             setPadding(dp(18), 0, dp(18), 0)
@@ -477,8 +477,8 @@ class MyKeyboardService : InputMethodService() {
             textSize = 18f
             gravity = Gravity.CENTER
             setTextColor(C_PRIMARY)
-            background = roundRect(Color.WHITE, dp(17)).apply {
-                setStroke(dp(1), Color.parseColor("#DADDE8"))
+            background = roundRect(theme.pillBg, dp(17)).apply {
+                setStroke(dp(1), theme.pillBorder)
             }
             layoutParams = LinearLayout.LayoutParams(dp(36), dp(34)).also {
                 it.setMargins(dp(8), 0, dp(8), 0)
@@ -498,7 +498,7 @@ class MyKeyboardService : InputMethodService() {
         languagePopupWindow?.dismiss()
         val list = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.WHITE)
+            setBackgroundColor(theme.popupBg)
         }
         languages.forEach { (code, name) ->
             list.addView(LinearLayout(this).apply {
@@ -509,19 +509,19 @@ class MyKeyboardService : InputMethodService() {
                 addView(TextView(this@MyKeyboardService).apply {
                     text = name
                     textSize = 14f
-                    setTextColor(C_KEY_TEXT)
+                    setTextColor(theme.pillText)
                     layoutParams = LinearLayout.LayoutParams(0, WRAP, 1f)
                 })
                 addView(TextView(this@MyKeyboardService).apply {
                     text = languageShort(code).uppercase()
                     textSize = 11f
-                    setTextColor(Color.parseColor("#5F6368"))
+                    setTextColor(C_HINT_TEXT)
                     typeface = Typeface.DEFAULT_BOLD
                     gravity = Gravity.CENTER
                     layoutParams = LinearLayout.LayoutParams(dp(40), WRAP)
                 })
                 if ((isFrom && fromLang == code) || (!isFrom && toLang == code)) {
-                    setBackgroundColor(Color.parseColor("#EEF1FF"))
+                    setBackgroundColor(theme.popupSelectedBg)
                 }
                 setOnClickListener {
                     if (isFrom) fromLang = code else toLang = code
@@ -531,7 +531,7 @@ class MyKeyboardService : InputMethodService() {
                 }
             })
             list.addView(View(this).apply {
-                setBackgroundColor(Color.parseColor("#EEEEEE"))
+                setBackgroundColor(theme.suggestionDivider)
                 layoutParams = LinearLayout.LayoutParams(MATCH, dp(1))
             })
         }
@@ -545,8 +545,9 @@ class MyKeyboardService : InputMethodService() {
             isOutsideTouchable = true
             inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
             setBackgroundDrawable(GradientDrawable().apply {
-                setColor(Color.WHITE)
+                setColor(theme.popupBg)
                 cornerRadius = dp(6).toFloat()
+                setStroke(dp(1), theme.popupStroke)
             })
             elevation = dp(6).toFloat()
             showAsDropDown(anchor, 0, dp(4))
@@ -1161,7 +1162,10 @@ class MyKeyboardService : InputMethodService() {
         }
         if (::resultBar.isInitialized) resultBar.setBackgroundColor(C_RESULT_BG)
         if (::voiceBar.isInitialized) voiceBar.setBackgroundColor(theme.voiceBarBg)
-        if (::settingsPanel.isInitialized) settingsPanel.setBackgroundColor(theme.settingsBg)
+        if (::settingsPanel.isInitialized) {
+            settingsPanel.setBackgroundColor(theme.settingsBg)
+            if (showSettings) renderSettingsPanel()
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────

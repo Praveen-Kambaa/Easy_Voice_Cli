@@ -19,6 +19,10 @@ data class KeyboardTheme(
     val voiceBarBg: Int,
     val popupBg: Int,
     val popupStroke: Int,
+    val pillBg: Int,
+    val pillText: Int,
+    val pillBorder: Int,
+    val popupSelectedBg: Int,
 ) {
     companion object {
         val light = KeyboardTheme(
@@ -37,6 +41,10 @@ data class KeyboardTheme(
             voiceBarBg = Color.parseColor("#EEF2F7"),
             popupBg = Color.WHITE,
             popupStroke = Color.parseColor("#E5E7EB"),
+            pillBg = Color.WHITE,
+            pillText = Color.parseColor("#111827"),
+            pillBorder = Color.parseColor("#DADDE8"),
+            popupSelectedBg = Color.parseColor("#EEF1FF"),
         )
 
         val dark = KeyboardTheme(
@@ -55,6 +63,10 @@ data class KeyboardTheme(
             voiceBarBg = Color.parseColor("#1A222D"),
             popupBg = Color.parseColor("#1A222D"),
             popupStroke = Color.parseColor("#2A3441"),
+            pillBg = Color.parseColor("#2A3441"),
+            pillText = Color.parseColor("#F1F5F9"),
+            pillBorder = Color.parseColor("#3D4A5C"),
+            popupSelectedBg = Color.parseColor("#253A52"),
         )
 
         fun fromIsDark(isDark: Boolean) = if (isDark) dark else light
