@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Modal,
   View,
@@ -10,8 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { PERMISSION_NAMES } from '../utils/AndroidPermissions';
-import { Colors } from '../theme/Colors';
-
+import { useTheme } from '../context/ThemeContext';
 const { width, height } = Dimensions.get('window');
 
 const PermissionModal = ({
@@ -21,6 +20,8 @@ const PermissionModal = ({
   onCancel,
   loading = false,
 }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const getPermissionContent = () => {
     switch (permissionType) {
       case PERMISSION_NAMES.OVERLAY:
@@ -162,7 +163,8 @@ const PermissionModal = ({
   );
 };
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
@@ -171,7 +173,7 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   modalContainer: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     width: width - 48,
     maxHeight: height * 0.82,
@@ -188,7 +190,7 @@ const styles = StyleSheet.create({
     paddingTop: 28,
     paddingBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: colors.borderLight,
   },
   icon: {
     fontSize: 44,
@@ -197,7 +199,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     textAlign: 'center',
     lineHeight: 26,
   },
@@ -209,7 +211,7 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 14,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 22,
     textAlign: 'center',
     marginBottom: 24,
@@ -220,7 +222,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 10,
   },
   benefitsList: {
@@ -235,14 +237,14 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     marginTop: 7,
     flexShrink: 0,
   },
   benefitText: {
     flex: 1,
     fontSize: 14,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 20,
   },
   instructionsList: {
@@ -257,7 +259,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 1,
@@ -271,20 +273,20 @@ const styles = StyleSheet.create({
   stepText: {
     flex: 1,
     fontSize: 14,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 20,
   },
   privacyNote: {
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     padding: 14,
     borderRadius: 8,
     borderLeftWidth: 3,
-    borderLeftColor: Colors.border,
+    borderLeftColor: colors.border,
     marginTop: 4,
   },
   privacyText: {
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 18,
     fontStyle: 'italic',
   },
@@ -293,7 +295,7 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: 20,
     borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
+    borderTopColor: colors.borderLight,
   },
   button: {
     flex: 1,
@@ -305,12 +307,12 @@ const styles = StyleSheet.create({
     minHeight: 46,
   },
   cancelButton: {
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   confirmButton: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
   },
   disabledButton: {
     opacity: 0.5,
@@ -318,13 +320,14 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: colors.text.primary,
   },
   confirmButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
   },
-});
+  });
+}
 
 export default PermissionModal;

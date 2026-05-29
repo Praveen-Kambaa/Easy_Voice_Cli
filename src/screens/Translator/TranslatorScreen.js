@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useDebounce } from '../../utils/debounce';
 import {
   View,
@@ -41,7 +41,7 @@ import {
   getOverlayAskQuestionEnabled,
 } from '../../services/floatingMicConfig';
 import { askQuestion } from '../../services/aiService';
-import { Colors } from '../../theme/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import { logActivity, ActivityCategory } from '../../services/appActivityHistoryService';
 import { useAlert } from '../../context/AlertContext';
 import { useAuth } from '../../context/AuthContext';
@@ -51,6 +51,8 @@ import {
 } from '../../services/translationTtsService';
 
 const TranslatorScreen = ({ navigation }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const showAlert = useAlert();
   const { user } = useAuth();
   const isFocused = useIsFocused();
@@ -441,8 +443,8 @@ const TranslatorScreen = ({ navigation }) => {
   const askLoadingLabel =
     askBusyPhase === 'transcribe' ? 'Transcribing…' : askBusyPhase === 'ai' ? 'Asking AI…' : '';
 
-  const iconMuted = Colors.text.secondary;
-  const starColor = starred ? Colors.primary : Colors.text.secondary;
+  const iconMuted = colors.text.secondary;
+  const starColor = starred ? colors.primary : colors.text.secondary;
 
   return (
     <ScreenContainer style={styles.screen}>
@@ -589,7 +591,7 @@ function TranslatorScrollBody({
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.swapPill} onPress={swapLanguages} activeOpacity={0.8}>
-              <Repeat2 size={18} color={Colors.text.secondary} strokeWidth={2.2} />
+              <Repeat2 size={18} color={colors.text.secondary} strokeWidth={2.2} />
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.langPill} onPress={onPressToLang} activeOpacity={0.8}>
@@ -604,7 +606,7 @@ function TranslatorScrollBody({
             <TextInput
               style={styles.input}
               placeholder="Enter text"
-              placeholderTextColor={Colors.text.light}
+              placeholderTextColor={colors.text.light}
               value={sourceText}
               onChangeText={onSourceChange}
               multiline
@@ -615,7 +617,7 @@ function TranslatorScrollBody({
             <View style={styles.inputMetaRow}>
               {!!sourceText ? (
                 <TouchableOpacity onPress={clearSource} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
-                  <X size={18} color={Colors.text.secondary} strokeWidth={2.2} />
+                  <X size={18} color={colors.text.secondary} strokeWidth={2.2} />
                 </TouchableOpacity>
               ) : (
                 <View />
@@ -650,13 +652,13 @@ function TranslatorScrollBody({
               {translatedText && showOutputActions ? (
                 <View style={styles.outputActions}>
                   <TouchableOpacity onPress={onCopyTranslation} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Copy size={18} color={Colors.primary} strokeWidth={2.2} />
+                    <Copy size={18} color={colors.primary} strokeWidth={2.2} />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={onSpeakTranslation} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Volume2 size={18} color={Colors.primary} strokeWidth={2.2} />
+                    <Volume2 size={18} color={colors.primary} strokeWidth={2.2} />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={onShareTranslation} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Share2 size={18} color={Colors.primary} strokeWidth={2.2} />
+                    <Share2 size={18} color={colors.primary} strokeWidth={2.2} />
                   </TouchableOpacity>
                 </View>
               ) : null}
@@ -664,7 +666,7 @@ function TranslatorScrollBody({
 
             {(translating || transcribingVoice || askBusyPhase) && !translatedText && !translateError ? (
               <View style={styles.loadingRow}>
-                <ActivityIndicator color={Colors.primary} size="small" />
+                <ActivityIndicator color={colors.primary} size="small" />
                 <Text style={styles.loadingText}>
                   {askBusyPhase ? askLoadingLabel : transcribingVoice ? 'Transcribing…' : 'Translating…'}
                 </Text>
@@ -685,7 +687,7 @@ function TranslatorScrollBody({
               onPress={() => navigation.navigate('TranslatorHistory')}
             >
               <View style={[styles.quickLinkIcon, styles.quickLinkIconBlue]}>
-                <History size={18} color={Colors.primary} strokeWidth={2.2} />
+                <History size={18} color={colors.primary} strokeWidth={2.2} />
               </View>
               <View style={styles.quickLinkTextCol}>
                 <Text style={styles.quickLinkTitle}>History</Text>
@@ -712,12 +714,13 @@ function TranslatorScrollBody({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   flex1: {
     flex: 1,
   },
   screen: {
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
   },
   toastWrap: {
     position: 'absolute',
@@ -761,51 +764,51 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   langPillText: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: 0.2,
   },
   swapPill: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   langHint: {
     fontSize: 11,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     textAlign: 'center',
   },
   cardKicker: {
     fontSize: 11,
     fontWeight: '800',
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     letterSpacing: 1.1,
   },
   inputCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: 14,
   },
   input: {
     minHeight: 90,
     fontSize: 16,
     lineHeight: 24,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     fontWeight: '500',
     paddingVertical: 10,
   },
@@ -823,29 +826,29 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
   errorText: {
     fontSize: 14,
-    color: Colors.status.blocked,
+    color: colors.status.blocked,
     lineHeight: 20,
     paddingVertical: 8,
   },
   charCount: {
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     fontVariant: ['tabular-nums'],
   },
   divider: {
     height: 1,
     borderRadius: 1,
-    backgroundColor: Colors.borderLight,
+    backgroundColor: colors.borderLight,
   },
   outputCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: 14,
   },
   outputTopRow: {
@@ -865,15 +868,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 1.2,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     textTransform: 'uppercase',
   },
   starBtn: {
     padding: 6,
     borderRadius: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: colors.borderLight,
   },
   outputActions: {
     flexDirection: 'row',
@@ -884,14 +887,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: 0,
   },
   outputPlaceholder: {
     fontSize: 16,
     lineHeight: 22,
     fontWeight: '500',
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
 
   quickLinksRow: {
@@ -901,10 +904,10 @@ const styles = StyleSheet.create({
   },
   quickLinkCard: {
     flex: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -932,14 +935,17 @@ const styles = StyleSheet.create({
   quickLinkTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: -0.2,
   },
   quickLinkSub: {
     marginTop: 2,
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
 });
+}
+
+
 
 export default TranslatorScreen;

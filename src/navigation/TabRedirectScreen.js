@@ -1,7 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { Colors } from '../theme/Colors';
+import { useTheme } from '../context/ThemeContext';
 
 /**
  * Drawer alias screen that redirects into MainTabs.
@@ -11,11 +11,12 @@ import { Colors } from '../theme/Colors';
  * - tab: one of the BottomTabs route names (e.g. 'SettingsTab')
  */
 export default function TabRedirectScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation();
   const route = useRoute();
 
   useEffect(() => {
-    // Ensure we navigate on the Drawer navigator, not a nested child.
     let nav = navigation;
     try {
       const parent = navigation.getParent?.('AppDrawer');
@@ -44,17 +45,18 @@ export default function TabRedirectScreen() {
 
   return (
     <View style={styles.screen}>
-      <ActivityIndicator size="small" color={Colors.primary} />
+      <ActivityIndicator size="small" color={colors.primary} />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.backgroundAlt,
-  },
-});
-
+function createStyles(colors) {
+  return StyleSheet.create({
+    screen: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.backgroundAlt,
+    },
+  });
+}

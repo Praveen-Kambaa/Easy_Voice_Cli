@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,8 +14,11 @@ import { Mail, X } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import AlertModal from './common/AlertModal';
 import { validateEmail } from '../utils/authValidation';
+import { useTheme } from '../context/ThemeContext';
 
 const ForgotPasswordModal = ({ visible, onClose }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { requestPasswordReset } = useAuth();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -76,7 +79,7 @@ const ForgotPasswordModal = ({ visible, onClose }) => {
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
-            <X size={24} color="#000000" />
+            <X size={24} color={colors.text.primary} />
           </TouchableOpacity>
           <Text style={styles.title}>Reset Password</Text>
           <View style={styles.placeholder} />
@@ -90,11 +93,11 @@ const ForgotPasswordModal = ({ visible, onClose }) => {
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Email Address</Text>
             <View style={[styles.inputWrapper, error && !email ? styles.inputError : null]}>
-              <Mail size={16} color="#666666" strokeWidth={2} style={styles.inputIcon} />
+              <Mail size={16} color={colors.text.secondary} strokeWidth={2} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="Enter your email"
-                placeholderTextColor="#999999"
+                placeholderTextColor={colors.text.light}
                 value={email}
                 onChangeText={(text) => {
                   setEmail(text);
@@ -109,7 +112,6 @@ const ForgotPasswordModal = ({ visible, onClose }) => {
             </View>
           </View>
 
-          {/* Error message */}
           {!!error && (
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>{error}</Text>
@@ -123,7 +125,7 @@ const ForgotPasswordModal = ({ visible, onClose }) => {
             activeOpacity={0.85}
           >
             {isLoading ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <ActivityIndicator color={colors.text.white} size="small" />
             ) : (
               <Text style={styles.submitBtnText}>Send Reset Instructions</Text>
             )}
@@ -142,104 +144,106 @@ const ForgotPasswordModal = ({ visible, onClose }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  closeBtn: {
-    padding: 4,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#000000',
-  },
-  placeholder: {
-    width: 32,
-  },
-  content: {
-    flex: 1,
-    padding: 24,
-  },
-  description: {
-    fontSize: 16,
-    color: '#666666',
-    lineHeight: 24,
-    marginBottom: 32,
-    textAlign: 'center',
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#000000',
-    marginBottom: 8,
-  },
-  inputIcon: {
-    marginRight: 8,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#E0E0E0',
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
-    height: 50,
-  },
-  inputError: {
-    borderColor: '#DC2626',
-  },
-  input: {
-    flex: 1,
-    fontSize: 15,
-    color: '#000000',
-    paddingVertical: 0,
-  },
-  errorBox: {
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 20,
-  },
-  errorText: {
-    fontSize: 13,
-    color: '#DC2626',
-    fontWeight: '500',
-  },
-  submitBtn: {
-    backgroundColor: '#000000',
-    borderRadius: 12,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  submitBtnDisabled: {
-    opacity: 0.7,
-  },
-  submitBtnText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-});
+function createStyles(colors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    closeBtn: {
+      padding: 4,
+    },
+    title: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    placeholder: {
+      width: 32,
+    },
+    content: {
+      flex: 1,
+      padding: 24,
+    },
+    description: {
+      fontSize: 16,
+      color: colors.text.secondary,
+      lineHeight: 24,
+      marginBottom: 32,
+      textAlign: 'center',
+    },
+    inputGroup: {
+      marginBottom: 20,
+    },
+    label: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.text.primary,
+      marginBottom: 8,
+    },
+    inputIcon: {
+      marginRight: 8,
+    },
+    inputWrapper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 14,
+      height: 50,
+    },
+    inputError: {
+      borderColor: colors.status.blocked,
+    },
+    input: {
+      flex: 1,
+      fontSize: 15,
+      color: colors.text.primary,
+      paddingVertical: 0,
+    },
+    errorBox: {
+      backgroundColor: colors.status.blockedBg,
+      borderWidth: 1,
+      borderColor: colors.status.blocked,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      marginBottom: 20,
+    },
+    errorText: {
+      fontSize: 13,
+      color: colors.status.blocked,
+      fontWeight: '500',
+    },
+    submitBtn: {
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      height: 52,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 8,
+    },
+    submitBtnDisabled: {
+      opacity: 0.7,
+    },
+    submitBtnText: {
+      color: colors.text.white,
+      fontSize: 16,
+      fontWeight: '700',
+      letterSpacing: 0.5,
+    },
+  });
+}
 
 export default ForgotPasswordModal;

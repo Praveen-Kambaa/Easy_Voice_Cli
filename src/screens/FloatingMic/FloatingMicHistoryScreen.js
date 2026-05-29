@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,13 +17,14 @@ import {
 } from '../../services/FloatingSpeechHistoryService';
 import { formatDateTime } from '../../utils/dateTimeFormat';
 import { useAlert } from '../../context/AlertContext';
-import { Colors } from '../../theme/Colors';
-
+import { useTheme } from '../../context/ThemeContext';
 /**
  * Speech history lists floating-mic transcriptions only (saved via FloatingSpeechHistorySync).
  * Overlay start/stop events are no longer mixed in so this screen shows what users expect: spoken text.
  */
 const FloatingMicHistoryScreen = ({ navigation }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const showAlert = useAlert();
   const [rows, setRows] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -77,7 +78,7 @@ const FloatingMicHistoryScreen = ({ navigation }) => {
     <View style={[styles.card, styles.transcriptCard]}>
       <View style={styles.cardTop}>
         <View style={styles.badgeRow}>
-          <Radio size={12} color={Colors.text.light} strokeWidth={2} />
+          <Radio size={12} color={colors.text.light} strokeWidth={2} />
           <Text style={styles.badgeText}>Transcript</Text>
         </View>
         <Text style={styles.dateText}>{formatDateTime(item.createdAt)}</Text>
@@ -89,7 +90,7 @@ const FloatingMicHistoryScreen = ({ navigation }) => {
         hitSlop={8}
         activeOpacity={0.75}
       >
-        <Trash2 size={16} color={Colors.recording.active} strokeWidth={2} />
+        <Trash2 size={16} color={colors.recording.active} strokeWidth={2} />
         <Text style={styles.deleteLabel}>Delete</Text>
       </TouchableOpacity>
     </View>
@@ -122,7 +123,7 @@ const FloatingMicHistoryScreen = ({ navigation }) => {
         contentContainerStyle={rows.length === 0 ? styles.listEmpty : styles.list}
         ListEmptyComponent={empty}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
         showsVerticalScrollIndicator={false}
       />
@@ -130,10 +131,11 @@ const FloatingMicHistoryScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
   },
   list: {
     padding: 16,
@@ -143,16 +145,16 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: 14,
     marginBottom: 12,
   },
   transcriptCard: {
     borderLeftWidth: 3,
-    borderLeftColor: Colors.primary,
+    borderLeftColor: colors.primary,
   },
   cardTop: {
     flexDirection: 'row',
@@ -168,17 +170,17 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: Colors.text.light,
+    color: colors.text.light,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
   dateText: {
     fontSize: 11,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
   bodyText: {
     fontSize: 16,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     lineHeight: 24,
     marginBottom: 10,
   },
@@ -190,14 +192,14 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 8,
-    backgroundColor: Colors.recording.activeBg,
+    backgroundColor: colors.recording.activeBg,
     borderWidth: 1,
     borderColor: '#FECACA',
   },
   deleteLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.recording.active,
+    color: colors.recording.active,
   },
   empty: {
     flex: 1,
@@ -210,7 +212,7 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 18,
@@ -218,19 +220,19 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 8,
     textAlign: 'center',
   },
   emptyDesc: {
     fontSize: 14,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 22,
   },
   emptyCta: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     paddingHorizontal: 22,
     paddingVertical: 12,
     borderRadius: 10,
@@ -241,5 +243,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+}
+
+
 
 export default FloatingMicHistoryScreen;

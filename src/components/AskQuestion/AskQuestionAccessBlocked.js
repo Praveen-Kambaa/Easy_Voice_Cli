@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { ScreenContainer } from '../common/ScreenContainer';
 import { AppHeader } from '../Header/AppHeader';
 import { PrimaryButton } from '../common/PrimaryButton';
-import { Colors } from '../../theme/Colors';
+import { useTheme } from '../../context/ThemeContext';
 
 function resolveDrawerNav(navigation) {
   try {
@@ -25,6 +25,8 @@ function resolveDrawerNav(navigation) {
  * Shown when Ask Question is unavailable on Android: Ask Question must be enabled under Settings.
  */
 export default function AskQuestionAccessBlocked({ navigation }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const drawerNav = resolveDrawerNav(navigation);
   return (
     <ScreenContainer>
@@ -47,7 +49,8 @@ export default function AskQuestionAccessBlocked({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   body: {
     flex: 1,
     paddingHorizontal: 20,
@@ -56,12 +59,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 16,
   },
   text: {
     fontSize: 15,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 22,
   },
   textGap: {
@@ -69,9 +72,10 @@ const styles = StyleSheet.create({
   },
   em: {
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
   },
   buttons: {
     gap: 12,
   },
-});
+  });
+}

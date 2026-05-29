@@ -5,6 +5,7 @@ import React, {
   useCallback,
   forwardRef,
   useImperativeHandle,
+  useMemo,
 } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -37,7 +38,7 @@ import { AppHeader } from '../../components/Header/AppHeader';
 import { AppCard } from '../../components/common/AppCard';
 import { PrimaryButton } from '../../components/common/PrimaryButton';
 import { useAlert } from '../../context/AlertContext';
-import { Colors } from '../../theme/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import { logActivity, ActivityCategory } from '../../services/appActivityHistoryService';
 import { isGlobalAlertModalVisible } from '../../utils/alertModalState';
 
@@ -49,6 +50,8 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
   { navigation, embedded = false, homeEmbedded = false },
   ref,
 ) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const showAlert = useAlert();
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -492,11 +495,11 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
                 {isRecording ? (
                   <Mic
                     size={micIconSize}
-                    color={isRecording && !isPaused ? Colors.recording.active : Colors.text.secondary}
+                    color={isRecording && !isPaused ? colors.recording.active : colors.text.secondary}
                     strokeWidth={1.6}
                   />
                 ) : (
-                  <MicOff size={micIconSize} color={Colors.text.light} strokeWidth={1.6} />
+                  <MicOff size={micIconSize} color={colors.text.light} strokeWidth={1.6} />
                 )}
               </Animated.View>
 
@@ -571,7 +574,7 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
                 accessibilityLabel="Upload existing audio"
               >
                 <View style={styles.actionIconOutline}>
-                  <Music size={18} color={Colors.primary} strokeWidth={2.2} />
+                  <Music size={18} color={colors.primary} strokeWidth={2.2} />
                 </View>
                 <View style={styles.actionTextCol}>
                   <Text style={styles.actionTitle}>Import</Text>
@@ -612,7 +615,7 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
 
       {isTranscribing && (
         <AppCard style={[styles.infoCard, homeEmbedded && styles.infoCardHome]}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.infoTitle}>Uploading & Transcribing…</Text>
           <Text style={styles.infoSubtext}>Sending audio to server</Text>
         </AppCard>
@@ -623,7 +626,7 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
           style={[
             styles.transcriptCard,
             homeEmbedded && styles.transcriptCardHome,
-            { borderLeftColor: Colors.status.granted, borderLeftWidth: 3 },
+            { borderLeftColor: colors.status.granted, borderLeftWidth: 3 },
           ]}
         >
           {isEditingTranscript ? (
@@ -643,13 +646,13 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
                   onPress={handleSaveTranscript}
                   variant="ghost"
                   style={[styles.editActionBtn, homeEmbedded && styles.editActionBtnHome]}
-                  textStyle={[{ color: Colors.status.granted }, homeEmbedded && styles.editActionTextHome]}
+                  textStyle={[{ color: colors.status.granted }, homeEmbedded && styles.editActionTextHome]}
                 />
                 <PrimaryButton
                   title="Send"
                   onPress={handleExecuteVoiceCommand}
                   loading={isExecuting}
-                  style={[styles.editActionBtn, homeEmbedded && styles.editActionBtnHome, { backgroundColor: Colors.primary }]}
+                  style={[styles.editActionBtn, homeEmbedded && styles.editActionBtnHome, { backgroundColor: colors.primary }]}
                   textStyle={homeEmbedded ? styles.editActionTextHomeLight : undefined}
                 />
                 <PrimaryButton
@@ -695,7 +698,7 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
           style={[
             styles.errorCard,
             homeEmbedded && styles.errorCardHome,
-            { borderLeftColor: Colors.status.blocked, borderLeftWidth: 3 },
+            { borderLeftColor: colors.status.blocked, borderLeftWidth: 3 },
           ]}
         >
           <Text style={styles.errorTitle}>Couldn’t create transcript</Text>
@@ -728,7 +731,7 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
               accessibilityRole="button"
               accessibilityLabel="Save without transcription"
             >
-              <Save size={18} color={Colors.primary} strokeWidth={2.2} />
+              <Save size={18} color={colors.primary} strokeWidth={2.2} />
               <Text style={styles.errorChipOutlineText}>Save local</Text>
             </TouchableOpacity>
           </View>
@@ -739,11 +742,11 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
         <AppCard>
           <Text style={styles.tipsTitle}>Quick Tips</Text>
           {[
-            { Icon: Circle, text: 'Tap Start to begin recording', color: Colors.recording.active },
-            { Icon: Square, text: 'Tap Stop & Send to upload to backend', color: Colors.primary },
-            { Icon: Music, text: 'Tap Import to choose an existing audio from Files', color: Colors.primary },
-            { Icon: Play, text: 'Play back the recorded audio', color: Colors.status.info },
-            { Icon: Music, text: 'Files saved in MP4/AAC format', color: Colors.text.secondary },
+            { Icon: Circle, text: 'Tap Start to begin recording', color: colors.recording.active },
+            { Icon: Square, text: 'Tap Stop & Send to upload to backend', color: colors.primary },
+            { Icon: Music, text: 'Tap Import to choose an existing audio from Files', color: colors.primary },
+            { Icon: Play, text: 'Play back the recorded audio', color: colors.status.info },
+            { Icon: Music, text: 'Files saved in MP4/AAC format', color: colors.text.secondary },
           ].map(({ Icon, text, color }) => (
             <View key={text} style={styles.tipRow}>
               <View style={[styles.tipIconWrap, { backgroundColor: `${color}14`, borderColor: `${color}22` }]}>
@@ -766,14 +769,14 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
               onPress={() => navigation.navigate('VoiceRecorderHistory')}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <History size={22} color={Colors.text.primary} strokeWidth={1.8} />
+              <History size={22} color={colors.text.primary} strokeWidth={1.8} />
             </TouchableOpacity>
             {hasRecording ? (
               <TouchableOpacity
                 onPress={() => navigation.navigate('RecordedAudio')}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Music size={22} color={Colors.text.primary} strokeWidth={1.8} />
+                <Music size={22} color={colors.text.primary} strokeWidth={1.8} />
               </TouchableOpacity>
             ) : null}
           </View>
@@ -793,14 +796,14 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
               onPress={() => navigation.navigate('VoiceRecorderHistory')}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <History size={22} color={Colors.text.primary} strokeWidth={1.8} />
+              <History size={22} color={colors.text.primary} strokeWidth={1.8} />
             </TouchableOpacity>
             {hasRecording ? (
               <TouchableOpacity
                 onPress={() => navigation.navigate('RecordedAudio')}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Music size={22} color={Colors.text.primary} strokeWidth={1.8} />
+                <Music size={22} color={colors.text.primary} strokeWidth={1.8} />
               </TouchableOpacity>
             ) : null}
           </View>
@@ -813,10 +816,11 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
   );
 });
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
   },
   embeddedRoot: {
     marginBottom: 8,
@@ -832,9 +836,9 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     borderRadius: 16,
     alignSelf: 'stretch',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -907,12 +911,12 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   heroCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 24,
     padding: 20,
     marginBottom: 16,
     borderWidth: 1.5,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.08,
@@ -921,7 +925,7 @@ const styles = StyleSheet.create({
   },
   heroCardActive: {
     borderColor: 'rgba(16, 185, 129, 0.35)',
-    backgroundColor: Colors.recording.activeBg,
+    backgroundColor: colors.recording.activeBg,
   },
   heroTopRow: {
     flexDirection: 'row',
@@ -934,9 +938,9 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     borderWidth: 1.5,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   heroIconWrapActive: {
     backgroundColor: 'rgba(16, 185, 129, 0.10)',
@@ -948,32 +952,32 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: -0.2,
   },
   heroSub: {
     marginTop: 2,
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 16,
   },
   heroMetaRow: {
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
+    borderTopColor: colors.borderLight,
     alignItems: 'center',
   },
   heroMetaValue: {
     fontSize: 28,
     fontWeight: '900',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     fontFamily: 'monospace',
     letterSpacing: -0.5,
   },
   heroMetaHint: {
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     fontWeight: '600',
   },
   actionRow: {
@@ -1031,28 +1035,28 @@ const styles = StyleSheet.create({
   actionTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: 0.1,
   },
   actionSub: {
     marginTop: 2,
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
   actionPrimary: {
-    backgroundColor: Colors.recording.active,
+    backgroundColor: colors.recording.active,
   },
   actionDanger: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
   },
   actionInfo: {
-    backgroundColor: Colors.status.info,
+    backgroundColor: colors.status.info,
   },
   actionMuted: {
-    backgroundColor: Colors.text.secondary,
+    backgroundColor: colors.text.secondary,
   },
   actionOutline: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderColor: 'rgba(30, 136, 255, 0.55)',
     borderStyle: 'dashed',
     borderWidth: 1.5,
@@ -1067,7 +1071,7 @@ const styles = StyleSheet.create({
   },
   controlsHelpText: {
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     textAlign: 'center',
     lineHeight: 16,
   },
@@ -1085,18 +1089,18 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  recordBtn: { backgroundColor: Colors.recording.active },
-  stopBtn: { backgroundColor: Colors.primary },
+  recordBtn: { backgroundColor: colors.recording.active },
+  stopBtn: { backgroundColor: colors.primary },
   uploadBtn: {
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     borderWidth: 1.5,
-    borderColor: Colors.primary,
+    borderColor: colors.primary,
     borderStyle: 'dashed',
   },
-  playBtn: { backgroundColor: Colors.status.info },
-  stopPlayBtn: { backgroundColor: Colors.text.secondary },
+  playBtn: { backgroundColor: colors.status.info },
+  stopPlayBtn: { backgroundColor: colors.text.secondary },
   controlBtnLabel: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
-  uploadBtnLabel: { color: Colors.primary, fontWeight: '800' },
+  uploadBtnLabel: { color: colors.primary, fontWeight: '800' },
   infoCard: {
     alignItems: 'center',
     marginBottom: 20,
@@ -1105,12 +1109,12 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginTop: 12,
   },
   infoSubtext: {
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     marginTop: 4,
   },
   transcriptCard: {
@@ -1119,12 +1123,12 @@ const styles = StyleSheet.create({
   transcriptDoneLabel: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.status.granted,
+    color: colors.status.granted,
     marginBottom: 10,
   },
   transcriptText: {
     fontSize: 15,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     lineHeight: 22,
     marginBottom: 14,
   },
@@ -1140,21 +1144,21 @@ const styles = StyleSheet.create({
   editLabel: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 10,
   },
   transcriptInput: {
     fontSize: 15,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     lineHeight: 22,
     minHeight: 80,
     textAlignVertical: 'top',
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     borderRadius: 8,
     padding: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   editActionsRow: {
     flexDirection: 'row',
@@ -1187,18 +1191,18 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.status.blocked,
+    color: colors.status.blocked,
     marginBottom: 6,
   },
   errorText: {
     fontSize: 13,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     lineHeight: 18,
   },
   errorHint: {
     marginTop: 10,
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 17,
   },
   errorActionsRow: {
@@ -1220,8 +1224,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   errorChipPrimary: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   errorChipPrimaryText: {
     color: '#FFFFFF',
@@ -1229,11 +1233,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   errorChipOutline: {
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
   },
   errorChipOutlineText: {
-    color: Colors.primary,
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -1243,7 +1247,7 @@ const styles = StyleSheet.create({
   tipsTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 14,
   },
   tipRow: {
@@ -1258,9 +1262,10 @@ const styles = StyleSheet.create({
   },
   tipText: {
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     flex: 1,
   },
-});
+  });
+}
 
 export default VoiceRecorderScreen;

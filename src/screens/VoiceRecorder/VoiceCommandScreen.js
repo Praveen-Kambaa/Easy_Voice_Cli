@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -64,13 +64,14 @@ import { PrimaryButton } from '../../components/common/PrimaryButton';
 
 import { useAlert } from '../../context/AlertContext';
 
-import { Colors } from '../../theme/Colors';
-
+import { useTheme } from '../../context/ThemeContext';
 import { isGlobalAlertModalVisible } from '../../utils/alertModalState';
 
 
 
 const VoiceCommandScreen = ({ navigation }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const showAlert = useAlert();
 
@@ -704,7 +705,7 @@ const VoiceCommandScreen = ({ navigation }) => {
 
             >
 
-              <Music size={22} color={Colors.text.primary} strokeWidth={1.8} />
+              <Music size={22} color={colors.text.primary} strokeWidth={1.8} />
 
             </TouchableOpacity>
 
@@ -744,9 +745,9 @@ const VoiceCommandScreen = ({ navigation }) => {
 
             {isRecording
 
-              ? <Mic size={48} color={isRecording && !isPaused ? Colors.recording.active : Colors.text.secondary} strokeWidth={1.5} />
+              ? <Mic size={48} color={isRecording && !isPaused ? colors.recording.active : colors.text.secondary} strokeWidth={1.5} />
 
-              : <MicOff size={48} color={Colors.text.light} strokeWidth={1.5} />}
+              : <MicOff size={48} color={colors.text.light} strokeWidth={1.5} />}
 
           </View>
 
@@ -862,7 +863,7 @@ const VoiceCommandScreen = ({ navigation }) => {
 
           <AppCard style={styles.infoCard}>
 
-            <ActivityIndicator size="large" color={Colors.primary} />
+            <ActivityIndicator size="large" color={colors.primary} />
 
             <Text style={styles.infoTitle}>Uploading & Transcribing…</Text>
 
@@ -880,7 +881,7 @@ const VoiceCommandScreen = ({ navigation }) => {
 
           <AppCard
 
-            style={[styles.transcriptCard, { borderLeftColor: Colors.status.granted, borderLeftWidth: 3 }]}
+            style={[styles.transcriptCard, { borderLeftColor: colors.status.granted, borderLeftWidth: 3 }]}
 
           >
 
@@ -918,7 +919,7 @@ const VoiceCommandScreen = ({ navigation }) => {
 
                     style={styles.editActionBtn}
 
-                    textStyle={{ color: Colors.status.granted }}
+                    textStyle={{ color: colors.status.granted }}
 
                   />
 
@@ -930,7 +931,7 @@ const VoiceCommandScreen = ({ navigation }) => {
 
                     loading={isExecuting}
 
-                    style={[styles.editActionBtn, { backgroundColor: Colors.primary }]}
+                    style={[styles.editActionBtn, { backgroundColor: colors.primary }]}
 
                   />
 
@@ -1002,7 +1003,7 @@ const VoiceCommandScreen = ({ navigation }) => {
 
           <AppCard
 
-            style={[styles.errorCard, { borderLeftColor: Colors.status.blocked, borderLeftWidth: 3 }]}
+            style={[styles.errorCard, { borderLeftColor: colors.status.blocked, borderLeftWidth: 3 }]}
 
           >
 
@@ -1024,13 +1025,13 @@ const VoiceCommandScreen = ({ navigation }) => {
 
           {[
 
-            { Icon: Circle, text: 'Tap Start to begin recording', color: Colors.recording.active },
+            { Icon: Circle, text: 'Tap Start to begin recording', color: colors.recording.active },
 
-            { Icon: Square, text: 'Tap Stop & Send to upload to backend', color: Colors.primary },
+            { Icon: Square, text: 'Tap Stop & Send to upload to backend', color: colors.primary },
 
-            { Icon: Play, text: 'Play back the recorded audio', color: Colors.status.info },
+            { Icon: Play, text: 'Play back the recorded audio', color: colors.status.info },
 
-            { Icon: Music, text: 'Files saved in MP4/AAC format', color: Colors.text.secondary },
+            { Icon: Music, text: 'Files saved in MP4/AAC format', color: colors.text.secondary },
 
           ].map(({ Icon, text, color }) => (
 
@@ -1060,13 +1061,14 @@ const VoiceCommandScreen = ({ navigation }) => {
 
 
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
 
   safeArea: {
 
     flex: 1,
 
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
 
   },
 
@@ -1082,7 +1084,7 @@ const styles = StyleSheet.create({
 
   recordingCard: {
 
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
 
     borderRadius: 20,
 
@@ -1094,7 +1096,7 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: Colors.border,
+    borderColor: colors.border,
 
     shadowColor: '#000',
 
@@ -1110,9 +1112,9 @@ const styles = StyleSheet.create({
 
   recordingCardActive: {
 
-    borderColor: Colors.recording.active,
+    borderColor: colors.recording.active,
 
-    backgroundColor: Colors.recording.activeBg,
+    backgroundColor: colors.recording.activeBg,
 
   },
 
@@ -1132,7 +1134,7 @@ const styles = StyleSheet.create({
 
     fontWeight: '600',
 
-    color: Colors.text.primary,
+    color: colors.text.primary,
 
     textAlign: 'center',
 
@@ -1144,7 +1146,7 @@ const styles = StyleSheet.create({
 
     fontWeight: '700',
 
-    color: Colors.primary,
+    color: colors.primary,
 
     fontFamily: 'monospace',
 
@@ -1158,7 +1160,7 @@ const styles = StyleSheet.create({
 
     fontSize: 13,
 
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
 
   },
 
@@ -1202,13 +1204,13 @@ const styles = StyleSheet.create({
 
   },
 
-  recordBtn: { backgroundColor: Colors.recording.active },
+  recordBtn: { backgroundColor: colors.recording.active },
 
-  stopBtn: { backgroundColor: Colors.primary },
+  stopBtn: { backgroundColor: colors.primary },
 
-  playBtn: { backgroundColor: Colors.status.info },
+  playBtn: { backgroundColor: colors.status.info },
 
-  stopPlayBtn: { backgroundColor: Colors.text.secondary },
+  stopPlayBtn: { backgroundColor: colors.text.secondary },
 
   controlBtnIcon: { marginBottom: 4 },
 
@@ -1232,7 +1234,7 @@ const styles = StyleSheet.create({
 
     fontWeight: '600',
 
-    color: Colors.text.primary,
+    color: colors.text.primary,
 
     marginTop: 12,
 
@@ -1242,7 +1244,7 @@ const styles = StyleSheet.create({
 
     fontSize: 13,
 
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
 
     marginTop: 4,
 
@@ -1262,7 +1264,7 @@ const styles = StyleSheet.create({
 
     fontWeight: '700',
 
-    color: Colors.status.granted,
+    color: colors.status.granted,
 
     marginBottom: 10,
 
@@ -1272,7 +1274,7 @@ const styles = StyleSheet.create({
 
     fontSize: 15,
 
-    color: Colors.text.primary,
+    color: colors.text.primary,
 
     lineHeight: 22,
 
@@ -1304,7 +1306,7 @@ const styles = StyleSheet.create({
 
     fontWeight: '700',
 
-    color: Colors.text.primary,
+    color: colors.text.primary,
 
     marginBottom: 10,
 
@@ -1314,7 +1316,7 @@ const styles = StyleSheet.create({
 
     fontSize: 15,
 
-    color: Colors.text.primary,
+    color: colors.text.primary,
 
     lineHeight: 22,
 
@@ -1322,7 +1324,7 @@ const styles = StyleSheet.create({
 
     textAlignVertical: 'top',
 
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
 
     borderRadius: 8,
 
@@ -1332,7 +1334,7 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: Colors.border,
+    borderColor: colors.border,
 
   },
 
@@ -1368,7 +1370,7 @@ const styles = StyleSheet.create({
 
     fontWeight: '700',
 
-    color: Colors.status.blocked,
+    color: colors.status.blocked,
 
     marginBottom: 6,
 
@@ -1378,7 +1380,7 @@ const styles = StyleSheet.create({
 
     fontSize: 13,
 
-    color: Colors.text.primary,
+    color: colors.text.primary,
 
     lineHeight: 18,
 
@@ -1392,7 +1394,7 @@ const styles = StyleSheet.create({
 
     fontWeight: '600',
 
-    color: Colors.text.primary,
+    color: colors.text.primary,
 
     marginBottom: 14,
 
@@ -1422,13 +1424,16 @@ const styles = StyleSheet.create({
 
     fontSize: 13,
 
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
 
     flex: 1,
 
   },
 
 });
+}
+
+
 
 
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -17,11 +17,11 @@ import {
   Bell,
   SpellCheck,
 } from 'lucide-react-native';
-import { Colors } from '../../theme/Colors';
 import { APP_NAME, APP_TAGLINE } from '../../constants';
 import { useAuth } from '../../context/AuthContext';
 import { useAlert } from '../../context/AlertContext';
 import { useAppVersion } from '../../hooks/useAppVersion';
+import { useTheme } from '../../context/ThemeContext';
 
 const MENU_ITEMS = [
   { title: 'Home', description: 'Dashboard & overview', Icon: Home, screen: 'MainTabs', tab: 'HomeTab' },
@@ -45,6 +45,8 @@ export const DrawerContent = (props) => {
   const { user, logout } = useAuth();
   const showAlert = useAlert();
   const { version: appVersion } = useAppVersion();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createDrawerStyles(colors), [colors]);
 
   const focusedDrawerRoute = props.state?.routes?.[props.state?.index];
   const currentRouteName = focusedDrawerRoute?.name;
@@ -87,7 +89,7 @@ export const DrawerContent = (props) => {
             accessibilityRole="button"
             accessibilityLabel="Close menu"
           >
-            <X size={18} color={Colors.text.secondary} strokeWidth={2.2} />
+            <X size={18} color={colors.text.secondary} strokeWidth={2.2} />
           </TouchableOpacity>
         </View>
 
@@ -133,7 +135,7 @@ export const DrawerContent = (props) => {
               item.screen === 'MainTabs'
                 ? currentRouteName === 'MainTabs' && currentTabName === item.tab
                 : currentRouteName === item.screen;
-            const iconColor = isActive ? Colors.primary : Colors.text.secondary;
+            const iconColor = isActive ? colors.primary : colors.text.secondary;
             const isLast = idx === MENU_ITEMS.length - 1;
 
             return (
@@ -166,17 +168,18 @@ export const DrawerContent = (props) => {
   );
 };
 
-const styles = StyleSheet.create({
+function createDrawerStyles(colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.drawer.background,
+    backgroundColor: colors.drawer.background,
   },
 
   header: {
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.drawer.border,
+    borderBottomColor: colors.drawer.border,
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -190,19 +193,19 @@ const styles = StyleSheet.create({
   appName: {
     fontSize: 17,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: -0.3,
   },
   appTagline: {
     fontSize: 11,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     marginTop: 1,
   },
   closeBtn: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -217,7 +220,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -233,13 +236,13 @@ const styles = StyleSheet.create({
   userDisplayName: {
     fontSize: 14,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: -0.2,
   },
   userUsername: {
     marginTop: 2,
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
   logoutBtn: {
     width: 34,
@@ -264,15 +267,15 @@ const styles = StyleSheet.create({
   navLabel: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     marginLeft: 4,
     marginBottom: 10,
   },
   groupCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: Colors.drawer.border,
+    borderColor: colors.drawer.border,
     overflow: 'hidden',
   },
   menuItem: {
@@ -282,7 +285,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     gap: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: colors.borderLight,
   },
   menuItemActive: {
     backgroundColor: 'rgba(30, 136, 255, 0.08)',
@@ -294,7 +297,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -308,40 +311,41 @@ const styles = StyleSheet.create({
   menuTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 1,
   },
   menuTitleActive: {
-    color: Colors.text.primary,
+    color: colors.text.primary,
   },
   menuDesc: {
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
   chevSpace: { width: 10 },
   activeDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
   },
 
   footer: {
     paddingHorizontal: 20,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: Colors.drawer.border,
+    borderTopColor: colors.drawer.border,
   },
   footerText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     marginBottom: 2,
   },
   footerSubText: {
     fontSize: 11,
-    color: Colors.text.light,
+    color: colors.text.light,
   },
-});
+  });
+}
 
 export default DrawerContent;

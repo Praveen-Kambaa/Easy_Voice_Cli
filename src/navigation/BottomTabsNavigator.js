@@ -9,16 +9,16 @@ import FloatingMicScreen from '../screens/FloatingMic/FloatingMicScreen';
 import TranslatorStack from './TranslatorStack';
 import AskQuestionStack from './AskQuestionStack';
 import SettingsScreen from '../screens/Settings/SettingsScreen';
-import { Colors } from '../theme/Colors';
+import { useTheme } from '../context/ThemeContext';
 import { Shadows } from '../theme/Shadows';
 
 const Tab = createBottomTabNavigator();
 
-function TabBarBackground() {
-  return <View style={styles.tabBarBg} />;
+function TabBarBackground({ backgroundColor }) {
+  return <View style={[StyleSheet.absoluteFillObject, { backgroundColor }]} />;
 }
 
-function CenterButton({ onPress, accessibilityState }) {
+function CenterButton({ onPress, accessibilityState, styles }) {
   const selected = !!accessibilityState?.selected;
   return (
     <TouchableOpacity
@@ -36,20 +36,30 @@ function CenterButton({ onPress, accessibilityState }) {
   );
 }
 
-function TabIcon({ Icon, focused }) {
+function TabIcon({ Icon, focused, colors }) {
   return (
-    <View style={styles.iconWrap}>
-      <Icon size={22} color={focused ? Colors.primary : Colors.text.light} strokeWidth={2} />
+    <View style={stylesStatic.iconWrap}>
+      <Icon size={22} color={focused ? colors.primary : colors.text.light} strokeWidth={2} />
     </View>
   );
 }
 
-function makeTabIcon(Icon) {
-  return ({ focused }) => <TabIcon Icon={Icon} focused={focused} />;
-}
+const stylesStatic = StyleSheet.create({
+  iconWrap: {
+    width: 44,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
 
 export default function BottomTabsNavigator() {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createTabStyles(colors), [colors]);
+
+  const makeTabIcon = (Icon) => ({ focused }) => <TabIcon Icon={Icon} focused={focused} colors={colors} />;
 
   const tabBarStyle = useMemo(() => {
     const bottomPad = Math.max(insets.bottom, 8);
@@ -60,7 +70,7 @@ export default function BottomTabsNavigator() {
         height: 58 + bottomPad,
       },
     ];
-  }, [insets.bottom]);
+  }, [insets.bottom, styles.tabBar]);
 
   return (
     <Tab.Navigator
@@ -69,11 +79,10 @@ export default function BottomTabsNavigator() {
         headerShown: false,
         tabBarShowLabel: false,
         tabBarStyle,
-        tabBarBackground: TabBarBackground,
+        tabBarBackground: () => <TabBarBackground backgroundColor={colors.tabBar.background} />,
         tabBarHideOnKeyboard: true,
       }}
     >
-      {/* Floating Mic first (left-most) */}
       <Tab.Screen name="FloatingMicTab" component={FloatingMicScreen} options={{ tabBarIcon: makeTabIcon(Radio) }} />
       <Tab.Screen
         name="TranslatorTab"
@@ -86,7 +95,11 @@ export default function BottomTabsNavigator() {
         options={{
           tabBarIcon: () => null,
           tabBarButton: (props) => (
-            <CenterButton accessibilityState={props.accessibilityState} onPress={props.onPress} />
+            <CenterButton
+              accessibilityState={props.accessibilityState}
+              onPress={props.onPress}
+              styles={styles}
+            />
           ),
         }}
       />
@@ -100,68 +113,57 @@ export default function BottomTabsNavigator() {
   );
 }
 
-const styles = StyleSheet.create({
-  tabBar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 0,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    borderLeftWidth: 0,
-    borderRightWidth: 0,
-    borderBottomWidth: 0,
-    backgroundColor: Colors.surface,
-    paddingTop: 8,
-    paddingHorizontal: 0,
-    overflow: 'hidden',
-    ...Platform.select({
-      android: { elevation: 12 },
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 4,
-      },
-    }),
-  },
-  tabBarBg: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: Colors.surface,
-    borderRadius: 0,
-  },
-  iconWrap: {
-    width: 44,
-    height: 40,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  centerBtnWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: -18,
-  },
-  centerBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.primary,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#00D2FF',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.28,
-    shadowRadius: 18,
-    elevation: 10,
-    ...Shadows.md,
-  },
-  centerBtnActive: {
-    transform: [{ scale: 1.02 }],
-  },
-});
-
+function createTabStyles(colors) {
+  return StyleSheet.create({
+    tabBar: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      borderRadius: 0,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.tabBar.border,
+      borderLeftWidth: 0,
+      borderRightWidth: 0,
+      borderBottomWidth: 0,
+      backgroundColor: colors.tabBar.background,
+      paddingTop: 8,
+      paddingHorizontal: 0,
+      overflow: 'hidden',
+      ...Platform.select({
+        android: { elevation: 12 },
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 4,
+        },
+      }),
+    },
+    centerBtnWrap: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: -18,
+    },
+    centerBtn: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: colors.primary,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#00D2FF',
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.28,
+      shadowRadius: 18,
+      elevation: 10,
+      ...Shadows.md,
+    },
+    centerBtnActive: {
+      transform: [{ scale: 1.02 }],
+    },
+  });
+}

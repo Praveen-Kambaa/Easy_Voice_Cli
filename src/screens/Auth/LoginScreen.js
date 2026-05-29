@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -18,10 +18,13 @@ import { useAuth } from '../../context/AuthContext';
 import ForgotPasswordModal from '../../components/ForgotPasswordModal';
 import { validateEmail } from '../../utils/authValidation';
 import { isGlobalAlertModalVisible } from '../../utils/alertModalState';
-
-const iconMuted = '#94a3b8';
+import { useTheme } from '../../context/ThemeContext';
+import { getAuthStyleDefs } from '../../theme/authStyleDefs';
 
 const LoginScreen = ({ navigation }) => {
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => StyleSheet.create(getAuthStyleDefs(colors, isDark)), [colors, isDark]);
+  const iconMuted = colors.text.secondary;
   const { login, signInWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -106,7 +109,7 @@ const LoginScreen = ({ navigation }) => {
                 <TextInput
                   style={styles.input}
                   placeholder="Enter email"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor={colors.text.light}
                   value={email}
                   onChangeText={(text) => {
                     setEmail(text);
@@ -128,7 +131,7 @@ const LoginScreen = ({ navigation }) => {
                 <TextInput
                   style={styles.inputFlex}
                   placeholder="Enter password"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor={colors.text.light}
                   value={password}
                   onChangeText={(text) => {
                     setPassword(text);
@@ -161,25 +164,25 @@ const LoginScreen = ({ navigation }) => {
 
             {/* Login button */}
             <TouchableOpacity
-              style={[styles.loginBtn, isLoading && styles.loginBtnDisabled]}
+              style={[styles.primaryBtn, isLoading && styles.primaryBtnDisabled]}
               onPress={handleLogin}
               disabled={isLoading}
               activeOpacity={0.85}
             >
               {isLoading ? (
-                <ActivityIndicator color="#0a0a0a" size="small" />
+                <ActivityIndicator color={colors.text.white} size="small" />
               ) : (
-                <Text style={styles.loginBtnText}>Sign In</Text>
+                <Text style={styles.primaryBtnText}>Sign In</Text>
               )}
             </TouchableOpacity>
 
             {/* Forgot Password */}
             <TouchableOpacity
-              style={styles.forgotPasswordBtn}
+              style={styles.linkBtn}
               onPress={() => setShowForgotPassword(true)}
               activeOpacity={0.7}
             >
-              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              <Text style={styles.linkText}>Forgot Password?</Text>
             </TouchableOpacity>
 
             {/* Divider */}
@@ -198,7 +201,7 @@ const LoginScreen = ({ navigation }) => {
             >
               <View style={styles.googleIconContainer}>
                 {isGoogleLoading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={colors.text.white} />
                 ) : (
                   <Text style={styles.googleIcon}>G</Text>
                 )}
@@ -209,13 +212,13 @@ const LoginScreen = ({ navigation }) => {
             </TouchableOpacity>
 
             {/* Register Link */}
-            <View style={styles.registerContainer}>
-              <Text style={styles.registerText}>Don't have an account? </Text>
+            <View style={styles.footerRow}>
+              <Text style={styles.footerText}>Don't have an account? </Text>
               <TouchableOpacity
                 onPress={() => navigation.navigate('Register')}
                 activeOpacity={0.7}
               >
-                <Text style={styles.registerLink}>Register</Text>
+                <Text style={styles.footerLink}>Register</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -230,206 +233,5 @@ const LoginScreen = ({ navigation }) => {
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#050505',
-  },
-  flex: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 22,
-    paddingVertical: 28,
-  },
-  headerBlock: {
-    alignItems: 'center',
-    marginBottom: 22,
-  },
-  badge: {
-    backgroundColor: '#14b8a6',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 999,
-    marginBottom: 14,
-  },
-  badgeText: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#f8fafc',
-    textAlign: 'center',
-  },
-  card: {
-    backgroundColor: '#121212',
-    borderRadius: 18,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    shadowColor: '#14b8a6',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 6,
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  logoImage: {
-    width: 240,
-    height: 120,
-    borderRadius: 12,
-  },
-  inputGroup: {
-    marginBottom: 14,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#cbd5e1',
-    marginBottom: 8,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-    borderRadius: 10,
-    backgroundColor: '#0a0a0a',
-    paddingHorizontal: 12,
-    minHeight: 50,
-  },
-  inputIcon: {
-    marginRight: 8,
-  },
-  inputError: {
-    borderColor: '#f87171',
-  },
-  input: {
-    flex: 1,
-    fontSize: 15,
-    color: '#f1f5f9',
-    paddingVertical: 12,
-  },
-  inputFlex: {
-    flex: 1,
-    fontSize: 15,
-    color: '#f1f5f9',
-    paddingVertical: 12,
-  },
-  eyeBtn: {
-    paddingLeft: 8,
-  },
-  errorBox: {
-    backgroundColor: 'rgba(248,113,113,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(248,113,113,0.35)',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 14,
-  },
-  errorText: {
-    fontSize: 13,
-    color: '#fca5a5',
-    fontWeight: '500',
-  },
-  loginBtn: {
-    backgroundColor: '#00d16b',
-    borderRadius: 10,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  loginBtnDisabled: {
-    opacity: 0.65,
-  },
-  loginBtnText: {
-    color: '#0a0a0a',
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-  forgotPasswordBtn: {
-    alignSelf: 'center',
-    marginTop: 16,
-  },
-  forgotPasswordText: {
-    color: '#2dd4bf',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 22,
-  },
-  dividerLine: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-  },
-  dividerText: {
-    marginHorizontal: 12,
-    fontSize: 11,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-  googleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#0a0a0a',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-    borderRadius: 10,
-    height: 52,
-    paddingHorizontal: 16,
-  },
-  googleIconContainer: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#4285F4',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  googleIcon: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  googleBtnText: {
-    color: '#f8fafc',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  registerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 22,
-  },
-  registerText: {
-    color: '#64748b',
-    fontSize: 14,
-  },
-  registerLink: {
-    color: '#f8fafc',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-});
 
 export default LoginScreen;

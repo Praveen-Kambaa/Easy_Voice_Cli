@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,9 +19,10 @@ import {
 } from '../../services/appActivityHistoryService';
 import { formatDateTime } from '../../utils/dateTimeFormat';
 import { useAlert } from '../../context/AlertContext';
-import { Colors } from '../../theme/Colors';
-
+import { useTheme } from '../../context/ThemeContext';
 const VoiceRecorderHistoryScreen = ({ navigation }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const showAlert = useAlert();
   const [entries, setEntries] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -89,7 +90,7 @@ const VoiceRecorderHistoryScreen = ({ navigation }) => {
         rightComponent={
           entries.length > 0 ? (
             <TouchableOpacity onPress={onClear} hitSlop={10}>
-              <Trash2 size={20} color={Colors.text.secondary} strokeWidth={2} />
+              <Trash2 size={20} color={colors.text.secondary} strokeWidth={2} />
             </TouchableOpacity>
           ) : null
         }
@@ -101,7 +102,7 @@ const VoiceRecorderHistoryScreen = ({ navigation }) => {
         contentContainerStyle={entries.length === 0 ? styles.listEmpty : styles.list}
         ListEmptyComponent={empty}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
         showsVerticalScrollIndicator={false}
       />
@@ -109,10 +110,11 @@ const VoiceRecorderHistoryScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
   },
   list: {
     padding: 16,
@@ -122,28 +124,28 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: 14,
     marginBottom: 10,
   },
   label: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 4,
   },
   meta: {
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 18,
     marginBottom: 8,
   },
   time: {
     fontSize: 11,
-    color: Colors.text.light,
+    color: colors.text.light,
   },
   empty: {
     flex: 1,
@@ -156,7 +158,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -164,15 +166,18 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 8,
   },
   emptyDesc: {
     fontSize: 14,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     textAlign: 'center',
     lineHeight: 20,
   },
 });
+}
+
+
 
 export default VoiceRecorderHistoryScreen;

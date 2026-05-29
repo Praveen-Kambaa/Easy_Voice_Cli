@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,11 +10,15 @@ import {
   getTranslationHistory,
   deleteTranslationHistoryEntry,
 } from '../../services/translationTextStorage';
-import { Colors } from '../../theme/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import { formatDateTime } from '../../utils/dateTimeFormat';
 import { useAlert } from '../../context/AlertContext';
 
 const TranslatorHistoryScreen = () => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+
   const showAlert = useAlert();
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState([]);
@@ -64,7 +68,7 @@ const TranslatorHistoryScreen = () => {
             accessibilityLabel="Delete history item"
             style={styles.iconBtn}
           >
-            <Trash2 size={18} color={Colors.recording.active} strokeWidth={2} />
+            <Trash2 size={18} color={colors.recording.active} strokeWidth={2} />
           </TouchableOpacity>
         </View>
 
@@ -105,9 +109,10 @@ const TranslatorHistoryScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   screen: {
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
   },
   list: {
     paddingHorizontal: 18,
@@ -115,10 +120,10 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: colors.borderLight,
     padding: 14,
     marginBottom: 10,
     shadowColor: '#000',
@@ -136,14 +141,14 @@ const styles = StyleSheet.create({
   },
   timeStamp: {
     fontSize: 11,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     flexShrink: 0,
   },
   iconBtn: {
     width: 34,
     height: 34,
     borderRadius: 12,
-    backgroundColor: Colors.recording.activeBg,
+    backgroundColor: colors.recording.activeBg,
     borderWidth: 1,
     borderColor: '#FECACA',
     alignItems: 'center',
@@ -154,28 +159,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: colors.borderLight,
     flex: 1,
   },
   langPillText: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     letterSpacing: 0.2,
   },
   source: {
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     lineHeight: 23,
     letterSpacing: -0.2,
   },
   target: {
     marginTop: 10,
     fontSize: 15,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 22,
   },
   empty: {
@@ -187,16 +192,19 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     textAlign: 'center',
     marginBottom: 8,
   },
   emptySub: {
     fontSize: 14,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     textAlign: 'center',
     lineHeight: 20,
   },
 });
+}
+
+
 
 export default TranslatorHistoryScreen;

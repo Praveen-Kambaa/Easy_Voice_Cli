@@ -3,6 +3,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildTypeEasyUrl, API_ENDPOINTS } from '../config/api';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { syncKeyboardSettingsToNative } from '../services/floatingMicConfig';
+import { readJsonResponse, getApiErrorMessage } from '../utils/parseApiResponse';
+
+const JSON_HEADERS = {
+  'Content-Type': 'application/json',
+  Accept: 'application/json',
+};
 
 const STORAGE_KEYS = {
   USER_DATA: '@auth_user_data',
@@ -67,32 +73,50 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = async (email, password) => {
+    const url = buildTypeEasyUrl(API_ENDPOINTS.AUTH.LOGIN);
     try {
-      const response = await fetch(buildTypeEasyUrl(API_ENDPOINTS.AUTH.LOGIN), {
+      const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: JSON_HEADERS,
         body: JSON.stringify({
           email: email.trim(),
-          password: password,
+          password,
         }),
       });
 
-      const data = await response.json();
+      const parsed = await readJsonResponse(response);
+      const { data, status, isHtml, parseError } = parsed;
+
       try {
-        console.log('[Auth] login response', { ok: response.ok, status: response.status, data });
+        if (__DEV__) {
+          console.log('[Auth] login', {
+            url,
+            ok: response.ok,
+            status,
+            isHtml,
+            parseError,
+            success: data?.success,
+          });
+        }
         await AsyncStorage.setItem(
           STORAGE_KEYS.LAST_LOGIN_RESPONSE,
           JSON.stringify({
             at: new Date().toISOString(),
             ok: response.ok,
-            status: response.status,
+            status,
             data,
+            isHtml: !!isHtml,
           }),
         );
       } catch {
         // ignore
+      }
+
+      if (isHtml || parseError) {
+        return {
+          success: false,
+          error: getApiErrorMessage({ status, isHtml, parseError, data }, 'Login failed'),
+        };
       }
 
       if (response.ok && data.success) {
@@ -108,41 +132,62 @@ export const AuthProvider = ({ children }) => {
           userId: data.userId || data.user?.id,
           token: data.token,
         };
-        
+
         await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(userData));
         setUser(userData);
         return { success: true };
-      } else {
-        return { success: false, error: data.message || 'Login failed' };
       }
+
+      return {
+        success: false,
+        error: getApiErrorMessage(
+          { status, isHtml, parseError, data },
+          typeof data.message === 'string' ? data.message : 'Login failed',
+        ),
+      };
     } catch (error) {
-      console.error('Login error:', error);
-      return { success: false, error: 'Network error. Please try again.' };
+      if (__DEV__) {
+        console.warn('[Auth] login network error', error?.message || error);
+      }
+      return { success: false, error: 'Network error. Please check your connection and try again.' };
     }
   };
 
-  const parseJsonSafe = async (response) => {
-    try {
-      return await response.json();
-    } catch {
-      return {};
+  const handleAuthResponse = (response, parsed, fallbackError) => {
+    const { data, status, isHtml, parseError } = parsed;
+    if (isHtml || parseError) {
+      return {
+        success: false,
+        error: getApiErrorMessage({ status, isHtml, parseError, data }, fallbackError),
+      };
     }
+    if (response.ok && data.success) {
+      return { success: true, data };
+    }
+    return {
+      success: false,
+      error: getApiErrorMessage(
+        { status, isHtml, parseError, data },
+        typeof data.message === 'string' ? data.message : fallbackError,
+      ),
+    };
   };
 
   const sendRegistrationOtp = async (email) => {
     try {
       const response = await fetch(buildTypeEasyUrl(API_ENDPOINTS.AUTH.SEND_OTP), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: JSON_HEADERS,
         body: JSON.stringify({ email: email.trim() }),
       });
-      const data = await parseJsonSafe(response);
-      if (response.ok && data.success) {
-        return { success: true, message: data.message };
+      const parsed = await readJsonResponse(response);
+      const result = handleAuthResponse(response, parsed, 'Could not send OTP');
+      if (result.success) {
+        return { success: true, message: result.data.message };
       }
-      return { success: false, error: data.message || 'Could not send OTP' };
+      return result;
     } catch (error) {
-      console.error('sendRegistrationOtp error:', error);
+      if (__DEV__) console.warn('[Auth] sendRegistrationOtp', error?.message || error);
       return { success: false, error: 'Network error. Please try again.' };
     }
   };
@@ -151,16 +196,17 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await fetch(buildTypeEasyUrl(API_ENDPOINTS.AUTH.VERIFY_OTP), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: JSON_HEADERS,
         body: JSON.stringify({ email: email.trim(), otp: String(otp).trim() }),
       });
-      const data = await parseJsonSafe(response);
-      if (response.ok && data.success) {
-        return { success: true, message: data.message };
+      const parsed = await readJsonResponse(response);
+      const result = handleAuthResponse(response, parsed, 'Invalid or expired OTP');
+      if (result.success) {
+        return { success: true, message: result.data.message };
       }
-      return { success: false, error: data.message || 'Invalid or expired OTP' };
+      return result;
     } catch (error) {
-      console.error('verifyRegistrationOtp error:', error);
+      if (__DEV__) console.warn('[Auth] verifyRegistrationOtp', error?.message || error);
       return { success: false, error: 'Network error. Please try again.' };
     }
   };
@@ -169,11 +215,13 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await fetch(buildTypeEasyUrl(API_ENDPOINTS.AUTH.COMPLETE_REGISTRATION), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: JSON_HEADERS,
         body: JSON.stringify(payload),
       });
-      const data = await parseJsonSafe(response);
-      if (response.ok && data.success) {
+      const parsed = await readJsonResponse(response);
+      const result = handleAuthResponse(response, parsed, 'Registration failed');
+      if (result.success) {
+        const data = result.data;
         if (data.token) {
           const userData = {
             email: payload.email.trim(),
@@ -191,9 +239,9 @@ export const AuthProvider = ({ children }) => {
           token: data.token,
         };
       }
-      return { success: false, error: data.message || 'Registration failed' };
+      return result;
     } catch (error) {
-      console.error('completeRegistration error:', error);
+      if (__DEV__) console.warn('[Auth] completeRegistration', error?.message || error);
       return { success: false, error: 'Network error. Please try again.' };
     }
   };
@@ -202,23 +250,29 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await fetch(buildTypeEasyUrl(API_ENDPOINTS.AUTH.REQUEST_RESET), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: JSON_HEADERS,
         body: JSON.stringify({
           email: email.trim(),
         }),
       });
 
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        return { success: true, message: data.message || 'If the email exists, reset instructions have been sent' };
-      } else {
-        return { success: false, error: data.message || 'Failed to send reset instructions' };
+      const parsed = await readJsonResponse(response);
+      const result = handleAuthResponse(
+        response,
+        parsed,
+        'Failed to send reset instructions',
+      );
+      if (result.success) {
+        return {
+          success: true,
+          message:
+            result.data.message ||
+            'If the email exists, reset instructions have been sent',
+        };
       }
+      return result;
     } catch (error) {
-      console.error('Password reset error:', error);
+      if (__DEV__) console.warn('[Auth] requestPasswordReset', error?.message || error);
       return { success: false, error: 'Network error. Please try again.' };
     }
   };
@@ -234,11 +288,9 @@ export const AuthProvider = ({ children }) => {
       const userInfo = await GoogleSignin.signIn();
       
       // Send Google token to your backend for verification
-      const response = await fetch(buildTypeEasyUrl('/auth/google-signin'), {
+      const response = await fetch(buildTypeEasyUrl(API_ENDPOINTS.AUTH.GOOGLE_SIGNIN), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: JSON_HEADERS,
         body: JSON.stringify({
           idToken: userInfo.idToken,
           email: userInfo.user.email,
@@ -247,7 +299,19 @@ export const AuthProvider = ({ children }) => {
         }),
       });
 
-      const data = await response.json();
+      const parsed = await readJsonResponse(response);
+      const { data, status, isHtml, parseError } = parsed;
+
+      if (isHtml || parseError) {
+        await GoogleSignin.signOut();
+        return {
+          success: false,
+          error: getApiErrorMessage(
+            { status, isHtml, parseError, data },
+            'Google sign-in verification failed',
+          ),
+        };
+      }
 
       if (response.ok && data.success) {
         const userData = {
@@ -262,11 +326,16 @@ export const AuthProvider = ({ children }) => {
         await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(userData));
         setUser(userData);
         return { success: true };
-      } else {
-        // Sign out from Google if backend verification fails
-        await GoogleSignin.signOut();
-        return { success: false, error: data.message || 'Google sign-in verification failed' };
       }
+
+      await GoogleSignin.signOut();
+      return {
+        success: false,
+        error: getApiErrorMessage(
+          { status, isHtml, parseError, data },
+          typeof data.message === 'string' ? data.message : 'Google sign-in verification failed',
+        ),
+      };
     } catch (error) {
       if (error.code === statusCodes.SIGN_IN_CANCELLED) {
         return { success: false, error: 'Sign-in cancelled' };

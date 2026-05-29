@@ -9,8 +9,7 @@ import { canAccessAskQuestionFeature } from '../services/floatingMicConfig';
 import { ScreenContainer } from '../components/common/ScreenContainer';
 import { AppHeader } from '../components/Header/AppHeader';
 import AskQuestionAccessBlocked from '../components/AskQuestion/AskQuestionAccessBlocked';
-import { Colors } from '../theme/Colors';
-
+import { useTheme } from '../context/ThemeContext';
 const Stack = createNativeStackNavigator();
 
 const NESTED_NAMES = new Set(['AiQaHistory', 'AiQaSaved']);
@@ -36,6 +35,8 @@ function AskQuestionNavigator({ initialRouteName, historyInitialParams, savedIni
  * Ask Question stack (Android): Ask Question overlay toggle enabled in Settings only.
  */
 const AskQuestionStack = ({ route, navigation }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [phase, setPhase] = useState('loading');
   const { initialRouteName, historyInitialParams, savedInitialParams } = useMemo(() => {
     const p = route?.params;
@@ -69,7 +70,7 @@ const AskQuestionStack = ({ route, navigation }) => {
       <ScreenContainer>
         <AppHeader title="Ask Question" />
         <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       </ScreenContainer>
     );
@@ -88,12 +89,16 @@ const AskQuestionStack = ({ route, navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   loadingWrap: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
 });
+}
+
+
 
 export default AskQuestionStack;

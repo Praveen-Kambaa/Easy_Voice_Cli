@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -23,7 +23,7 @@ import { LanguagePickerModal } from '../../components/LanguagePickerModal';
 import { usePermissionsManager } from '../../hooks/usePermissionsManager';
 import { useAndroidPermissions } from '../../hooks/useAndroidPermissions';
 import { useAlert } from '../../context/AlertContext';
-import { Colors } from '../../theme/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildEasyVoiceUrl } from '../../config/api';
 import { offlineWhisperService } from '../../services/offlineWhisperService';
@@ -45,6 +45,7 @@ import {
   setOverlayAskQuestionEnabled,
 } from '../../services/floatingMicConfig';
 import { ChevronDown, Copy, Keyboard } from 'lucide-react-native';
+import { ThemeModeSelector } from '../../components/settings/ThemeModeSelector';
 import {
   TRANSLATION_LANGUAGES as languages,
   getLanguageName,
@@ -54,6 +55,8 @@ import { logActivity, ActivityCategory } from '../../services/appActivityHistory
 
 const SettingsScreen = () => {
   const showAlert = useAlert();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createSettingsStyles(colors), [colors]);
 
   const [internalTranscribe, setInternalTranscribe] = useState(true);
   const [overlayMicEnabled, setOverlayMicEnabledState] = useState(true);
@@ -357,11 +360,11 @@ const SettingsScreen = () => {
 
   const getStdStatusColor = (status) => {
     switch (status) {
-      case 'granted': return Colors.status.granted;
-      case 'denied': return Colors.status.denied;
-      case 'blocked': return Colors.status.blocked;
-      case 'limited': return Colors.status.info;
-      default: return Colors.status.unavailable;
+      case 'granted': return colors.status.granted;
+      case 'denied': return colors.status.denied;
+      case 'blocked': return colors.status.blocked;
+      case 'limited': return colors.status.info;
+      default: return colors.status.unavailable;
     }
   };
 
@@ -506,6 +509,16 @@ const SettingsScreen = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* ── Appearance ─────────────────────────────────────────────────── */}
+        <Text style={styles.sectionLabel}>Appearance</Text>
+        <AppCard style={styles.appearanceCard}>
+          <Text style={styles.appearanceTitle}>Theme</Text>
+          <Text style={styles.appearanceSub}>
+            Choose how Type Easy looks. System default follows your phone setting.
+          </Text>
+          <ThemeModeSelector />
+        </AppCard>
+
         {/* ── Section 0: Translation Settings ────────────────────────────── */}
         <Text style={styles.sectionLabel}>Translation</Text>
 
@@ -526,7 +539,7 @@ const SettingsScreen = () => {
               <Text style={styles.settingTitle}>From</Text>
               <Text style={styles.settingSub} numberOfLines={1}>{getLanguageName(fromLanguage)}</Text>
             </View>
-            <ChevronDown size={18} color={Colors.text.light} />
+            <ChevronDown size={18} color={colors.text.light} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -540,7 +553,7 @@ const SettingsScreen = () => {
               <Text style={styles.settingTitle}>To</Text>
               <Text style={styles.settingSub} numberOfLines={1}>{getLanguageName(toLanguage)}</Text>
             </View>
-            <ChevronDown size={18} color={Colors.text.light} />
+            <ChevronDown size={18} color={colors.text.light} />
           </TouchableOpacity>
 
           <View style={styles.groupFooter}>
@@ -588,7 +601,7 @@ const SettingsScreen = () => {
 
           {pickedTranscribing && (
             <View style={styles.transcribeLoadingRow}>
-              <ActivityIndicator size="small" color={Colors.primary} />
+              <ActivityIndicator size="small" color={colors.primary} />
               <Text style={styles.transcribeLoadingText}>
                 {typeof modelDownloadPct === 'number' && modelDownloadPct < 100
                   ? `Downloading model… ${modelDownloadPct}%`
@@ -618,7 +631,7 @@ const SettingsScreen = () => {
                     accessibilityRole="button"
                     accessibilityLabel="Copy transcript"
                   >
-                    <Copy size={16} color={Colors.primary} strokeWidth={2.1} />
+                    <Copy size={16} color={colors.primary} strokeWidth={2.1} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -643,8 +656,8 @@ const SettingsScreen = () => {
                 <Switch
                   value={overlayMicEnabled}
                   onValueChange={onOverlayMicToggle}
-                  trackColor={{ false: Colors.border, true: Colors.primary + '88' }}
-                  thumbColor={overlayMicEnabled ? Colors.primary : Colors.text.light}
+                  trackColor={{ false: colors.border, true: colors.primary + '88' }}
+                  thumbColor={overlayMicEnabled ? colors.primary : colors.text.light}
                 />
               </View>
               <View style={[styles.toggleRow, styles.overlayActionRow]}>
@@ -655,8 +668,8 @@ const SettingsScreen = () => {
                 <Switch
                   value={overlayTranslationEnabled}
                   onValueChange={onOverlayTranslationToggle}
-                  trackColor={{ false: Colors.border, true: Colors.primary + '88' }}
-                  thumbColor={overlayTranslationEnabled ? Colors.primary : Colors.text.light}
+                  trackColor={{ false: colors.border, true: colors.primary + '88' }}
+                  thumbColor={overlayTranslationEnabled ? colors.primary : colors.text.light}
                 />
               </View>
               <View style={[styles.toggleRow, styles.overlayActionRowLast]}>
@@ -669,8 +682,8 @@ const SettingsScreen = () => {
                 <Switch
                   value={overlayAskQuestionEnabled}
                   onValueChange={onOverlayAskQuestionToggle}
-                  trackColor={{ false: Colors.border, true: Colors.primary + '88' }}
-                  thumbColor={overlayAskQuestionEnabled ? Colors.primary : Colors.text.light}
+                  trackColor={{ false: colors.border, true: colors.primary + '88' }}
+                  thumbColor={overlayAskQuestionEnabled ? colors.primary : colors.text.light}
                 />
               </View>
 
@@ -687,8 +700,8 @@ const SettingsScreen = () => {
                   value={internalTranscribe}
                   onValueChange={onInternalTranscribeToggle}
                   disabled={!overlayMicEnabled}
-                  trackColor={{ false: Colors.border, true: Colors.primary + '88' }}
-                  thumbColor={internalTranscribe ? Colors.primary : Colors.text.light}
+                  trackColor={{ false: colors.border, true: colors.primary + '88' }}
+                  thumbColor={internalTranscribe ? colors.primary : colors.text.light}
                 />
               </View>
               <View style={[styles.toggleRow, styles.internalTranslateRow]}>
@@ -702,8 +715,8 @@ const SettingsScreen = () => {
                   value={internalFloatingTranslation}
                   onValueChange={onInternalFloatingTranslationToggle}
                   disabled={!overlayTranslationEnabled}
-                  trackColor={{ false: Colors.border, true: Colors.primary + '88' }}
-                  thumbColor={internalFloatingTranslation ? Colors.primary : Colors.text.light}
+                  trackColor={{ false: colors.border, true: colors.primary + '88' }}
+                  thumbColor={internalFloatingTranslation ? colors.primary : colors.text.light}
                 />
               </View>
             </AppCard>
@@ -719,7 +732,7 @@ const SettingsScreen = () => {
                 value={elevenLabsKeyDraft}
                 onChangeText={setElevenLabsKeyDraft}
                 placeholder={ELEVENLABS_API_KEY_PLACEHOLDER}
-                placeholderTextColor={Colors.text.secondary}
+                placeholderTextColor={colors.text.secondary}
                 autoCapitalize="none"
                 autoCorrect={false}
                 editable={!elevenLabsKeySaving}
@@ -741,7 +754,7 @@ const SettingsScreen = () => {
           <AppCard style={styles.keyboardCard}>
             <View style={styles.keyboardCardHeader}>
               <View style={styles.keyboardIconWrap}>
-                <Keyboard size={22} color={Colors.primary} strokeWidth={2} />
+                <Keyboard size={22} color={colors.primary} strokeWidth={2} />
               </View>
               <View style={styles.keyboardCardText}>
                 <Text style={styles.keyboardCardTitle}>Advanced Keyboard</Text>
@@ -782,8 +795,8 @@ const SettingsScreen = () => {
                   // Re-check status after user returns from settings
                   setTimeout(() => checkKeyboardStatus(), 1500);
                 }}
-                trackColor={{ false: Colors.border, true: Colors.primary + '88' }}
-                thumbColor={keyboardEnabled ? Colors.primary : Colors.text.light}
+                trackColor={{ false: colors.border, true: colors.primary + '88' }}
+                thumbColor={keyboardEnabled ? colors.primary : colors.text.light}
               />
             </View>
 
@@ -802,8 +815,8 @@ const SettingsScreen = () => {
                   NativeModules.KeyboardModule?.showKeyboardPicker?.();
                   setTimeout(() => checkKeyboardStatus(), 1500);
                 }}
-                trackColor={{ false: Colors.border, true: Colors.primary + '88' }}
-                thumbColor={keyboardSelected ? Colors.primary : Colors.text.light}
+                trackColor={{ false: colors.border, true: colors.primary + '88' }}
+                thumbColor={keyboardSelected ? colors.primary : colors.text.light}
               />
             </View>
           </AppCard>
@@ -859,7 +872,7 @@ const SettingsScreen = () => {
                   loading={stdLoading}
                   variant={isGranted ? 'ghost' : 'primary'}
                   style={styles.permBtn}
-                  textStyle={isGranted ? { color: Colors.status.granted } : undefined}
+                  textStyle={isGranted ? { color: colors.status.granted } : undefined}
                 />
               </View>
             </AppCard>
@@ -913,7 +926,7 @@ const SettingsScreen = () => {
                   disabled={isLoading || !isSupported}
                   variant={isGranted ? 'ghost' : 'primary'}
                   style={[styles.permBtn, { flex: 1 }]}
-                  textStyle={isGranted ? { color: Colors.status.granted } : undefined}
+                  textStyle={isGranted ? { color: colors.status.granted } : undefined}
                 />
                 <TouchableOpacity
                   style={styles.checkBtn}
@@ -981,7 +994,8 @@ const SettingsScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+function createSettingsStyles(colors) {
+  return StyleSheet.create({
   scroll: {
     flex: 1,
   },
@@ -992,17 +1006,17 @@ const styles = StyleSheet.create({
   },
 
   platformWarning: {
-    backgroundColor: Colors.warning.bg,
+    backgroundColor: colors.warning.bg,
     marginHorizontal: 20,
     marginTop: 12,
     padding: 12,
     borderRadius: 8,
     borderLeftWidth: 3,
-    borderLeftColor: Colors.warning.border,
+    borderLeftColor: colors.warning.border,
   },
   platformWarningText: {
     fontSize: 13,
-    color: Colors.warning.text,
+    color: colors.warning.text,
     lineHeight: 18,
   },
 
@@ -1019,7 +1033,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     marginBottom: 10,
   },
 
@@ -1039,12 +1053,12 @@ const styles = StyleSheet.create({
   permTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 4,
   },
   permDescription: {
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 18,
   },
   statusBadge: {
@@ -1071,9 +1085,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   checkBtn: {
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
@@ -1084,22 +1098,22 @@ const styles = StyleSheet.create({
   checkBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: colors.text.primary,
   },
 
   errorBox: {
-    backgroundColor: Colors.status.blockedBg,
+    backgroundColor: colors.status.blockedBg,
     padding: 10,
     borderRadius: 6,
     marginBottom: 12,
   },
   errorMsg: {
     fontSize: 13,
-    color: Colors.status.blocked,
+    color: colors.status.blocked,
     lineHeight: 18,
   },
   unsupportedBox: {
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     padding: 10,
     borderRadius: 6,
     marginBottom: 12,
@@ -1107,7 +1121,7 @@ const styles = StyleSheet.create({
   },
   unsupportedText: {
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     fontStyle: 'italic',
   },
 
@@ -1117,12 +1131,12 @@ const styles = StyleSheet.create({
   settingsLinkTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 6,
   },
   settingsLinkDesc: {
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 18,
     marginBottom: 14,
   },
@@ -1137,11 +1151,11 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   footerText: {
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     textAlign: 'center',
     lineHeight: 18,
   },
@@ -1158,13 +1172,13 @@ const styles = StyleSheet.create({
   groupTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: -0.2,
   },
   groupSub: {
     marginTop: 4,
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 18,
   },
   groupFooter: {
@@ -1172,7 +1186,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 14,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.borderLight,
+    borderTopColor: colors.borderLight,
   },
   groupPrimaryBtn: {
     minHeight: 48,
@@ -1184,11 +1198,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.borderLight,
+    borderTopColor: colors.borderLight,
   },
   settingRowLast: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: colors.borderLight,
   },
   settingTextCol: {
     flex: 1,
@@ -1197,22 +1211,22 @@ const styles = StyleSheet.create({
   settingTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: colors.text.primary,
   },
   settingSub: {
     marginTop: 2,
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
   translationTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 6,
   },
   translationDesc: {
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 18,
     marginBottom: 20,
   },
@@ -1232,7 +1246,7 @@ const styles = StyleSheet.create({
   overlayActionRow: {
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
     alignItems: 'center',
   },
   overlayActionRowLast: {
@@ -1245,7 +1259,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     paddingBottom: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
     alignItems: 'flex-start',
   },
   internalTranslateRow: {
@@ -1255,12 +1269,12 @@ const styles = StyleSheet.create({
   internalTranslationTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 6,
   },
   overlayHint: {
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 17,
     marginBottom: 4,
     fontWeight: '400',
@@ -1268,22 +1282,22 @@ const styles = StyleSheet.create({
   toggleLabel: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: colors.text.primary,
   },
   toggleSubLabel: {
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     marginTop: 2,
   },
   apiKeyInput: {
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: Colors.text.primary,
-    backgroundColor: Colors.backgroundAlt,
+    color: colors.text.primary,
+    backgroundColor: colors.backgroundAlt,
     marginBottom: 12,
   },
 
@@ -1294,13 +1308,13 @@ const styles = StyleSheet.create({
   transcribeTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 6,
     letterSpacing: -0.2,
   },
   transcribeDesc: {
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 18,
     marginBottom: 14,
   },
@@ -1316,7 +1330,7 @@ const styles = StyleSheet.create({
   transcribeFileHint: {
     marginTop: 12,
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 16,
   },
   transcribeLoadingRow: {
@@ -1327,29 +1341,29 @@ const styles = StyleSheet.create({
   },
   transcribeLoadingText: {
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     fontWeight: '600',
   },
   transcribeErrorBox: {
     marginTop: 12,
-    backgroundColor: Colors.status.blockedBg,
+    backgroundColor: colors.status.blockedBg,
     padding: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.status.blocked + '22',
+    borderColor: colors.status.blocked + '22',
   },
   transcribeErrorText: {
     fontSize: 13,
-    color: Colors.status.blocked,
+    color: colors.status.blocked,
     lineHeight: 18,
   },
   transcribeResultBox: {
     marginTop: 12,
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   transcribeResultHeader: {
     flexDirection: 'row',
@@ -1361,12 +1375,12 @@ const styles = StyleSheet.create({
   transcribeResultLabel: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     letterSpacing: 0.2,
   },
   transcribeResultText: {
     fontSize: 14,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     lineHeight: 20,
   },
   transcribeHeaderActions: {
@@ -1379,15 +1393,15 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   transcribeCopiedText: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.status.granted,
+    color: colors.status.granted,
   },
 
   // Keyboard section
@@ -1417,20 +1431,20 @@ const styles = StyleSheet.create({
   keyboardCardTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: -0.2,
   },
   keyboardCardSub: {
     marginTop: 3,
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 18,
   },
   keyboardFeatureList: {
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: colors.borderLight,
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 6,
@@ -1438,7 +1452,7 @@ const styles = StyleSheet.create({
   },
   keyboardFeatureItem: {
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 20,
   },
   keyboardBtnRow: {
@@ -1453,7 +1467,7 @@ const styles = StyleSheet.create({
   },
   keyboardHint: {
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 17,
     textAlign: 'center',
   },
@@ -1463,12 +1477,30 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 14,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.borderLight,
+    borderTopColor: colors.borderLight,
   },
   keyboardToggleRowLast: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: colors.borderLight,
   },
-});
+
+  appearanceCard: {
+    marginBottom: 16,
+  },
+  appearanceTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text.primary,
+    letterSpacing: -0.2,
+    marginBottom: 4,
+  },
+  appearanceSub: {
+    fontSize: 13,
+    color: colors.text.secondary,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  });
+}
 
 export default SettingsScreen;

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -28,11 +28,15 @@ import {
   sanitizeIndianMobileInput,
 } from '../../utils/authValidation';
 import { isGlobalAlertModalVisible } from '../../utils/alertModalState';
+import { useTheme } from '../../context/ThemeContext';
+import { getRegisterStyleDefs } from '../../theme/authStyleDefs';
 
 /** Match API contract; use `mobile` if your backend expects it. */
 const REGISTRATION_SOURCE = 'web';
 
 const RegisterScreen = ({ navigation }) => {
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => StyleSheet.create(getRegisterStyleDefs(colors, isDark)), [colors, isDark]);
   const showAlert = useAlert();
   const { sendRegistrationOtp, verifyRegistrationOtp, completeRegistration } = useAuth();
   const [step, setStep] = useState(1);
@@ -164,7 +168,7 @@ const RegisterScreen = ({ navigation }) => {
     clearError();
   };
 
-  const iconMuted = '#94a3b8';
+  const iconMuted = colors.text.secondary;
 
   const renderHeader = () => (
     <View style={styles.headerBlock}>
@@ -186,7 +190,7 @@ const RegisterScreen = ({ navigation }) => {
           <TextInput
             style={styles.input}
             placeholder="Email Address"
-            placeholderTextColor="#64748b"
+            placeholderTextColor={colors.text.light}
             value={email}
             onChangeText={(t) => {
               setEmail(t);
@@ -207,7 +211,7 @@ const RegisterScreen = ({ navigation }) => {
         activeOpacity={0.85}
       >
         {isLoading ? (
-          <ActivityIndicator color="#ffffff" size="small" />
+          <ActivityIndicator color={colors.text.white} size="small" />
         ) : (
           <Text style={styles.sendOtpBtnText}>Send OTP</Text>
         )}
@@ -238,7 +242,7 @@ const RegisterScreen = ({ navigation }) => {
           <TextInput
             style={[styles.input, styles.otpInput]}
             placeholder="Enter 6-digit OTP"
-            placeholderTextColor="#64748b"
+            placeholderTextColor={colors.text.light}
             value={otp}
             onChangeText={(t) => {
               setOtp(t.replace(/\D/g, '').slice(0, 6));
@@ -263,7 +267,7 @@ const RegisterScreen = ({ navigation }) => {
         activeOpacity={0.85}
       >
         {isLoading ? (
-          <ActivityIndicator color="#000000" size="small" />
+          <ActivityIndicator color={colors.text.primary} size="small" />
         ) : (
           <Text style={styles.verifyBtnText}>Verify OTP</Text>
         )}
@@ -290,7 +294,7 @@ const RegisterScreen = ({ navigation }) => {
           <TextInput
             style={styles.input}
             placeholder="Full Name"
-            placeholderTextColor="#64748b"
+            placeholderTextColor={colors.text.light}
             value={name}
             onChangeText={(t) => {
               setName(sanitizeLettersAndSpaces(t));
@@ -309,7 +313,7 @@ const RegisterScreen = ({ navigation }) => {
           <TextInput
             style={styles.input}
             placeholder="10 digits, starts with 6–9"
-            placeholderTextColor="#64748b"
+            placeholderTextColor={colors.text.light}
             value={phone}
             onChangeText={(t) => {
               setPhone(sanitizeIndianMobileInput(t));
@@ -331,7 +335,7 @@ const RegisterScreen = ({ navigation }) => {
             <TextInput
               style={styles.input}
               placeholder="City"
-              placeholderTextColor="#64748b"
+              placeholderTextColor={colors.text.light}
               value={city}
               onChangeText={(t) => {
                 setCity(sanitizeLettersAndSpaces(t));
@@ -348,7 +352,7 @@ const RegisterScreen = ({ navigation }) => {
             <TextInput
               style={styles.input}
               placeholder="State"
-              placeholderTextColor="#64748b"
+              placeholderTextColor={colors.text.light}
               value={stateRegion}
               onChangeText={(t) => {
                 setStateRegion(sanitizeLettersAndSpaces(t));
@@ -367,7 +371,7 @@ const RegisterScreen = ({ navigation }) => {
           <TextInput
             style={styles.inputFlex}
             placeholder="Create Password (min 8, 1 uppercase, 1 number)"
-            placeholderTextColor="#64748b"
+            placeholderTextColor={colors.text.light}
             value={password}
             onChangeText={(t) => {
               setPassword(t);
@@ -404,7 +408,7 @@ const RegisterScreen = ({ navigation }) => {
         activeOpacity={0.85}
       >
         {isLoading ? (
-          <ActivityIndicator color="#0a0a0a" size="small" />
+          <ActivityIndicator color={colors.text.white} size="small" />
         ) : (
           <Text style={styles.completeBtnText}>Complete Registration</Text>
         )}
@@ -442,259 +446,5 @@ const RegisterScreen = ({ navigation }) => {
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#050505',
-  },
-  flex: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 22,
-    paddingVertical: 28,
-  },
-  headerBlock: {
-    alignItems: 'center',
-    marginBottom: 22,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#14b8a6',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 999,
-    marginBottom: 14,
-    gap: 6,
-  },
-  badgeEmoji: {
-    fontSize: 14,
-  },
-  badgeText: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#f8fafc',
-    textAlign: 'center',
-  },
-  stepLabel: {
-    marginTop: 8,
-    fontSize: 14,
-    color: '#94a3b8',
-  },
-  card: {
-    backgroundColor: '#121212',
-    borderRadius: 18,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    shadowColor: '#14b8a6',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 6,
-  },
-  inputGroup: {
-    marginBottom: 14,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  rowHalf: {
-    flex: 1,
-    marginBottom: 14,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#cbd5e1',
-    marginBottom: 8,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-    borderRadius: 10,
-    backgroundColor: '#0a0a0a',
-    paddingHorizontal: 12,
-    minHeight: 50,
-  },
-  inputError: {
-    borderColor: '#f87171',
-  },
-  inputIcon: {
-    marginRight: 8,
-  },
-  input: {
-    flex: 1,
-    fontSize: 15,
-    color: '#f1f5f9',
-    paddingVertical: 12,
-  },
-  inputFlex: {
-    flex: 1,
-    fontSize: 15,
-    color: '#f1f5f9',
-    paddingVertical: 12,
-  },
-  otpInput: {
-    letterSpacing: 6,
-    fontSize: 20,
-    fontWeight: '600',
-  },
-  eyeBtn: {
-    paddingLeft: 8,
-  },
-  sendOtpBtn: {
-    marginTop: 6,
-    backgroundColor: '#000000',
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#ffffff',
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendOtpBtnText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  verifyBtn: {
-    marginTop: 6,
-    backgroundColor: '#ffffff',
-    borderRadius: 10,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  verifyBtnText: {
-    color: '#000000',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  completeBtn: {
-    marginTop: 8,
-    backgroundColor: '#00d16b',
-    borderRadius: 10,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  completeBtnText: {
-    color: '#0a0a0a',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  btnDisabled: {
-    opacity: 0.65,
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-  },
-  dividerText: {
-    marginHorizontal: 10,
-    fontSize: 11,
-    color: '#64748b',
-  },
-  hintMuted: {
-    fontSize: 13,
-    color: '#94a3b8',
-    textAlign: 'center',
-  },
-  hintEmail: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#f8fafc',
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  changeEmail: {
-    alignSelf: 'center',
-    marginTop: 10,
-    marginBottom: 8,
-  },
-  changeEmailText: {
-    fontSize: 13,
-    color: '#2dd4bf',
-    fontWeight: '600',
-  },
-  resendWrap: {
-    alignItems: 'center',
-    marginTop: 14,
-  },
-  resendText: {
-    fontSize: 14,
-    color: '#94a3b8',
-    fontWeight: '600',
-  },
-  registeringForLabel: {
-    fontSize: 13,
-    color: '#94a3b8',
-    marginBottom: 4,
-  },
-  registeringForEmail: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#f8fafc',
-    marginBottom: 16,
-  },
-  errorBox: {
-    backgroundColor: 'rgba(248,113,113,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(248,113,113,0.35)',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginTop: 14,
-  },
-  errorBoxTight: {
-    backgroundColor: 'rgba(248,113,113,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(248,113,113,0.35)',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
-  },
-  errorText: {
-    fontSize: 13,
-    color: '#fca5a5',
-    fontWeight: '500',
-  },
-  footerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 28,
-  },
-  footerText: {
-    color: '#64748b',
-    fontSize: 14,
-  },
-  footerLink: {
-    color: '#f8fafc',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-});
 
 export default RegisterScreen;

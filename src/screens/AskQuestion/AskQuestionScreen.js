@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import { History, Bookmark, X, Mic, Square } from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import AskQuestionAccessBlocked from '../../components/AskQuestion/AskQuestionAccessBlocked';
-import { Colors } from '../../theme/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import {
   canAccessAskQuestionFeature,
   syncFloatingMicSettingsToNative,
@@ -29,6 +29,8 @@ import { useAlert } from '../../context/AlertContext';
 const { FloatingMicModule } = NativeModules;
 
 const AskQuestionScreen = ({ navigation }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const showAlert = useAlert();
   const [accessAllowed, setAccessAllowed] = useState(null);
@@ -224,7 +226,7 @@ const AskQuestionScreen = ({ navigation }) => {
       <ScreenContainer>
         <AppHeader title="Ask Question" />
         <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       </ScreenContainer>
     );
@@ -311,7 +313,7 @@ const AskQuestionScreen = ({ navigation }) => {
                 >
                   <Bookmark
                     size={18}
-                    color={isSaved ? Colors.primary : Colors.text.secondary}
+                    color={isSaved ? colors.primary : colors.text.secondary}
                     strokeWidth={2.5}
                   />
                 </TouchableOpacity>
@@ -326,7 +328,7 @@ const AskQuestionScreen = ({ navigation }) => {
                   accessibilityLabel="Clear all text"
                   style={styles.actionIconBtn}
                 >
-                  <X size={18} color={Colors.text.secondary} strokeWidth={2.5} />
+                  <X size={18} color={colors.text.secondary} strokeWidth={2.5} />
                 </TouchableOpacity>
               </View>
             ) : null}
@@ -340,7 +342,7 @@ const AskQuestionScreen = ({ navigation }) => {
               activeOpacity={0.75}
             >
               <View style={[styles.quickLinkIcon, styles.quickLinkIconBlue]}>
-                <History size={18} color={Colors.primary} strokeWidth={2.2} />
+                <History size={18} color={colors.primary} strokeWidth={2.2} />
               </View>
               <View style={styles.quickLinkTextCol}>
                 <Text style={styles.quickLinkTitle}>History</Text>
@@ -368,7 +370,8 @@ const AskQuestionScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   loadingWrap: {
     flex: 1,
     justifyContent: 'center',
@@ -393,14 +396,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.06)',
   },
   micBtnRecording: {
-    backgroundColor: Colors.status.blocked,
+    backgroundColor: colors.status.blocked,
     borderColor: 'rgba(0,0,0,0.08)',
   },
   inputHeaderTextCol: {
@@ -408,7 +411,7 @@ const styles = StyleSheet.create({
   },
   inputHeaderHint: {
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 18,
   },
   askedInline: {
@@ -419,7 +422,7 @@ const styles = StyleSheet.create({
   askedInlineLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
@@ -427,22 +430,22 @@ const styles = StyleSheet.create({
     marginTop: 3,
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     lineHeight: 18,
   },
   answerBoxLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: Colors.primary,
+    color: colors.primary,
     letterSpacing: 0.8,
     marginBottom: 8,
     textTransform: 'uppercase',
   },
   inputCard: {
     flex: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: 16,
     padding: 14,
   },
@@ -453,23 +456,23 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     minHeight: 180,
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: colors.borderLight,
     borderRadius: 14,
     padding: 14,
     paddingRight: 44,
     paddingBottom: 28,
     fontSize: 16,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     lineHeight: 22,
   },
   answerBox: {
     flex: 1,
     minHeight: 180,
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: colors.borderLight,
     borderRadius: 14,
     padding: 14,
     paddingRight: 44,
@@ -481,7 +484,7 @@ const styles = StyleSheet.create({
     top: 14,
     left: 14,
     right: 44,
-    color: Colors.text.light,
+    color: colors.text.light,
   },
   answerScroll: {
     flex: 1,
@@ -491,12 +494,12 @@ const styles = StyleSheet.create({
   },
   answerText: {
     fontSize: 16,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     lineHeight: 22,
   },
   answerTextBold: {
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
   },
   clearIconBtn: {
     position: 'absolute',
@@ -507,9 +510,9 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: colors.borderLight,
   },
   answerActions: {
     position: 'absolute',
@@ -524,9 +527,9 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: colors.borderLight,
   },
   actionIconBtnDisabled: {
     opacity: 0.45,
@@ -537,10 +540,10 @@ const styles = StyleSheet.create({
   },
   quickLinkCard: {
     flex: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -573,14 +576,17 @@ const styles = StyleSheet.create({
   quickLinkTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: -0.2,
   },
   quickLinkSub: {
     marginTop: 2,
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
 });
+}
+
+
 
 export default AskQuestionScreen;

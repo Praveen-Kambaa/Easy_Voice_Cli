@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -19,12 +19,14 @@ import { AppCard } from '../../components/common/AppCard';
 import { PrimaryButton } from '../../components/common/PrimaryButton';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { useFloatingMic } from '../../hooks/useFloatingMic';
-import { Colors } from '../../theme/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import { isGlobalAlertModalVisible } from '../../utils/alertModalState';
 
 const { FloatingMicModule } = NativeModules;
 
 const FloatingMicScreen = ({ navigation }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [lastTranscription, setLastTranscription] = useState('');
   const orbAnim = React.useRef(new Animated.Value(0)).current;
 
@@ -163,7 +165,7 @@ const FloatingMicScreen = ({ navigation }) => {
         {/* <AppCard>
           <View style={styles.sectionTitleRow}>
             <View style={styles.sectionTitleLeft}>
-              <ShieldCheck size={18} color={Colors.primary} strokeWidth={2.2} />
+              <ShieldCheck size={18} color={colors.primary} strokeWidth={2.2} />
               <Text style={styles.sectionTitle}>Permissions</Text>
             </View>
             <StatusBadge
@@ -190,7 +192,7 @@ const FloatingMicScreen = ({ navigation }) => {
         {/* <AppCard>
           <View style={styles.sectionTitleRow}>
             <View style={styles.sectionTitleLeft}>
-              <Radio size={18} color={Colors.primary} strokeWidth={2.2} />
+              <Radio size={18} color={colors.primary} strokeWidth={2.2} />
               <Text style={styles.sectionTitle}>Status</Text>
             </View>
           </View>
@@ -241,19 +243,19 @@ const FloatingMicScreen = ({ navigation }) => {
           onPress={() => navigation.navigate('FloatingMicHistory')}
           activeOpacity={0.7}
         >
-          <History size={20} color={Colors.primary} strokeWidth={1.8} />
+          <History size={20} color={colors.primary} strokeWidth={1.8} />
           <View style={styles.historyRowText}>
             <Text style={styles.historyRowTitle}>Speech history</Text>
             <Text style={styles.historyRowSub}>Transcripts from the floating mic</Text>
           </View>
-          <ChevronRight size={18} color={Colors.text.light} strokeWidth={2} />
+          <ChevronRight size={18} color={colors.text.light} strokeWidth={2} />
         </TouchableOpacity>
 
         {/* Controls */}
         {/* <AppCard>
           <View style={styles.sectionTitleRow}>
             <View style={styles.sectionTitleLeft}>
-              <SlidersHorizontal size={18} color={Colors.primary} strokeWidth={2.2} />
+              <SlidersHorizontal size={18} color={colors.primary} strokeWidth={2.2} />
               <Text style={styles.sectionTitle}>Controls</Text>
             </View>
           </View>
@@ -311,7 +313,8 @@ const FloatingMicScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   scroll: {
     flex: 1,
   },
@@ -327,10 +330,10 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   heroCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: 16,
     overflow: 'hidden',
     shadowColor: '#000',
@@ -369,14 +372,14 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 26,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: -0.7,
     lineHeight: 32,
   },
   heroSub: {
     marginTop: 6,
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 19,
   },
   orbWrap: {
@@ -393,16 +396,16 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 27,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
   },
   orb: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.20,
     shadowRadius: 16,
@@ -417,7 +420,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
+    borderTopColor: colors.borderLight,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -425,7 +428,7 @@ const styles = StyleSheet.create({
   heroMetaText: {
     flex: 1,
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
 
   sectionTitleRow: {
@@ -443,10 +446,10 @@ const styles = StyleSheet.create({
   historyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: 16,
     marginBottom: 16,
     gap: 12,
@@ -462,18 +465,18 @@ const styles = StyleSheet.create({
   historyRowTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
   },
   historyRowSub: {
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     marginTop: 2,
   },
 
   sectionTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
   },
 
   infoRow: {
@@ -484,11 +487,11 @@ const styles = StyleSheet.create({
   },
   rowDivider: {
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   rowLabel: {
     fontSize: 14,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     flex: 1,
     marginRight: 12,
   },
@@ -496,59 +499,59 @@ const styles = StyleSheet.create({
   resultBox: {
     marginTop: 12,
     padding: 12,
-    backgroundColor: Colors.status.grantedBg,
+    backgroundColor: colors.status.grantedBg,
     borderRadius: 8,
   },
   resultLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: Colors.status.granted,
+    color: colors.status.granted,
     marginBottom: 4,
     letterSpacing: 0.5,
   },
   resultText: {
     fontSize: 14,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     lineHeight: 20,
   },
 
   errorBox: {
     marginTop: 12,
     padding: 12,
-    backgroundColor: Colors.status.blockedBg,
+    backgroundColor: colors.status.blockedBg,
     borderRadius: 8,
   },
   errorLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: Colors.status.blocked,
+    color: colors.status.blocked,
     marginBottom: 4,
     letterSpacing: 0.5,
   },
   errorText: {
     fontSize: 14,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     lineHeight: 20,
   },
 
   transcriptionBox: {
     marginTop: 12,
     padding: 12,
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   transcriptionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     marginBottom: 4,
     letterSpacing: 0.5,
   },
   transcriptionText: {
     fontSize: 14,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     lineHeight: 20,
   },
 
@@ -579,7 +582,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
@@ -589,10 +592,13 @@ const styles = StyleSheet.create({
   },
   instructionText: {
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 20,
     flex: 1,
   },
 });
+}
+
+
 
 export default FloatingMicScreen;

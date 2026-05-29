@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,9 +13,12 @@ import { PrimaryButton } from '../components/common/PrimaryButton';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { useVoiceAssistant } from '../hooks/useVoiceAssistant';
 import { useAlert } from '../context/AlertContext';
-import { Colors } from '../theme/Colors';
-
+import { useTheme } from '../context/ThemeContext';
 const VoiceAssistantScreen = () => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+
   const showAlert = useAlert();
 
   const {
@@ -221,7 +224,8 @@ const VoiceAssistantScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   scroll: {
     flex: 1,
   },
@@ -233,7 +237,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 14,
   },
 
@@ -245,11 +249,11 @@ const styles = StyleSheet.create({
   },
   rowDivider: {
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   rowLabel: {
     fontSize: 14,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     flex: 1,
     marginRight: 12,
   },
@@ -268,7 +272,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
@@ -278,7 +282,7 @@ const styles = StyleSheet.create({
   },
   instructionText: {
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 20,
     flex: 1,
   },
@@ -293,13 +297,13 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginTop: 7,
     flexShrink: 0,
   },
   noteText: {
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 20,
     flex: 1,
   },
@@ -312,10 +316,13 @@ const styles = StyleSheet.create({
   },
   unsupportedText: {
     fontSize: 15,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     textAlign: 'center',
     lineHeight: 22,
   },
 });
+}
+
+
 
 export default VoiceAssistantScreen;

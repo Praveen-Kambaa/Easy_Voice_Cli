@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Modal,
   View,
@@ -8,11 +8,14 @@ import {
   Dimensions,
   ScrollView,
 } from 'react-native';
-import { Colors } from '../../theme/Colors';
+import { useTheme } from '../../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
 const AlertModal = ({ visible, title, message, buttons = [], onDismiss }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createAlertStyles(colors), [colors]);
+
   const handlePress = (btn) => {
     onDismiss();
     btn.onPress?.();
@@ -64,7 +67,6 @@ const AlertModal = ({ visible, title, message, buttons = [], onDismiss }) => {
     >
       <View style={styles.overlay}>
         <View style={styles.container}>
-          {/* Body */}
           <View style={styles.body}>
             <Text style={styles.title}>{title}</Text>
             {!!message && <Text style={styles.message}>{message}</Text>}
@@ -72,7 +74,6 @@ const AlertModal = ({ visible, title, message, buttons = [], onDismiss }) => {
 
           <View style={styles.divider} />
 
-          {/* Buttons */}
           <View style={[styles.actions, isStackedLayout && styles.actionsColumn]}>
             {buttons.map((btn, idx) => {
               const isLast = idx === buttons.length - 1;
@@ -96,108 +97,104 @@ const AlertModal = ({ visible, title, message, buttons = [], onDismiss }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-  },
-  container: {
-    width: width - 64,
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 12,
-  },
-  body: {
-    paddingHorizontal: 24,
-    paddingTop: 28,
-    paddingBottom: 20,
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: Colors.text.primary,
-    textAlign: 'center',
-    marginBottom: 8,
-    lineHeight: 24,
-  },
-  message: {
-    fontSize: 14,
-    color: Colors.text.secondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-
-  // Button container layouts
-  actions: {
-    flexDirection: 'row',
-  },
-  actionsColumn: {
-    flexDirection: 'column',
-  },
-  button: {
-    flex: 1,
-    minHeight: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-  },
-  stackedButton: {
-    flex: undefined,
-    minHeight: 52,
-    width: '100%',
-  },
-  buttonSeparator: {
-    borderLeftWidth: 1,
-    borderLeftColor: Colors.border,
-  },
-  buttonStackSeparator: {
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-
-  // Button type backgrounds
-  primaryButton: {
-    backgroundColor: Colors.primary,
-  },
-  destructiveButton: {
-    backgroundColor: Colors.recording.active,
-  },
-  cancelButton: {
-    backgroundColor: Colors.surface,
-  },
-  defaultButton: {
-    backgroundColor: Colors.backgroundAlt,
-  },
-
-  // Text styles
-  buttonText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  whiteText: {
-    color: '#FFFFFF',
-  },
-  cancelText: {
-    color: Colors.text.secondary,
-    fontWeight: '500',
-  },
-  defaultText: {
-    color: Colors.text.primary,
-  },
-});
+function createAlertStyles(colors) {
+  return StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 32,
+    },
+    container: {
+      width: width - 64,
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      overflow: 'hidden',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.18,
+      shadowRadius: 16,
+      elevation: 12,
+    },
+    body: {
+      paddingHorizontal: 24,
+      paddingTop: 28,
+      paddingBottom: 20,
+      alignItems: 'center',
+    },
+    title: {
+      fontSize: 17,
+      fontWeight: '700',
+      color: colors.text.primary,
+      textAlign: 'center',
+      marginBottom: 8,
+      lineHeight: 24,
+    },
+    message: {
+      fontSize: 14,
+      color: colors.text.secondary,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    divider: {
+      height: 1,
+      backgroundColor: colors.border,
+    },
+    actions: {
+      flexDirection: 'row',
+    },
+    actionsColumn: {
+      flexDirection: 'column',
+    },
+    button: {
+      flex: 1,
+      minHeight: 52,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 12,
+      paddingVertical: 14,
+    },
+    stackedButton: {
+      flex: undefined,
+      minHeight: 52,
+      width: '100%',
+    },
+    buttonSeparator: {
+      borderLeftWidth: 1,
+      borderLeftColor: colors.border,
+    },
+    buttonStackSeparator: {
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    primaryButton: {
+      backgroundColor: colors.primary,
+    },
+    destructiveButton: {
+      backgroundColor: colors.recording.active,
+    },
+    cancelButton: {
+      backgroundColor: colors.surface,
+    },
+    defaultButton: {
+      backgroundColor: colors.backgroundAlt,
+    },
+    buttonText: {
+      fontSize: 15,
+      fontWeight: '600',
+    },
+    whiteText: {
+      color: '#FFFFFF',
+    },
+    cancelText: {
+      color: colors.text.secondary,
+      fontWeight: '500',
+    },
+    defaultText: {
+      color: colors.text.primary,
+    },
+  });
+}
 
 export default AlertModal;

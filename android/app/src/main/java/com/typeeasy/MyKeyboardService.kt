@@ -4,6 +4,7 @@ import com.typeeasy.generated.ApiConfig
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Color
+import android.graphics.PorterDuff
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.inputmethodservice.InputMethodService
@@ -37,19 +38,18 @@ import java.util.concurrent.Executors
 class MyKeyboardService : InputMethodService() {
 
     // ── Theme ─────────────────────────────────────────────────────────────────
-    private val C_BG         = Color.parseColor("#E8EAF6")
-    private val C_KEY_LETTER = Color.WHITE
-    private val C_KEY_ACTION = Color.parseColor("#C5CAE9")
-    private val C_KEY_TEXT   = Color.parseColor("#212121")
-    private val C_HINT_TEXT  = Color.parseColor("#9E9E9E")
-    private val C_TOOLBAR_BG = Color.parseColor("#3F51B5")
-    private val C_TOOLBAR_TXT= Color.WHITE
-    private val C_RESULT_BG  = Color.parseColor("#F5F5F5")
-    private val C_PRIMARY    = Color.parseColor("#3F51B5")
-    private val C_SUGGESTION = Color.parseColor("#ECEFF1")
-    private val C_ERROR_TEXT = Color.parseColor("#B71C1C")
-    private val C_SUCCESS    = Color.parseColor("#1B5E20")
-
+    private val C_BG          = Color.parseColor("#EAF4FF")
+    private val C_KEY_LETTER  = Color.WHITE
+    private val C_KEY_ACTION  = Color.parseColor("#B9DCFF")
+    private val C_KEY_TEXT    = Color.parseColor("#0F172A")
+    private val C_HINT_TEXT   = Color.parseColor("#64748B")
+    private val C_TOOLBAR_BG  = Color.parseColor("#1E88FF")
+    private val C_TOOLBAR_TXT = Color.WHITE
+    private val C_RESULT_BG   = Color.parseColor("#F8FAFC")
+    private val C_PRIMARY     = Color.parseColor("#1E88FF")
+    private val C_SUGGESTION  = Color.parseColor("#DCEEFF")
+    private val C_ERROR_TEXT  = Color.parseColor("#DC2626")
+    private val C_SUCCESS     = Color.parseColor("#16A34A")
     // ── State ─────────────────────────────────────────────────────────────────
     private enum class Layer { ALPHA, SHIFT, CAPS, SYMBOLS, EMOJI }
     private var layer = Layer.ALPHA
@@ -127,17 +127,243 @@ class MyKeyboardService : InputMethodService() {
     private var pendingReplaceBeforeChars = 0
 
     // ── Word suggestions ──────────────────────────────────────────────────────
-    private val commonWords = listOf(
-        "the","be","to","of","and","a","in","that","have","it","for","not","on",
-        "with","he","as","you","do","at","this","but","his","by","from","they",
-        "we","say","her","she","or","an","will","my","one","all","would","there",
-        "their","what","so","up","out","if","about","who","get","which","go","me",
-        "when","make","can","like","time","no","just","him","know","take","people",
-        "into","year","your","good","some","could","them","see","other","than",
-        "then","now","look","only","come","its","over","think","also","back",
-        "after","use","two","how","our","work","first","well","way","even","new",
-        "want","because","any","these","give","day","most","us","great","need"
-    )
+private val commonWords = listOf(
+    // --- TOP 100 HIGH FREQUENCY WORDS ---
+    "the","be","to","of","and","a","in","that","have","it","for","not","on",
+    "with","he","as","you","do","at","this","but","his","by","from","they",
+    "we","say","her","she","or","an","will","my","one","all","would","there",
+    "their","what","so","up","out","if","about","who","get","which","go","me",
+    "when","make","can","like","time","no","just","him","know","take","people",
+    "into","year","your","good","some","could","them","see","other","than",
+    "then","now","look","only","come","its","over","think","also","back",
+    "after","use","two","how","our","work","first","well","way","even","new",
+    "want","because","any","these","give","day","most","us","great","need",
+    
+    // --- CORE DAY-TO-DAY WORDS (101 - 500) ---
+    "should","state","never","become","high","really","something","another","much",
+    "own","leave","put","old","while","mean","keep","student","why","let",
+    "same","big","group","begin","seem","country","help","talk","where",
+    "turn","problem","every","start","hand","might","show","part","against",
+    "place","such","again","few","case","week","company","system","each","right",
+    "program","hear","question","during","play","government","run","small","number",
+    "off","always","move","night","live","point","believe","hold","today","bring",
+    "happen","next","without","before","large","million","must","home","under",
+    "water","room","write","mother","area","national","money","story","young",
+    "fact","month","different","lot","study","book","eye","job","word","though",
+    "business","issue","side","kind","four","head","far","black","long","both",
+    "little","house","yes","since","provide","service","around","friend","important",
+    "father","sit","away","until","power","hour","game","line","end","among",
+    "ever","stand","bad","lose","however","member","meet","car","city","almost",
+    "include","continue","set","later","community","name","five","once","white",
+    "least","president","learn","real","change","team","minute","best","several",
+    "idea","kid","body","information","nothing","ago","lead","social","understand",
+    "whether","watch","together","follow","parent","stop","face","anything","create",
+    "public","already","speak","others","read","level","allow","add","office",
+    "spend","door","health","person","art","sure","war","history","party",
+    "within","grow","result","open","morning","walk","reason","low","win",
+    "research","girl","guy","early","food","moment","himself","air","teacher",
+    "force","offer","enough","education","across","although","remember","foot",
+    "second","boy","maybe","toward","able","age","policy","everything","love",
+    "process","music","including","consider","appear","actually","buy","probably",
+    "human","wait","serve","market","die","send","expect","sense","build",
+    "stay","fall","oh","nation","plan","cut","college","interest","death",
+    "course","someone","experience","behind","reach","local","kill","six",
+    "remain","effect","suggest","class","control","raise","care","perhaps",
+    "late","hard","field","else","pass","former","sell","major","sometimes",
+    "require","along","development","themselves","report","role","better",
+    "economic","effort","decide","rate","strong","possible","heart","drug",
+    "leader","light","voice","wife","whole","police","mind","finally","pull",
+    "return","free","military","price","less","according","decision","explain",
+    "son","hope","develop","view","relationship","carry","town","road","drive",
+    "arm","true","federal","break","difference","thank","receive","value",
+    "international","building","action","full","model","join","season","society",
+    "tax","director","position","player","agree","especially","record","pick",
+    "wear","paper","special","space","ground","form","support","event","official",
+    "whose","matter","everyone","center","couple","site","project","hit","base",
+    "activity","star","table","court","produce","eat","american","teach","oil",
+    "half","situation","easy","cost","industry","figure","face","street","image",
+    "itself","phone","either","data","cover","quite","picture","clear","practice",
+    "piece","land","recent","doctor","wall","patient","worker","news","test",
+    
+    // --- EVERYDAY OBJECTS, ACTIONS & NOUNS (501 - 1000) ---
+    "movie","certain","north","love","personal","open","support","simply","third",
+    "technology","catch","step","baby","computer","type","attention","draw",
+    "film","republican","tree","source","red","nearly","choose","cause","hair",
+    "look","point","century","evidence","window","difficult","listen","soon",
+    "culture","billion","dear","chance","brother","energy","period","course",
+    "summer","realize","hundred","available","plant","likely","opportunity",
+    "term","short","letter","condition","choice","place","single","rule",
+    "daughter","administration","south","husband","congress","floor","campaign",
+    "material","population","well","call","economy","medical","hospital",
+    "church","close","thousand","risk","current","fire","future","wrong",
+    "involve","defense","anyone","increase","security","bank","myself",
+    "certainly","west","sport","board","seek","officer","strategy","deal",
+    "performance","drop","recent","realty","forward","individual","top",
+    "behavior","desire","firm","goal","quarter","agency","push","produce",
+    "guitar","microphone","drums","piano","trumpet","violin","flute","screen",
+    "keyboard","button","display","cable","adapter","charge","battery","power",
+    "network","internet","server","cloud","database","application","software",
+    "hardware","memory","storage","processor","graphics","sound","video","audio",
+    "camera","sensor","sensor","signal","frequency","antenna","channel","station",
+    "broadcast","satellite","radar","laser","fiber","copper","wire","switch",
+    "router","modem","gateway","packet","protocol","address","domain","website",
+    "browser","search","engine","index","query","result","link","click",
+    "scroll","swipe","touch","press","hold","drag","drop","pinch","zoom",
+    "rotate","shake","tilt","motion","speed","velocity","acceleration",
+    "force","gravity","mass","weight","volume","density","pressure","temperature",
+    "heat","cold","warm","cool","hot","freeze","melt","boil","vapor","steam",
+    "smoke","dust","dirt","mud","sand","rock","stone","clay","soil","earth",
+    "globe","map","compass","navigation","location","latitude","longitude",
+    "altitude","depth","height","width","length","distance","range","radius",
+    "diameter","circle","square","triangle","rectangle","polygon","cube",
+    "sphere","cylinder","cone","pyramid","box","container","bag","pack",
+    "package","pocket","wallet","purse","case","cover","sleeve","jacket",
+    "coat","shirt","pants","jeans","shorts","skirt","dress","suit","tie",
+    "hat","cap","helmet","mask","glasses","goggles","gloves","socks","shoes",
+    "boots","sandals","slippers","belt","watch","ring","necklace","bracelet",
+    "earring","button","zipper","pocket","thread","needle","scissors","knife",
+    "fork","spoon","plate","bowl","cup","mug","glass","bottle","can","jar",
+    "box","pot","pan","oven","stove","grill","toaster","blender","mixer",
+    "fridge","freezer","sink","faucet","drain","pipe","tube","hose","valve",
+    "pump","fan","blower","heater","cooler","filter","purifier","cleaner",
+    
+    // --- EXPANDED GENERAL DICTIONARY (1001 - 1500) ---
+    "vacuum","broom","mop","bucket","soap","sponge","towel","cloth","rag",
+    "brush","comb","razor","blade","scissors","clipper","file","mirror",
+    "sink","toilet","shower","tub","bath","mat","curtain","blind","shade",
+    "window","door","lock","key","handle","knob","hinge","latch","bolt",
+    "screw","nail","pin","clip","staple","tape","glue","paste","cement",
+    "brick","block","stone","tile","board","plank","beam","post","pillar",
+    "wall","floor","ceiling","roof","attic","basement","cellar","garage",
+    "porch","deck","patio","yard","lawn","garden","park","field","meadow",
+    "forest","woods","jungle","swamp","marsh","desert","dune","beach",
+    "coast","shore","cliff","cave","valley","canyon","hill","mountain",
+    "peak","summit","ridge","pass","trail","path","road","street","avenue",
+    "drive","lane","way","route","highway","freeway","bridge","tunnel",
+    "rail","track","train","subway","metro","bus","coach","taxi","cab",
+    "car","auto","truck","van","jeep","suv","pickup","wagon","trailer",
+    "camper","rv","bike","cycle","moped","scooter","skate","board","sled",
+    "skis","boat","ship","vessel","yacht","ferry","barge","tanker","sub",
+    "plane","jet","aircraft","glider","copter","rocket","shuttle","capsule",
+    "satellite","station","orbit","space","moon","sun","star","planet",
+    "comet","asteroid","meteor","galaxy","cluster","nebula","void","hole",
+    "time","date","year","month","week","day","hour","minute","second",
+    "milli","micro","nano","pico","kilo","mega","giga","tera","peta",
+    "byte","bit","word","code","data","file","folder","drive","disk",
+    "tape","card","chip","board","circuit","relay","diode","switch",
+    "plug","socket","cord","wire","cable","line","loop","mesh","grid",
+    "matrix","array","list","stack","queue","tree","graph","node","edge",
+    "vertex","face","mesh","solid","fluid","liquid","gas","plasma",
+    "atom","ion","molecule","bond","chain","ring","group","series",
+    "sequence","set","class","type","kind","sort","rank","order",
+    "level","grade","stage","phase","step","pace","rate","speed",
+    "flow","flux","current","wave","pulse","beam","ray","field",
+    "force","load","stress","strain","shear","tension","torque",
+    "twist","turn","spin","rotate","revolve","orbit","cycle","loop",
+    "ring","coil","wind","wrap","bind","tie","knot","hitch","lash",
+    "fasten","secure","lock","latch","bolt","screw","nail","pin",
+    "rivet","weld","solder","braze","glue","bond","cement","mortar",
+    "concrete","plaster","stucco","drywall","panel","sheet","plate",
+    "strip","wire","rod","bar","beam","tube","pipe","hose","duct",
+    "vent","drain","sewer","main","line","pipe","valve","cock","plug",
+    
+    // --- ADVANCED DAILY CHAT & PREDICTIVE TEXT (1501 - 2100+) ---
+    "faucet","spigot","nozzle","spray","mist","fog","cloud","rain","sleet",
+    "snow","hail","ice","frost","dew","condense","evaporate","sublime",
+    "melt","freeze","thaw","warm","heat","scald","burn","char","scorch",
+    "singe","smoke","blaze","flame","spark","ember","ash","soot","dust",
+    "dirt","grime","smudge","stain","spot","blot","mark","scratch","dent",
+    "crack","chip","break","fracture","shatter","smash","crush","grind",
+    "powder","dust","flake","chip","chunk","block","lump","mass","heap",
+    "pile","stack","bundle","bunch","pack","load","cargo","freight",
+    "shipment","delivery","parcel","package","packet","envelope","letter",
+    "note","card","ticket","pass","permit","license","badge","token",
+    "coin","bill","cash","money","funds","capital","wealth","assets",
+    "property","estate","land","ground","lot","plot","site","spot",
+    "place","space","room","hall","chamber","cell","vault","safe",
+    "box","chest","trunk","case","bag","sack","pouch","pocket",
+    "purse","wallet","holder","clip","clamp","vise","grip","tongs",
+    "pliers","wrench","spanner","driver","screw","bolt","nut","washer",
+    "shim","spacer","gasket","seal","ring","o-ring","packing","gland",
+    "bearing","bushing","sleeve","collar","shaft","axle","spindle",
+    "hub","wheel","tire","rim","spoke","gear","pinion","rack","cam",
+    "follower","lever","crank","arm","rod","link","pin","pivot",
+    "hinge","joint","socket","ball","swivel","caster","wheel","roller",
+    "track","slide","guide","rail","way","channel","groove","slot",
+    "notch","slit","hole","bore","port","vent","outlet","inlet",
+    "intake","exhaust","return","feed","supply","drain","waste",
+    "refuse","trash","garbage","rubbish","debris","wreck","ruin",
+    "spoil","waste","scrap","leftover","remnant","shred","scrap",
+    "sliver","splinter","chip","shaving","dust","powder","grain",
+    "speck","particle","molecule","atom","electron","proton","neutron",
+    "quark","photon","lepton","boson","gluon","graviton","neutrino",
+    "radiation","ray","beam","wave","pulse","signal","sign","token",
+    "mark","stamp","seal","brand","label","tag","ticket","card",
+    "slip","form","sheet","page","leaf","book","volume","tome",
+    "scroll","roll","strip","band","belt","strap","cord","rope",
+    "string","twine","thread","yarn","fiber","strand","filament",
+    "wire","cable","line","track","path","trail","route","course",
+    "way","road","street","avenue","boulevard","drive","lane",
+    "court","terrace","place","plaza","square","park","garden",
+    "yard","lawn","field","meadow","pasture","range","plain",
+    "prairie","savanna","steppe","tundra","desert","waste","wild",
+    "bush","jungle","forest","woods","grove","thicket","copse",
+    "orchard","vineyard","farm","ranch","plantation","estate",
+    "manor","house","home","abode","dwelling","residence","lodge",
+    "cabin","shack","hut","hovel","shanty","tent","camp","shelter",
+    "refuge","asylum","sanctuary","retreat","haven","port","harbor",
+    "dock","pier","wharf","quay","marina","anchorage","roadstead",
+    "sound","strait","channel","passage","pass","gap","gorge",
+    "canyon","ravine","gully","chasm","abyss","gulf","bay","bight",
+    "cove","inlet","fjord","estuary","delta","mouth","source",
+    "spring","well","fountain","geyser","pool","pond","mere",
+    "lake","loch","sea","ocean","deep","abyss","void","space",
+    "sky","heaven","firmament","ether","air","atmosphere","climate",
+    "weather","season","spring","summer","autumn","fall","winter",
+    "solstice","equinox","period","epoch","era","age","eon",
+    "time","moment","instant","second","minute","hour","day",
+    "night","dawn","sunrise","morning","noon","afternoon","dusk",
+    "sunset","evening","twilight","midnight","today","yesterday",
+    "tomorrow","fortnight","month","quarter","year","decade",
+    "century","millennium","forever","eternity","always","ever",
+    "never","sometimes","often","frequently","usually","normally",
+    "generally","typically","seldom","rarely","scarcely","hardly",
+    "barely","just","only","solely","simply","merely","nearly",
+    "almost","about","around","circa","roughly","approximately",
+    "exactly","precisely","correctly","right","true","factual",
+    "real","actual","genuine","authentic","sincere","honest",
+    "frank","candid","direct","straight","plain","simple","easy",
+    "smooth","flat","level","even","regular","uniform","steady",
+    "stable","firm","solid","hard","tough","strong","robust",
+    "hardy","sturdy","brave","bold","daring","heroic","valiant",
+    "fearless","intrepid","dauntless","gallant","noble","grand",
+    "great","huge","vast","immense","enormous","massive","giant",
+    "mammoth","monstrous","colossal","titanic","mighty","powerful",
+    "potent","strong","intense","sharp","keen","acute","shrewd",
+    "smart","clever","bright","intelligent","wise","sage","learned",
+    "expert","skilled","adept","proficient","capable","able","fit",
+    "ready","prepared","alert","watchful","vigilant","wary","cautious",
+    "careful","prudent","discreet","judicious","sane","rational",
+    "logical","sound","valid","solid","good","excellent","fine",
+    "choice","select","prime","first","chief","main","principal",
+    "major","leading","capital","cardinal","central","focal","core",
+    "middle","midst","center","heart","nucleus","hub","pivot",
+    "axis","spindle","shaft","rod","pole","post","stake","peg",
+    "pin","bolt","screw","nail","tack","brad","rivet","anchor",
+    "fastener","tie","bond","link","chain","shackle","fetter",
+    "handcuff","manacle","bond","rein","leash","tether","halter",
+    "yoke","harness","gear","tackle","rig","apparatus","device",
+    "engine","motor","machine","mechanism","tool","implement",
+    "instrument","utensil","weapon","arms","armaments","ordnance",
+    "artillery","cannon","gun","rifle","musket","pistol","revolver",
+    "dagger","dirk","knife","blade","sword","saber","foil","rapier",
+    "lance","spear","pike","halberd","javelin","dart","arrow","bolt",
+    "missile","rocket","torpedo","bomb","shell","grenade","mine",
+    "charge","blast","explosion","burst","eruption","outbreak",
+    "flare","flash","gleam","glimmer","glint","sparkle","twinkle",
+    "shimmer","glitter","glow","beam","ray","streak","line",
+    "strip","band","belt","zone","region","area","district"
+)
 
     // ── Number hints for top row ──────────────────────────────────────────────
     private val topRowHints = mapOf(
@@ -260,7 +486,7 @@ class MyKeyboardService : InputMethodService() {
 
     // ─────────────────────────────────────────────────────────────────────────
     // Feature toolbar  — Unicode professional icons
-    //   文A = translate   A✓ = grammar   🎙 = mic   ⚙ = settings
+    //   文A = translate   A✓ = grammar   mic vector = voice   ⚙ = settings
     // ─────────────────────────────────────────────────────────────────────────
 
     private fun buildFeatureToolbar() {
@@ -277,8 +503,8 @@ class MyKeyboardService : InputMethodService() {
         // Grammar icon: A✓
         bar.addView(toolBtn("A✓") { onGrammarPress() })
         bar.addView(toolDivider())
-        // Mic icon: 🎙 (studio microphone) — same bold style as 文A and A✓
-        bar.addView(toolBtn("🎙") { onVoicePress() })
+        // Mic icon: flat white vector — matches 文A / A✓ toolbar style (not emoji)
+        bar.addView(toolBtnIcon(R.drawable.ic_mic) { onVoicePress() })
         bar.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) })
         // Settings: ⚙
         bar.addView(toolBtn("⚙") { toggleSettings() })
@@ -290,6 +516,15 @@ class MyKeyboardService : InputMethodService() {
         setTextColor(C_TOOLBAR_TXT); setBackgroundColor(Color.TRANSPARENT)
         typeface = Typeface.DEFAULT_BOLD
         layoutParams = LinearLayout.LayoutParams(dp(48), dp(38))
+        setOnClickListener { action() }
+    }
+
+    private fun toolBtnIcon(drawableRes: Int, action: () -> Unit) = ImageView(this).apply {
+        setImageResource(drawableRes)
+        setColorFilter(C_TOOLBAR_TXT, PorterDuff.Mode.SRC_IN)
+        scaleType = ImageView.ScaleType.CENTER_INSIDE
+        layoutParams = LinearLayout.LayoutParams(dp(48), dp(38))
+        setPadding(dp(10), dp(6), dp(10), dp(6))
         setOnClickListener { action() }
     }
 
@@ -323,7 +558,7 @@ class MyKeyboardService : InputMethodService() {
         }
         // Insert button — shown only when result is valid text
         resultInsertBtn = TextView(this).apply {
-            text = "↙ Insert"; textSize = 12f
+            text = "↙ Insert"; textSize = 13f
             setTextColor(C_PRIMARY); typeface = Typeface.DEFAULT_BOLD
             setPadding(dp(10), dp(4), dp(6), dp(4))
             visibility = View.GONE
@@ -355,11 +590,12 @@ class MyKeyboardService : InputMethodService() {
             setPadding(dp(12), 0, dp(12), 0)
             visibility = View.GONE
         }
-        // Mic icon — same style as toolbar icons (Unicode, not emoji)
-        val micIcon = TextView(this).apply {
-            text = "🎙"; textSize = 20f; typeface = Typeface.DEFAULT_BOLD
-            setTextColor(C_PRIMARY)
-            layoutParams = LinearLayout.LayoutParams(WRAP, WRAP).also { it.setMargins(0,0,dp(8),0) }
+        // Mic icon — flat vector, same style as toolbar icons
+        val micIcon = ImageView(this).apply {
+            setImageResource(R.drawable.ic_mic)
+            setColorFilter(C_PRIMARY, PorterDuff.Mode.SRC_IN)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            layoutParams = LinearLayout.LayoutParams(dp(24), dp(24)).also { it.setMargins(0, 0, dp(8), 0) }
         }
         voiceLabel = TextView(this).apply {
             text = "Listening…"; textSize = 14f
@@ -404,8 +640,8 @@ class MyKeyboardService : InputMethodService() {
             layoutParams = LinearLayout.LayoutParams(MATCH, dp(44))
         }
         row.addView(TextView(this).apply {
-            text = "Translation Language"
-            textSize = 12f
+            text = "Translation :"
+            textSize = 14f
             setTextColor(Color.parseColor("#757575"))
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(0, WRAP, 1f)
@@ -559,9 +795,9 @@ class MyKeyboardService : InputMethodService() {
                 val display = when {
                     isUpper && logical.length == 1 && logical[0].isLetter() -> logical.uppercase()
                     logical == "SHIFT" && layer == Layer.CAPS -> "⬆"   // filled = caps lock
-                    logical == "SHIFT" -> "⇧"                           // outline = shift
+                    logical == "SHIFT" -> "↑"                           // outline = shift
                     logical == "BKSP"  -> "⌫"
-                    logical == "ENTER" -> "↵"
+                    logical == "ENTER" -> "⏎"
                     logical == "EMOJI" -> "😊"
                     else -> logical
                 }
@@ -618,7 +854,8 @@ class MyKeyboardService : InputMethodService() {
                     isSpace -> 13f
                     logical in listOf("?123","ABC") -> 13f
                     logical == "EMOJI" -> 20f
-                    logical in listOf("SHIFT","BKSP","ENTER") -> 18f
+                    logical in listOf("SHIFT","ENTER") -> 24f
+                    logical in listOf("BKSP") -> 18f
                     else -> 18f
                 }
                 gravity = Gravity.CENTER

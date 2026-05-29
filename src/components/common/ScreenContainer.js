@@ -1,17 +1,18 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '../../theme/Colors';
+import { useTheme } from '../../context/ThemeContext';
 
 export const ScreenContainer = ({ children, style, bgColor }) => {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
 
   return (
     <View
       style={[
         styles.container,
-        { paddingBottom: insets.bottom },
-        bgColor && { backgroundColor: bgColor },
+        { paddingBottom: insets.bottom, backgroundColor: colors.backgroundAlt },
+        bgColor != null && { backgroundColor: bgColor },
         style,
       ]}
     >
@@ -23,6 +24,5 @@ export const ScreenContainer = ({ children, style, bgColor }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.backgroundAlt,
   },
 });

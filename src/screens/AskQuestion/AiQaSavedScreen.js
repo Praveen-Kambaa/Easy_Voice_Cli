@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Trash2 } from 'lucide-react-native';
@@ -6,10 +6,14 @@ import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getSavedAiQa, toggleSavedAiQa } from '../../services/aiQaStorage';
-import { Colors } from '../../theme/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import { formatDateTime } from '../../utils/dateTimeFormat';
 
 const AiQaSavedScreen = () => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState([]);
@@ -41,7 +45,7 @@ const AiQaSavedScreen = () => {
           accessibilityLabel="Remove saved item"
           style={styles.iconBtn}
         >
-          <Trash2 size={18} color={Colors.text.secondary} strokeWidth={2} />
+          <Trash2 size={18} color={colors.text.secondary} strokeWidth={2} />
         </TouchableOpacity>
       </View>
       <Text style={styles.question} numberOfLines={3}>{item.question}</Text>
@@ -76,9 +80,10 @@ const AiQaSavedScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   screen: {
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
   },
   list: {
     paddingHorizontal: 18,
@@ -86,10 +91,10 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: colors.borderLight,
     padding: 16,
     marginBottom: 12,
     shadowColor: '#000',
@@ -107,28 +112,28 @@ const styles = StyleSheet.create({
   },
   timeStamp: {
     fontSize: 11,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
   iconBtn: {
     width: 34,
     height: 34,
     borderRadius: 12,
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: colors.borderLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   question: {
     fontSize: 16,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     lineHeight: 23,
     letterSpacing: -0.2,
   },
   answer: {
     fontSize: 15,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 22,
     marginTop: 10,
   },
@@ -141,16 +146,19 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     textAlign: 'center',
     marginBottom: 8,
   },
   emptySub: {
     fontSize: 14,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     textAlign: 'center',
     lineHeight: 20,
   },
 });
+}
+
+
 
 export default AiQaSavedScreen;

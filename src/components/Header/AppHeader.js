@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Menu, ChevronLeft } from 'lucide-react-native';
-import { Colors } from '../../theme/Colors';
+import { useTheme } from '../../context/ThemeContext';
 
 const APP_DRAWER_ID = 'AppDrawer';
 
@@ -84,6 +84,7 @@ export const AppHeader = ({
 }) => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const { colors } = useTheme();
 
   const drawerNav = useMemo(() => resolveDrawerNavigation(navigation), [navigation]);
   const drawerFocusedRouteName = getDrawerFocusedName(drawerNav, navigation);
@@ -128,10 +129,10 @@ export const AppHeader = ({
     }
   }, [navigation, drawerNav]);
 
-  const barBg = dark ? '#0f1419' : Colors.surface;
-  const barBorder = dark ? 'rgba(255,255,255,0.08)' : Colors.border;
-  const titleColor = dark ? '#f1f5f9' : Colors.text.primary;
-  const iconColor = dark ? '#e2e8f0' : Colors.text.primary;
+  const barBg = dark ? '#0f1419' : colors.header.background;
+  const barBorder = dark ? 'rgba(255,255,255,0.08)' : colors.header.border;
+  const titleColor = dark ? '#f1f5f9' : colors.header.title;
+  const iconColor = dark ? '#e2e8f0' : colors.header.icon;
 
   let leftContent;
   if (onBack) {

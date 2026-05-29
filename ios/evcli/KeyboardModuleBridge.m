@@ -5,5 +5,16 @@
 
 RCT_EXTERN_METHOD(openKeyboardSettings)
 RCT_EXTERN_METHOD(showKeyboardPicker)
+RCT_EXTERN_METHOD(syncKeyboardSettings:(NSString *)userId
+                  fromLang:(NSString *)fromLang
+                  toLang:(NSString *)toLang
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(getKeyboardSettings:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(isKeyboardEnabled:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(isKeyboardSelected:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
 
 @end

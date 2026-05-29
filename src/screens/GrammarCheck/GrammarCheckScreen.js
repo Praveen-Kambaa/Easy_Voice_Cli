@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { X, Copy, SendHorizonal, Bookmark, History } from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
-import { Colors } from '../../theme/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useAlert } from '../../context/AlertContext';
 import { API_SERVERS, API_ENDPOINTS } from '../../config/api';
@@ -57,6 +57,8 @@ async function checkGrammarApi({ text, userId }) {
 }
 
 const GrammarCheckScreen = ({ navigation }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { user } = useAuth();
   const showAlert = useAlert();
 
@@ -137,7 +139,7 @@ const GrammarCheckScreen = ({ navigation }) => {
 
   const canSend = inputText.trim().length > 0 && !loading;
   const hasResult = correctedText.length > 0;
-  const starColor = starred ? Colors.primary : Colors.text.secondary;
+  const starColor = starred ? colors.primary : colors.text.secondary;
 
   return (
     <ScreenContainer style={styles.screen}>
@@ -169,7 +171,7 @@ const GrammarCheckScreen = ({ navigation }) => {
             <TextInput
               style={styles.input}
               placeholder="Type your sentence here…"
-              placeholderTextColor={Colors.text.light}
+              placeholderTextColor={colors.text.light}
               value={inputText}
               onChangeText={setInputText}
               multiline
@@ -184,7 +186,7 @@ const GrammarCheckScreen = ({ navigation }) => {
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   activeOpacity={0.7}
                 >
-                  <X size={18} color={Colors.text.secondary} strokeWidth={2.2} />
+                  <X size={18} color={colors.text.secondary} strokeWidth={2.2} />
                 </TouchableOpacity>
               ) : (
                 <View />
@@ -235,7 +237,7 @@ const GrammarCheckScreen = ({ navigation }) => {
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       activeOpacity={0.7}
                     >
-                      <Copy size={16} color={Colors.primary} strokeWidth={2.2} />
+                      <Copy size={16} color={colors.primary} strokeWidth={2.2} />
                     </TouchableOpacity>
                   </View>
                 ) : null}
@@ -243,7 +245,7 @@ const GrammarCheckScreen = ({ navigation }) => {
 
               {loading ? (
                 <View style={styles.loadingRow}>
-                  <ActivityIndicator size="small" color={Colors.primary} />
+                  <ActivityIndicator size="small" color={colors.primary} />
                   <Text style={styles.loadingText}>Checking grammar…</Text>
                 </View>
               ) : (
@@ -260,7 +262,7 @@ const GrammarCheckScreen = ({ navigation }) => {
               onPress={() => navigation.navigate('GrammarCheckHistory')}
             >
               <View style={[styles.quickLinkIcon, styles.quickLinkIconBlue]}>
-                <History size={18} color={Colors.primary} strokeWidth={2.2} />
+                <History size={18} color={colors.primary} strokeWidth={2.2} />
               </View>
               <View style={styles.quickLinkTextCol}>
                 <Text style={styles.quickLinkTitle}>History</Text>
@@ -288,9 +290,10 @@ const GrammarCheckScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   screen: {
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
   },
   flex: {
     flex: 1,
@@ -326,16 +329,16 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: 14,
   },
   cardKicker: {
     fontSize: 11,
     fontWeight: '800',
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     letterSpacing: 1.1,
     marginBottom: 10,
   },
@@ -343,7 +346,7 @@ const styles = StyleSheet.create({
     minHeight: 110,
     fontSize: 16,
     lineHeight: 24,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     fontWeight: '500',
     paddingVertical: 0,
   },
@@ -360,14 +363,14 @@ const styles = StyleSheet.create({
   },
   charCount: {
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     fontVariant: ['tabular-nums'],
   },
   sendBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -383,7 +386,7 @@ const styles = StyleSheet.create({
   outputKicker: {
     fontSize: 11,
     fontWeight: '800',
-    color: Colors.primary,
+    color: colors.primary,
     letterSpacing: 1.1,
   },
   outputActions: {
@@ -399,13 +402,13 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
   outputText: {
     fontSize: 16,
     lineHeight: 24,
     fontWeight: '500',
-    color: Colors.text.primary,
+    color: colors.text.primary,
   },
   quickLinksRow: {
     flexDirection: 'row',
@@ -413,10 +416,10 @@ const styles = StyleSheet.create({
   },
   quickLinkCard: {
     flex: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -444,14 +447,17 @@ const styles = StyleSheet.create({
   quickLinkTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: -0.2,
   },
   quickLinkSub: {
     marginTop: 2,
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
 });
+}
+
+
 
 export default GrammarCheckScreen;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,7 +20,7 @@ import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { PrimaryButton } from '../../components/common/PrimaryButton';
 import { AppCard } from '../../components/common/AppCard';
-import { Colors } from '../../theme/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import NativeAudioService from '../../services/NativeAudioService';
 import { useAlert } from '../../context/AlertContext';
 import { formatDateTime, formatCompactDateTime } from '../../utils/dateTimeFormat';
@@ -81,6 +81,8 @@ async function transcribeForReminder(filePath) {
 }
 
 function VoiceRemindersScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const showAlert = useAlert();
@@ -421,9 +423,9 @@ function VoiceRemindersScreen() {
             accessibilityLabel="Play reminder audio"
           >
             {activePlayback?.kind === 'row' && activePlayback.id === item.id ? (
-              <Pause size={20} color={Colors.primary} />
+              <Pause size={20} color={colors.primary} />
             ) : (
-              <Play size={20} color={Colors.primary} />
+              <Play size={20} color={colors.primary} />
             )}
           </TouchableOpacity>
           <TouchableOpacity
@@ -452,8 +454,8 @@ function VoiceRemindersScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onPullRefresh}
-              colors={[Colors.primary]}
-              tintColor={Colors.primary}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
             />
           }
         >
@@ -491,7 +493,7 @@ function VoiceRemindersScreen() {
                       : '0:00'}
                 </Text>
               </View>
-              {isTranscribing && <ActivityIndicator color={Colors.primary} />}
+              {isTranscribing && <ActivityIndicator color={colors.primary} />}
               {!!pendingPath && !isRecording && !isTranscribing && (
                 <TouchableOpacity
                   style={[
@@ -534,7 +536,7 @@ function VoiceRemindersScreen() {
                     activeOpacity={0.7}
                     accessibilityLabel="Edit reminder"
                   >
-                    <Pencil size={16} color={Colors.primary} />
+                    <Pencil size={16} color={colors.primary} />
                     <Text style={styles.editBtnText}>Edit</Text>
                   </TouchableOpacity>
                 </>
@@ -557,7 +559,7 @@ function VoiceRemindersScreen() {
                       }
                     }}
                     multiline
-                    placeholderTextColor={Colors.text.light}
+                    placeholderTextColor={colors.text.light}
                   />
                   <Text style={styles.editLabel}>When</Text>
                   <TouchableOpacity
@@ -565,7 +567,7 @@ function VoiceRemindersScreen() {
                     onPress={() => setPicker(Platform.OS === 'ios' ? 'datetime' : 'date')}
                     activeOpacity={0.7}
                   >
-                    <Calendar size={18} color={Colors.text.secondary} />
+                    <Calendar size={18} color={colors.text.secondary} />
                     <View style={styles.timeRowText}>
                       <Text style={styles.timeValue}>{formatCompactDateTime(scheduledAt)}</Text>
                     </View>
@@ -577,7 +579,7 @@ function VoiceRemindersScreen() {
                         onPress={() => setPicker('date')}
                         activeOpacity={0.7}
                       >
-                        <Calendar size={16} color={Colors.primary} />
+                        <Calendar size={16} color={colors.primary} />
                         <Text style={styles.splitBtnText}>Date</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
@@ -585,7 +587,7 @@ function VoiceRemindersScreen() {
                         onPress={() => setPicker('time')}
                         activeOpacity={0.7}
                       >
-                        <Clock size={16} color={Colors.primary} />
+                        <Clock size={16} color={colors.primary} />
                         <Text style={styles.splitBtnText}>Time</Text>
                       </TouchableOpacity>
                     </View>
@@ -703,14 +705,15 @@ function VoiceRemindersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   screenRoot: { paddingBottom: 0 },
   body: { flex: 1 },
   topScroll: { flexGrow: 0, flexShrink: 1 },
   topScrollContent: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 },
   oneLineHint: {
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 18,
     marginBottom: 12,
   },
@@ -719,7 +722,7 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 29,
-    backgroundColor: Colors.recording.active,
+    backgroundColor: colors.recording.active,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -732,23 +735,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   recInfo: { flex: 1 },
-  recLabel: { fontSize: 16, fontWeight: '700', color: Colors.text.primary },
-  recDur: { fontSize: 14, color: Colors.text.secondary, marginTop: 2 },
+  recLabel: { fontSize: 16, fontWeight: '700', color: colors.text.primary },
+  recDur: { fontSize: 14, color: colors.text.secondary, marginTop: 2 },
   playBtn: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.recording.play,
+    backgroundColor: colors.recording.play,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  playBtnOn: { backgroundColor: Colors.text.primary },
+  playBtnOn: { backgroundColor: colors.text.primary },
   summaryCard: { marginTop: 12 },
-  summaryText: { fontSize: 15, color: Colors.text.primary, lineHeight: 22 },
+  summaryText: { fontSize: 15, color: colors.text.primary, lineHeight: 22 },
   summaryTime: {
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.primary,
+    color: colors.primary,
     marginTop: 8,
   },
   editBtn: {
@@ -760,24 +763,24 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 4,
   },
-  editBtnText: { fontSize: 15, fontWeight: '700', color: Colors.primary },
+  editBtnText: { fontSize: 15, fontWeight: '700', color: colors.primary },
   editLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     marginBottom: 6,
   },
   transcriptInput: {
     minHeight: 80,
     fontSize: 15,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     lineHeight: 22,
     textAlignVertical: 'top',
     marginBottom: 12,
   },
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   timeRowText: { flex: 1 },
-  timeValue: { fontSize: 16, fontWeight: '600', color: Colors.text.primary },
+  timeValue: { fontSize: 16, fontWeight: '600', color: colors.text.primary },
   splitPicker: { flexDirection: 'row', gap: 8, marginTop: 8 },
   splitBtn: {
     flex: 1,
@@ -787,21 +790,21 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
   },
-  splitBtnText: { fontSize: 13, fontWeight: '600', color: Colors.primary },
+  splitBtnText: { fontSize: 13, fontWeight: '600', color: colors.primary },
   doneEditBtn: { alignSelf: 'flex-end', marginTop: 8, padding: 4 },
-  doneEditText: { fontSize: 15, fontWeight: '700', color: Colors.primary },
-  mutedCenter: { textAlign: 'center', color: Colors.text.secondary, marginTop: 8, fontSize: 14 },
+  doneEditText: { fontSize: 15, fontWeight: '700', color: colors.primary },
+  mutedCenter: { textAlign: 'center', color: colors.text.secondary, marginTop: 8, fontSize: 14 },
   hintOk: { fontSize: 12, color: '#0D9488', marginTop: 6 },
   warnText: { fontSize: 12, color: '#C2410C', marginTop: 6, lineHeight: 18 },
   errorText: { fontSize: 13, color: '#B91C1C' },
   retryBox: { marginTop: 10, padding: 8 },
-  retryLink: { fontSize: 13, color: Colors.primary, fontWeight: '600', marginTop: 4 },
+  retryLink: { fontSize: 13, color: colors.primary, fontWeight: '600', marginTop: 4 },
   listTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     marginTop: 8,
     marginBottom: 8,
     paddingHorizontal: 16,
@@ -825,10 +828,10 @@ const styles = StyleSheet.create({
   remindersList: { flex: 1 },
   remindersListContent: { flexGrow: 1, paddingHorizontal: 20, paddingVertical: 12 },
   emptyWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: 24 },
-  emptyTitle: { fontSize: 15, fontWeight: '700', color: Colors.text.secondary, textAlign: 'center' },
+  emptyTitle: { fontSize: 15, fontWeight: '700', color: colors.text.secondary, textAlign: 'center' },
   emptySubtitle: {
     fontSize: 12,
-    color: Colors.text.light,
+    color: colors.text.light,
     textAlign: 'center',
     marginTop: 6,
     paddingHorizontal: 12,
@@ -838,41 +841,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: colors.borderLight,
   },
   rowMain: { flex: 1, marginRight: 8, minWidth: 0 },
   rowMainPast: { opacity: 0.58 },
-  rowTranscript: { fontSize: 14, fontWeight: '600', color: Colors.text.primary, marginBottom: 4 },
+  rowTranscript: { fontSize: 14, fontWeight: '600', color: colors.text.primary, marginBottom: 4 },
   rowTranscriptPast: {
     textDecorationLine: 'line-through',
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
-  rowTime: { fontSize: 13, color: Colors.text.primary },
+  rowTime: { fontSize: 13, color: colors.text.primary },
   rowTimePast: {
     textDecorationLine: 'line-through',
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
-  rowMeta: { fontSize: 11, color: Colors.text.secondary, marginTop: 2 },
-  rowMetaPast: { color: Colors.text.light },
+  rowMeta: { fontSize: 11, color: colors.text.secondary, marginTop: 2 },
+  rowMetaPast: { color: colors.text.light },
   rowActions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   iconBtn: { padding: 6 },
   stickyFooter: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderTopColor: colors.border,
+    backgroundColor: colors.surface,
     paddingHorizontal: 16,
   },
   ctaButton: { minHeight: 56, borderRadius: 14 },
   ctaButtonLabel: { fontSize: 17, fontWeight: '800' },
-  ctaHelper: { fontSize: 12, color: Colors.text.secondary, textAlign: 'center', marginTop: 8 },
+  ctaHelper: { fontSize: 12, color: colors.text.secondary, textAlign: 'center', marginTop: 8 },
   iosPickerWrap: {
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     borderRadius: 12,
     overflow: 'hidden',
     marginTop: 8,
   },
   iosBar: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 10, paddingTop: 8 },
-  iosBarBtn: { fontSize: 16, fontWeight: '700', color: Colors.primary },
-});
+  iosBarBtn: { fontSize: 16, fontWeight: '700', color: colors.primary },
+  });
+}
 
 export default VoiceRemindersScreen;

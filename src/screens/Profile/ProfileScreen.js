@@ -4,7 +4,7 @@ import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { AppCard } from '../../components/common/AppCard';
 import { PrimaryButton } from '../../components/common/PrimaryButton';
-import { Colors } from '../../theme/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useAlert } from '../../context/AlertContext';
 import { getUserPlan, getUserUsage, updateTokensOnly } from '../../services/typeEasyUsageApi';
@@ -22,6 +22,8 @@ function clamp01(x) {
 }
 
 export default function ProfileScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { user } = useAuth();
   const showAlert = useAlert();
 
@@ -211,7 +213,7 @@ export default function ProfileScreen() {
             value={tokensDraft}
             onChangeText={setTokensDraft}
             placeholder="Enter tokens (e.g. 50)"
-            placeholderTextColor={Colors.text.light}
+            placeholderTextColor={colors.text.light}
             keyboardType="numeric"
             style={styles.input}
           />
@@ -234,7 +236,8 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   scroll: {
     paddingHorizontal: 18,
     paddingTop: 14,
@@ -248,23 +251,23 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: -0.6,
   },
   heroSub: {
     marginTop: 6,
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
   sectionTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 10,
   },
   sectionSub: {
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     marginBottom: 10,
     lineHeight: 18,
   },
@@ -287,13 +290,13 @@ const styles = StyleSheet.create({
   planTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: -0.2,
   },
   planSub: {
     marginTop: 6,
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 18,
   },
   renewRow: {
@@ -315,7 +318,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(30, 136, 255, 0.25)',
   },
   badgeTextPrimary: {
-    color: Colors.primary,
+    color: colors.primary,
     fontWeight: '900',
     fontSize: 12,
     letterSpacing: 0.2,
@@ -326,8 +329,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(16, 185, 129, 0.22)',
   },
   badgeMuted: {
-    backgroundColor: Colors.backgroundAlt,
-    borderColor: Colors.borderLight,
+    backgroundColor: colors.backgroundAlt,
+    borderColor: colors.borderLight,
   },
   badgeText: {
     fontWeight: '800',
@@ -337,14 +340,14 @@ const styles = StyleSheet.create({
     color: '#10B981',
   },
   badgeTextMuted: {
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
   kpiRow: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    backgroundColor: Colors.backgroundAlt,
+    borderColor: colors.borderLight,
+    backgroundColor: colors.backgroundAlt,
     borderRadius: 16,
     paddingVertical: 12,
     paddingHorizontal: 12,
@@ -356,18 +359,18 @@ const styles = StyleSheet.create({
   kpiDivider: {
     width: 1,
     height: 26,
-    backgroundColor: Colors.borderLight,
+    backgroundColor: colors.borderLight,
     marginHorizontal: 10,
   },
   kpiLabel: {
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
   kpiValue: {
     marginTop: 4,
     fontSize: 16,
     fontWeight: '900',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: -0.2,
   },
   progressWrap: {
@@ -381,23 +384,23 @@ const styles = StyleSheet.create({
   },
   progressLabel: {
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
   progressValue: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
   },
   progressTrack: {
     height: 10,
     borderRadius: 999,
-    backgroundColor: Colors.borderLight,
+    backgroundColor: colors.borderLight,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     borderRadius: 999,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
   },
   miniRows: {
     gap: 8,
@@ -409,17 +412,17 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.borderLight,
+    borderTopColor: colors.borderLight,
   },
   miniLabel: {
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     flex: 1,
   },
   miniValue: {
     fontSize: 13,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     maxWidth: '60%',
   },
   row: {
@@ -431,30 +434,31 @@ const styles = StyleSheet.create({
   },
   rowDivider: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.borderLight,
+    borderTopColor: colors.borderLight,
   },
   rowLabel: {
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     flex: 1,
   },
   rowValue: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
   },
   input: {
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: colors.borderLight,
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 12,
   },
   btn: {
     marginBottom: 10,
   },
-});
+  });
+}
 

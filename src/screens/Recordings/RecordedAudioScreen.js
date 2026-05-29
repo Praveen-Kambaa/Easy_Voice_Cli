@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -16,7 +16,7 @@ import NativeAudioService, { VOICE_RECORDINGS_UPDATED_EVENT } from '../../servic
 import { voiceApi } from '../../api/voiceApi';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { useAlert } from '../../context/AlertContext';
-import { Colors } from '../../theme/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import { formatDateTime, formatCompactDateTime } from '../../utils/dateTimeFormat';
 import {
   logActivity,
@@ -27,6 +27,8 @@ import {
 import { isGlobalAlertModalVisible } from '../../utils/alertModalState';
 
 const RecordedAudioScreen = ({ navigation }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const showAlert = useAlert();
   const [recordings, setRecordings] = useState([]);
   const [recentActivities, setRecentActivities] = useState([]);
@@ -259,7 +261,7 @@ const RecordedAudioScreen = ({ navigation }) => {
             onPress={() => handleDelete(item.id)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Trash2 size={14} color={Colors.recording.active} strokeWidth={2} />
+            <Trash2 size={14} color={colors.recording.active} strokeWidth={2} />
           </TouchableOpacity>
         </View>
 
@@ -313,7 +315,7 @@ const RecordedAudioScreen = ({ navigation }) => {
                   value={transcriptText}
                   onChangeText={setTranscriptText}
                   placeholder="Edit transcript…"
-                  placeholderTextColor={Colors.text.light}
+                  placeholderTextColor={colors.text.light}
                   autoFocus
                 />
                 <View style={styles.editActionsRow}>
@@ -352,7 +354,7 @@ const RecordedAudioScreen = ({ navigation }) => {
                   style={styles.editTranscriptBtn}
                   onPress={() => handleEditTranscript(item)}
                 >
-                  <Pencil size={12} color={Colors.text.primary} strokeWidth={2} />
+                  <Pencil size={12} color={colors.text.primary} strokeWidth={2} />
                   <Text style={styles.editTranscriptBtnText}>Edit Transcript</Text>
                 </TouchableOpacity>
               </>
@@ -419,7 +421,7 @@ const RecordedAudioScreen = ({ navigation }) => {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
         ListEmptyComponent={renderEmpty}
         ListFooterComponent={renderActivityFooter}
@@ -429,16 +431,17 @@ const RecordedAudioScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
   },
   addBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -457,12 +460,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 20,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   activitySectionTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 12,
     letterSpacing: 0.3,
   },
@@ -472,7 +475,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   activityLogMain: {
     flex: 1,
@@ -480,16 +483,16 @@ const styles = StyleSheet.create({
   activityLogLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: colors.text.primary,
   },
   activityLogMeta: {
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     marginTop: 4,
   },
   activityLogTime: {
     fontSize: 11,
-    color: Colors.text.light,
+    color: colors.text.light,
     flexShrink: 0,
     maxWidth: '38%',
     textAlign: 'right',
@@ -497,10 +500,10 @@ const styles = StyleSheet.create({
 
   // Player card
   playerCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     marginBottom: 14,
     overflow: 'hidden',
     shadowColor: '#000',
@@ -522,7 +525,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -537,25 +540,25 @@ const styles = StyleSheet.create({
   trackTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 2,
   },
   trackDate: {
     fontSize: 12,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
   deleteBtn: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: Colors.recording.activeBg,
+    backgroundColor: colors.recording.activeBg,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   deleteBtnText: {
     fontSize: 12,
-    color: Colors.recording.active,
+    color: colors.recording.active,
     fontWeight: '700',
   },
 
@@ -563,7 +566,7 @@ const styles = StyleSheet.create({
   playerBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     paddingHorizontal: 14,
     paddingVertical: 12,
     gap: 10,
@@ -595,14 +598,14 @@ const styles = StyleSheet.create({
   playPauseBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.recording.play,
+    backgroundColor: colors.recording.play,
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 10,
     gap: 6,
   },
   stopBtnStyle: {
-    backgroundColor: Colors.recording.active,
+    backgroundColor: colors.recording.active,
   },
   playPauseBtnIcon: {
     fontSize: 14,
@@ -637,18 +640,18 @@ const styles = StyleSheet.create({
   transcriptSection: {
     padding: 14,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   transcriptLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: Colors.text.light,
+    color: colors.text.light,
     letterSpacing: 1,
     marginBottom: 8,
   },
   transcriptBody: {
     fontSize: 14,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     lineHeight: 20,
     marginBottom: 10,
   },
@@ -657,32 +660,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
   editTranscriptBtnText: {
     fontSize: 12,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: colors.text.primary,
   },
 
   // Edit mode
   transcriptInput: {
     fontSize: 14,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     lineHeight: 20,
     minHeight: 80,
     textAlignVertical: 'top',
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     borderRadius: 8,
     padding: 12,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   editActionsRow: {
     flexDirection: 'row',
@@ -696,7 +699,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   saveBtn: {
-    backgroundColor: Colors.recording.play,
+    backgroundColor: colors.recording.play,
   },
   saveActionText: {
     fontSize: 13,
@@ -704,7 +707,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   sendEditBtn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
   },
   sendEditText: {
     fontSize: 13,
@@ -712,14 +715,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   cancelEditBtn: {
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   cancelEditText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: colors.text.primary,
   },
 
   // Empty state
@@ -734,7 +737,7 @@ const styles = StyleSheet.create({
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
@@ -742,18 +745,18 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 8,
   },
   emptyDesc: {
     fontSize: 14,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     textAlign: 'center',
     marginBottom: 28,
     lineHeight: 20,
   },
   emptyBtn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     paddingHorizontal: 28,
     paddingVertical: 14,
     borderRadius: 12,
@@ -764,5 +767,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+}
+
+
 
 export default RecordedAudioScreen;

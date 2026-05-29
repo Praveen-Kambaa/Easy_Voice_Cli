@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,13 +11,15 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Mic, Circle } from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
-import { Colors } from '../../theme/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import { TIME_LABELS, USER } from '../../constants';
 import VoiceRecorderScreen from '../VoiceRecorder/VoiceRecorderScreen';
 import { useAuth } from '../../context/AuthContext';
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createHomeStyles(colors), [colors]);
   const [refreshing, setRefreshing] = useState(false);
   const voiceCommandRef = useRef(null);
   const [homeRecording, setHomeRecording] = useState(false);
@@ -25,7 +27,6 @@ const HomeScreen = ({ navigation }) => {
   const homeTimerRef = useRef(null);
   const homeStartRef = useRef(null);
 
-  console.log(user, "Logging user data")
   const onRefresh = async () => {
     setRefreshing(true);
     setRefreshing(false);
@@ -58,7 +59,7 @@ const HomeScreen = ({ navigation }) => {
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         {/* Modern greeting */}
         <View style={styles.greetingBlock}>
@@ -150,7 +151,8 @@ const HomeScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+function createHomeStyles(colors) {
+  return StyleSheet.create({
   scroll: {
     paddingHorizontal: 20,
     paddingTop: 20,
@@ -165,25 +167,25 @@ const styles = StyleSheet.create({
   greetingTitle: {
     fontSize: 30,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: -0.8,
     lineHeight: 36,
   },
   greetingTitleAccent: {
-    color: Colors.primary,
+    color: colors.primary,
   },
   greetingSub: {
     marginTop: 8,
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 19,
   },
 
   primaryCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -204,30 +206,30 @@ const styles = StyleSheet.create({
   primaryCardKicker: {
     fontSize: 11,
     fontWeight: '800',
-    color: Colors.primary,
+    color: colors.primary,
     letterSpacing: 1.2,
   },
   primaryCardTitle: {
     marginTop: 6,
     fontSize: 16,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: -0.2,
   },
   primaryCardSub: {
     marginTop: 6,
     fontSize: 13,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 19,
   },
   micOrb: {
     width: 54,
     height: 54,
     borderRadius: 27,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
     shadowRadius: 16,
@@ -238,12 +240,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 14,
     paddingVertical: 16,
     paddingHorizontal: 16,
     gap: 10,
-    shadowColor: Colors.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.22,
     shadowRadius: 8,
@@ -264,25 +266,25 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   timerPill: {
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     borderRadius: 14,
     paddingVertical: 16,
     paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   timerText: {
     fontSize: 16,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: 0.8,
     fontVariant: ['tabular-nums'],
   },
   stopBtnHome: {
     marginTop: 10,
-    backgroundColor: Colors.status.blocked,
+    backgroundColor: colors.status.blocked,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
@@ -294,6 +296,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.4,
   },
-});
+  });
+}
 
 export default HomeScreen;

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,7 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, Play, Pause, FileText, Copy, X } from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
-import { Colors } from '../../theme/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import { PhoneCallsModule, isPhoneCallsSupported } from '../../native/phoneCalls';
 import { formatDateTime } from '../../utils/dateTimeFormat';
 import NativeAudioService from '../../services/NativeAudioService';
@@ -159,6 +159,8 @@ function directionFromCallType(callType) {
 }
 
 export default function CallLogsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const showAlert = useAlert();
   const insets = useSafeAreaInsets();
   const featurePermsOnce = useRef(false);
@@ -665,8 +667,8 @@ export default function CallLogsScreen() {
         : item.callType === 'incoming'
           ? '#10B981'
           : item.callType === 'outgoing'
-            ? Colors.primary
-            : Colors.text.secondary;
+            ? colors.primary
+            : colors.text.secondary;
     const typeBg =
       item.callType === 'missed'
         ? 'rgba(239, 68, 68, 0.10)'
@@ -674,7 +676,7 @@ export default function CallLogsScreen() {
           ? 'rgba(16, 185, 129, 0.10)'
           : item.callType === 'outgoing'
             ? 'rgba(30, 136, 255, 0.10)'
-            : Colors.backgroundAlt;
+            : colors.backgroundAlt;
     const typeBorder =
       item.callType === 'missed'
         ? 'rgba(239, 68, 68, 0.20)'
@@ -682,7 +684,7 @@ export default function CallLogsScreen() {
           ? 'rgba(16, 185, 129, 0.20)'
           : item.callType === 'outgoing'
             ? 'rgba(30, 136, 255, 0.20)'
-            : Colors.borderLight;
+            : colors.borderLight;
     const timeText = formatTime(item.timestamp);
     const dateText = formatDate(item.timestamp);
 
@@ -755,7 +757,7 @@ export default function CallLogsScreen() {
             >
               <FileText
                 size={16}
-                color={(transcript || transcriptBusy) ? Colors.primary : Colors.text.secondary}
+                color={(transcript || transcriptBusy) ? colors.primary : colors.text.secondary}
                 strokeWidth={2.2}
               />
             </TouchableOpacity>
@@ -798,7 +800,7 @@ export default function CallLogsScreen() {
 
       {loading ? (
         <View style={styles.loaderWrap}>
-          <ActivityIndicator size="large" color={Colors.primaryLight} />
+          <ActivityIndicator size="large" color={colors.primaryLight} />
         </View>
       ) : (
         <FlatList
@@ -837,7 +839,7 @@ export default function CallLogsScreen() {
                 style={styles.modalCloseBtn}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <X size={18} color={Colors.text.secondary} strokeWidth={2.2} />
+                <X size={18} color={colors.text.secondary} strokeWidth={2.2} />
               </TouchableOpacity>
             </View>
 
@@ -850,7 +852,7 @@ export default function CallLogsScreen() {
                 <Text style={styles.modalCopiedText}>Copied</Text>
               ) : null}
               <TouchableOpacity style={styles.modalCopyIconBtn} onPress={copyTranscriptText} activeOpacity={0.85}>
-                <Copy size={16} color={Colors.primary} strokeWidth={2.1} />
+                <Copy size={16} color={colors.primary} strokeWidth={2.1} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalPrimaryBtn}
@@ -870,20 +872,21 @@ export default function CallLogsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   listContent: {
     paddingHorizontal: 14,
     paddingTop: 8,
     paddingBottom: 24,
   },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 18,
     paddingVertical: 12,
     paddingHorizontal: 14,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.05,
@@ -899,9 +902,9 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 14,
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: colors.borderLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -923,11 +926,11 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 13,
     fontWeight: '900',
-    color: Colors.text.primary,
+    color: colors.text.primary,
   },
   dateText: {
     fontSize: 10,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
   rightMetaText: {
     marginTop: 6,
@@ -938,17 +941,17 @@ const styles = StyleSheet.create({
   syncRightText: {
     marginTop: 4,
     fontSize: 10,
-    color: Colors.text.light,
+    color: colors.text.light,
   },
   cardTitle: {
     fontSize: 15,
     fontWeight: '900',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: -0.2,
   },
   cardSub: {
     fontSize: 11,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     marginTop: 2,
   },
   recordRow: {
@@ -958,9 +961,9 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 6,
     borderRadius: 16,
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: colors.borderLight,
   },
   recordRowActive: {
     borderColor: 'rgba(30, 136, 255, 0.28)',
@@ -970,12 +973,12 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 12,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   recordPlayActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
   },
   recordPlayArea: {
     flex: 1,
@@ -989,13 +992,13 @@ const styles = StyleSheet.create({
   recordRowTitle: {
     fontSize: 13,
     fontWeight: '900',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     letterSpacing: -0.2,
   },
   recordRowSub: {
     marginTop: 2,
     fontSize: 11,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
   transcriptIconBtn: {
     width: 34,
@@ -1003,17 +1006,17 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: colors.borderLight,
   },
   transcriptIconBtnActive: {
-    borderColor: Colors.primary + '55',
-    backgroundColor: Colors.primary + '10',
+    borderColor: colors.primary + '55',
+    backgroundColor: colors.primary + '10',
   },
   listEmpty: {
     textAlign: 'center',
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     marginTop: 32,
     paddingHorizontal: 24,
     lineHeight: 22,
@@ -1026,12 +1029,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 8,
   },
   emptyBody: {
     fontSize: 15,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 22,
   },
   loaderWrap: {
@@ -1046,10 +1049,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   modalCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: 16,
     maxHeight: '70%',
   },
@@ -1064,7 +1067,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
   },
   modalCloseBtn: {
     width: 32,
@@ -1072,7 +1075,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
   },
   modalBody: {
     maxHeight: 320,
@@ -1082,7 +1085,7 @@ const styles = StyleSheet.create({
   },
   modalTranscriptText: {
     fontSize: 15,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     lineHeight: 22,
   },
   modalActions: {
@@ -1097,25 +1100,26 @@ const styles = StyleSheet.create({
     height: 38,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalCopiedText: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.status.granted,
+    color: colors.status.granted,
   },
   modalPrimaryBtn: {
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
   },
   modalPrimaryBtnText: {
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
   },
-});
+  });
+}

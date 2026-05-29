@@ -1,20 +1,24 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '../../theme/Colors';
-
-const STATUS_MAP = {
-  granted: { bg: Colors.status.grantedBg, color: Colors.status.granted },
-  denied: { bg: Colors.status.deniedBg, color: Colors.status.denied },
-  blocked: { bg: Colors.status.blockedBg, color: Colors.status.blocked },
-  limited: { bg: Colors.status.infoBg, color: Colors.status.info },
-  unavailable: { bg: Colors.status.unavailableBg, color: Colors.status.unavailable },
-  active: { bg: Colors.status.grantedBg, color: Colors.status.granted },
-  inactive: { bg: Colors.status.unavailableBg, color: Colors.status.unavailable },
-};
+import { useTheme } from '../../context/ThemeContext';
 
 export const StatusBadge = ({ status, label }) => {
+  const { colors } = useTheme();
+  const statusMap = useMemo(
+    () => ({
+      granted: { bg: colors.status.grantedBg, color: colors.status.granted },
+      denied: { bg: colors.status.deniedBg, color: colors.status.denied },
+      blocked: { bg: colors.status.blockedBg, color: colors.status.blocked },
+      limited: { bg: colors.status.infoBg, color: colors.status.info },
+      unavailable: { bg: colors.status.unavailableBg, color: colors.status.unavailable },
+      active: { bg: colors.status.grantedBg, color: colors.status.granted },
+      inactive: { bg: colors.status.unavailableBg, color: colors.status.unavailable },
+    }),
+    [colors],
+  );
+
   const key = status?.toLowerCase();
-  const config = STATUS_MAP[key] || STATUS_MAP.unavailable;
+  const config = statusMap[key] || statusMap.unavailable;
 
   return (
     <View style={[styles.badge, { backgroundColor: config.bg }]}>

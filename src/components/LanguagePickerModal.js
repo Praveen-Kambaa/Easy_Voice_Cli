@@ -11,7 +11,7 @@ import {
   Keyboard,
 } from 'react-native';
 import { Search } from 'lucide-react-native';
-import { Colors } from '../theme/Colors';
+import { useTheme } from '../context/ThemeContext';
 
 /**
  * Searchable full-screen modal for picking a translation language.
@@ -32,6 +32,8 @@ export function LanguagePickerModal({
   selectedCode,
   onSelect,
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [query, setQuery] = useState('');
 
   useEffect(() => {
@@ -89,11 +91,11 @@ export function LanguagePickerModal({
             <Text style={styles.sheetTitle}>{title}</Text>
 
             <View style={styles.searchWrap}>
-              <Search size={18} color={Colors.text.secondary} strokeWidth={2} />
+              <Search size={18} color={colors.text.secondary} strokeWidth={2} />
               <TextInput
                 style={styles.searchInput}
                 placeholder="Search language or code"
-                placeholderTextColor={Colors.text.light}
+                placeholderTextColor={colors.text.light}
                 value={query}
                 onChangeText={setQuery}
                 autoCorrect={false}
@@ -133,7 +135,8 @@ export function LanguagePickerModal({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -146,22 +149,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   sheet: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     maxHeight: '78%',
     overflow: 'hidden',
   },
   sheetTitle: {
     fontSize: 17,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     paddingHorizontal: 18,
     paddingTop: 18,
     paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   searchWrap: {
     flexDirection: 'row',
@@ -173,13 +176,13 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.backgroundAlt,
+    borderColor: colors.border,
+    backgroundColor: colors.backgroundAlt,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     padding: 0,
   },
   list: {
@@ -195,25 +198,25 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 18,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: colors.borderLight,
   },
   rowSelected: {
-    backgroundColor: Colors.backgroundAlt,
+    backgroundColor: colors.backgroundAlt,
   },
   rowText: {
     flex: 1,
     fontSize: 16,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginRight: 12,
   },
   rowTextSelected: {
     fontWeight: '600',
-    color: Colors.primary,
+    color: colors.primary,
   },
   rowCode: {
     fontSize: 12,
     fontWeight: '600',
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     letterSpacing: 0.5,
   },
   empty: {
@@ -221,17 +224,18 @@ const styles = StyleSheet.create({
     paddingVertical: 28,
     paddingHorizontal: 16,
     fontSize: 15,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
   cancelBtn: {
     paddingVertical: 14,
     alignItems: 'center',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   cancelText: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
   },
-});
+  });
+}

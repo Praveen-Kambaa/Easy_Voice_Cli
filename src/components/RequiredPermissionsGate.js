@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,7 @@ import {
   RESULTS,
   openSettings,
 } from 'react-native-permissions';
-import { Colors } from '../theme/Colors';
+import { useTheme } from '../context/ThemeContext';
 import PermissionModal from './PermissionModal';
 import { PERMISSION_NAMES } from '../utils/AndroidPermissions';
 import {
@@ -86,6 +86,8 @@ async function requestIosMicrophone() {
 }
 
 export default function RequiredPermissionsGate({ children }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createGateStyles(colors), [colors]);
   const [loading, setLoading] = useState(true);
   const [runtimeComplete, setRuntimeComplete] = useState(false);
   const [runtimeHasBlocked, setRuntimeHasBlocked] = useState(false);
@@ -268,7 +270,7 @@ export default function RequiredPermissionsGate({ children }) {
           style={styles.splashImage}
           resizeMode="contain"
         />
-        <ActivityIndicator size="large" color={Colors.text.white} style={styles.loader} />
+        <ActivityIndicator size="large" color={colors.text.white} style={styles.loader} />
       </View>
     );
   }
@@ -364,9 +366,9 @@ export default function RequiredPermissionsGate({ children }) {
       </Text>
 
       <View style={styles.list}>
-        <Row ok={overlay} label="Display over other apps" />
-        <Row ok={accessibility} label="Accessibility service" />
-        <Row ok={recordAudio} label="Microphone" />
+        <Row ok={overlay} label="Display over other apps" styles={styles} />
+        <Row ok={accessibility} label="Accessibility service" styles={styles} />
+        <Row ok={recordAudio} label="Microphone" styles={styles} />
       </View>
 
       <View style={styles.actions}>
@@ -450,7 +452,7 @@ export default function RequiredPermissionsGate({ children }) {
   );
 }
 
-function Row({ ok, label }) {
+function Row({ ok, label, styles }) {
   return (
     <View style={styles.row}>
       <Text style={[styles.rowIcon, ok ? styles.rowIconOk : styles.rowIconPending]}>
@@ -461,7 +463,8 @@ function Row({ ok, label }) {
   );
 }
 
-const styles = StyleSheet.create({
+function createGateStyles(colors) {
+  return StyleSheet.create({
   loadingContainer: {
     flex: 1,
     backgroundColor: '#000000',
@@ -490,7 +493,7 @@ const styles = StyleSheet.create({
   blockTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: Colors.text.white,
+    color: colors.text.white,
     marginBottom: 12,
     textAlign: 'center',
   },
@@ -520,7 +523,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   rowIconOk: {
-    color: Colors.status.granted,
+    color: colors.status.granted,
   },
   rowIconPending: {
     color: 'rgba(255,255,255,0.35)',
@@ -531,14 +534,14 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.9)',
   },
   rowLabelOk: {
-    color: Colors.status.granted,
+    color: colors.status.granted,
   },
   actions: {
     gap: 12,
     marginBottom: 16,
   },
   primaryBtn: {
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: colors.primaryLight,
     paddingVertical: 15,
     borderRadius: 10,
     alignItems: 'center',
@@ -547,7 +550,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   primaryBtnText: {
-    color: Colors.text.white,
+    color: colors.text.white,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -560,4 +563,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
-});
+  });
+}

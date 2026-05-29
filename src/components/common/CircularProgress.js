@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '../../theme/Colors';
+import { useTheme } from '../../context/ThemeContext';
 
 export const CircularProgress = ({
   percentage = 0,
@@ -8,6 +8,9 @@ export const CircularProgress = ({
   strokeWidth = 5,
   label,
 }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={[styles.wrapper, { width: size + 24, alignItems: 'center' }]}>
       <View
@@ -28,25 +31,27 @@ export const CircularProgress = ({
   );
 };
 
-const styles = StyleSheet.create({
-  wrapper: {
-    alignItems: 'center',
-  },
-  circle: {
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  percentage: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.text.primary,
-  },
-  label: {
-    marginTop: 6,
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text.secondary,
-  },
-});
+function createStyles(colors) {
+  return StyleSheet.create({
+    wrapper: {
+      alignItems: 'center',
+    },
+    circle: {
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    percentage: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    label: {
+      marginTop: 6,
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.text.secondary,
+    },
+  });
+}
