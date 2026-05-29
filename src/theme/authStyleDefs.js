@@ -30,14 +30,14 @@ export function getAuthStyleDefs(colors, isDark) {
       shadowRadius: 24,
       elevation: 6,
     },
-    logoContainer: {
-      alignItems: 'center',
+    logoWrap: {
+      alignSelf: 'stretch',
+      marginHorizontal: -22,
+      marginTop: -22,
       marginBottom: 20,
-    },
-    logoImage: {
-      width: 240,
-      height: 120,
-      borderRadius: 12,
+      borderTopLeftRadius: 18,
+      borderTopRightRadius: 18,
+      overflow: 'hidden',
     },
     inputGroup: {
       marginBottom: 14,

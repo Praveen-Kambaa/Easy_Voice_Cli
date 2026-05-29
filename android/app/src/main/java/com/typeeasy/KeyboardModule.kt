@@ -25,6 +25,8 @@ class KeyboardModule(
         const val KEY_USER_ID = "user_id"
         const val KEY_FROM_LANG = "from_lang"
         const val KEY_TO_LANG = "to_lang"
+        const val KEY_IS_DARK = "keyboard_is_dark"
+        const val KEY_THEME_MODE = "keyboard_theme_mode"
     }
 
     @ReactMethod
@@ -88,12 +90,22 @@ class KeyboardModule(
      * Persists app settings needed by MyKeyboardService while it runs outside React Native.
      */
     @ReactMethod
-    fun syncKeyboardSettings(userId: String?, fromLang: String?, toLang: String?, promise: Promise) {
+    fun syncKeyboardSettings(
+        userId: String?,
+        fromLang: String?,
+        toLang: String?,
+        isDark: Boolean,
+        themeMode: String?,
+        promise: Promise,
+    ) {
         try {
+            val mode = themeMode?.trim()?.lowercase().orEmpty().ifEmpty { "system" }
             reactContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putString(KEY_USER_ID, userId?.trim().orEmpty())
                 .putString(KEY_FROM_LANG, fromLang?.trim().orEmpty().ifEmpty { "en" })
                 .putString(KEY_TO_LANG, toLang?.trim().orEmpty().ifEmpty { "ta" })
+                .putBoolean(KEY_IS_DARK, isDark)
+                .putString(KEY_THEME_MODE, mode)
                 .apply()
             promise.resolve(true)
         } catch (e: Exception) {
@@ -111,6 +123,7 @@ class KeyboardModule(
                 putString("toLang", prefs.getString(KEY_TO_LANG, "ta")?.trim().orEmpty().ifEmpty { "ta" })
                 putBoolean("hasFromLang", prefs.contains(KEY_FROM_LANG))
                 putBoolean("hasToLang", prefs.contains(KEY_TO_LANG))
+                putBoolean("isDark", prefs.getBoolean(KEY_IS_DARK, false))
             }
             promise.resolve(map)
         } catch (e: Exception) {
