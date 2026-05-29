@@ -1,8 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { useColorScheme } from 'react-native';
+import { Appearance, useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { getPalette, lightPalette } from '../theme/palettes';
+import { syncKeyboardSettingsToNative } from '../services/floatingMicConfig';
 
 export const THEME_STORAGE_KEY = '@app_color_scheme';
 
@@ -75,6 +76,11 @@ export function ThemeProvider({ children }) {
   const colors = useMemo(() => getPalette(isDark), [isDark]);
   const navigationTheme = useMemo(() => (isDark ? navigationDark : navigationLight), [isDark]);
 
+  useEffect(() => {
+    if (!isReady) return;
+    syncKeyboardSettingsToNative(undefined, isDark, themeMode);
+  }, [isDark, isReady, themeMode]);
+
   const setThemeMode = useCallback(async (mode) => {
     const next =
       mode === THEME_MODES.DARK
@@ -88,6 +94,13 @@ export function ThemeProvider({ children }) {
     } catch {
       // ignore persistence errors
     }
+    const dark =
+      next === THEME_MODES.DARK
+        ? true
+        : next === THEME_MODES.LIGHT
+          ? false
+          : Appearance.getColorScheme() === 'dark';
+    syncKeyboardSettingsToNative(undefined, dark, next);
   }, []);
 
   const value = useMemo(

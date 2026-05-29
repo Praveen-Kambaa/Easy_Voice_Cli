@@ -1,5 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NativeModules, Platform } from 'react-native';
+import { Appearance, NativeModules, Platform } from 'react-native';
+
+/** Keep in sync with ThemeContext THEME_STORAGE_KEY / THEME_MODES */
+const THEME_STORAGE_KEY = '@app_color_scheme';
+const THEME_MODES = { SYSTEM: 'system', LIGHT: 'light', DARK: 'dark' };
 import { buildEasyVoiceUrl } from '../config/api';
 import {
   AI_PROVIDER_API_KEY,
@@ -163,11 +167,23 @@ async function getStoredAuthUserId() {
 }
 
 /**
- * Push auth/language settings to the native keyboard (Android service + iOS app group).
- * The keyboard runs outside React Native, so it cannot read AsyncStorage directly.
+ * Push auth/language settings to the Android keyboard service. The keyboard runs
+ * outside React Native, so it cannot reliably read AsyncStorage directly.
  */
-export async function syncKeyboardSettingsToNative(userIdOverride) {
-  if (typeof KeyboardModule?.syncKeyboardSettings !== 'function') return;
+async function resolveKeyboardIsDark(isDarkOverride) {
+  if (typeof isDarkOverride === 'boolean') return isDarkOverride;
+  try {
+    const stored = await AsyncStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === THEME_MODES.DARK) return true;
+    if (stored === THEME_MODES.LIGHT) return false;
+  } catch {
+    // fall through to system
+  }
+  return Appearance.getColorScheme() === 'dark';
+}
+
+export async function syncKeyboardSettingsToNative(userIdOverride, isDarkOverride, themeModeOverride) {
+  if (Platform.OS !== 'android' || typeof KeyboardModule?.syncKeyboardSettings !== 'function') return;
   try {
     const fromLang = (await AsyncStorage.getItem('@from_language')) || 'en';
     const toLang = (await AsyncStorage.getItem('@to_language')) || 'ta';
@@ -175,7 +191,20 @@ export async function syncKeyboardSettingsToNative(userIdOverride) {
       userIdOverride !== undefined && userIdOverride !== null
         ? String(userIdOverride).trim()
         : await getStoredAuthUserId();
-    await KeyboardModule.syncKeyboardSettings(userId, fromLang, toLang);
+    const isDark = await resolveKeyboardIsDark(isDarkOverride);
+    let themeMode = themeModeOverride;
+    if (themeMode !== THEME_MODES.LIGHT && themeMode !== THEME_MODES.DARK && themeMode !== THEME_MODES.SYSTEM) {
+      themeMode = THEME_MODES.SYSTEM;
+      try {
+        const stored = await AsyncStorage.getItem(THEME_STORAGE_KEY);
+        if (stored === THEME_MODES.LIGHT || stored === THEME_MODES.DARK || stored === THEME_MODES.SYSTEM) {
+          themeMode = stored;
+        }
+      } catch {
+        // default system
+      }
+    }
+    await KeyboardModule.syncKeyboardSettings(userId, fromLang, toLang, isDark, themeMode);
   } catch (e) {
     console.warn('[floatingMicConfig] keyboard sync failed:', e?.message || e);
   }

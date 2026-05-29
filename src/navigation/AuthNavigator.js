@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Image, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { AuthLogo } from '../components/auth/AuthLogo';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import LoginScreen from '../screens/Auth/LoginScreen';
@@ -14,11 +15,7 @@ const AuthNavigator = () => {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <Image
-          source={require('../assets/splashscreen.png')}
-          style={styles.splashImage}
-          resizeMode="contain"
-        />
+        <AuthLogo variant="default" style={styles.loadingLogo} />
       </View>
     );
   }
@@ -44,9 +41,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
   },
-  splashImage: {
+  loadingLogo: {
     flex: 1,
-    width: '100%',
+    justifyContent: 'center',
   },
 });
 

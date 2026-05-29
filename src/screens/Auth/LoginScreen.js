@@ -10,7 +10,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Mail, Eye, EyeOff, Lock } from 'lucide-react-native';
@@ -20,6 +19,7 @@ import { validateEmail } from '../../utils/authValidation';
 import { isGlobalAlertModalVisible } from '../../utils/alertModalState';
 import { useTheme } from '../../context/ThemeContext';
 import { getAuthStyleDefs } from '../../theme/authStyleDefs';
+import { AuthLogo } from '../../components/auth/AuthLogo';
 
 const LoginScreen = ({ navigation }) => {
   const { colors, isDark } = useTheme();
@@ -94,13 +94,7 @@ const LoginScreen = ({ navigation }) => {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.card}>
-            <View style={styles.logoContainer}>
-              <Image
-                source={require('../../assets/splashscreen.png')}
-                style={styles.logoImage}
-                resizeMode="contain"
-              />
-            </View>
+            <AuthLogo variant="full" style={styles.logoWrap} />
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Email</Text>

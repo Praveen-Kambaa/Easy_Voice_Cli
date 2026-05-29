@@ -8,8 +8,8 @@ import {
   Platform,
   NativeModules,
   AppState,
-  Image,
 } from 'react-native';
+import { AuthLogo } from './auth/AuthLogo';
 import {
   check,
   request,
@@ -265,11 +265,7 @@ export default function RequiredPermissionsGate({ children }) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <Image
-          source={require('../assets/splashscreen.png')}
-          style={styles.splashImage}
-          resizeMode="contain"
-        />
+        <AuthLogo variant="default" style={styles.loadingLogo} />
         <ActivityIndicator size="large" color={colors.text.white} style={styles.loader} />
       </View>
     );
@@ -282,11 +278,7 @@ export default function RequiredPermissionsGate({ children }) {
   if (Platform.OS === 'ios') {
     return (
       <View style={styles.blockContainer}>
-        <Image
-          source={require('../assets/splashscreen.png')}
-          style={styles.blockLogo}
-          resizeMode="contain"
-        />
+        <AuthLogo variant="compact" style={styles.blockLogoWrap} />
         <Text style={styles.blockTitle}>Microphone required</Text>
         <Text style={styles.blockBody}>
           This app needs microphone access to continue. Tap below to allow, then you can use the app.
@@ -314,11 +306,7 @@ export default function RequiredPermissionsGate({ children }) {
         : 'Required permissions';
     return (
       <View style={styles.blockContainer}>
-        <Image
-          source={require('../assets/splashscreen.png')}
-          style={styles.blockLogo}
-          resizeMode="contain"
-        />
+        <AuthLogo variant="compact" style={styles.blockLogoWrap} />
         <Text style={styles.blockTitle}>Permissions needed</Text>
         <Text style={styles.blockBody}>
           To continue, allow: {missingText}. Tap Try again to open the system prompts, or open Settings if a
@@ -354,11 +342,7 @@ export default function RequiredPermissionsGate({ children }) {
 
   return (
     <View style={styles.blockContainer}>
-      <Image
-        source={require('../assets/splashscreen.png')}
-        style={styles.blockLogo}
-        resizeMode="contain"
-      />
+      <AuthLogo variant="compact" style={styles.blockLogoWrap} />
       <Text style={styles.blockTitle}>Overlay and accessibility</Text>
       <Text style={styles.blockBody}>
         For display over other apps and accessibility, use the buttons below. After each change, return here —
@@ -469,9 +453,9 @@ function createGateStyles(colors) {
     flex: 1,
     backgroundColor: '#000000',
   },
-  splashImage: {
+  loadingLogo: {
     flex: 1,
-    width: '100%',
+    justifyContent: 'center',
   },
   loader: {
     position: 'absolute',
@@ -485,9 +469,8 @@ function createGateStyles(colors) {
     paddingTop: 48,
     paddingBottom: 32,
   },
-  blockLogo: {
-    width: '100%',
-    height: 120,
+  blockLogoWrap: {
+    alignSelf: 'stretch',
     marginBottom: 24,
   },
   blockTitle: {

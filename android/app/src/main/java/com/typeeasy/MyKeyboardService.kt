@@ -2,6 +2,7 @@ package com.typeeasy
 
 import com.typeeasy.generated.ApiConfig
 import android.content.Context
+import android.content.res.Configuration
 import android.content.SharedPreferences
 import android.graphics.Color
 import android.graphics.PorterDuff
@@ -20,14 +21,16 @@ import android.view.inputmethod.EditorInfo
 import android.widget.*
 import android.content.Intent
 import android.os.Bundle
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.util.Locale
 import java.util.concurrent.Executors
 
 /**
- * Type Easy Keyboard — Light lavender theme.
+ * Type Easy Keyboard — Datamuse suggestions, clipboard, app-synced light/dark theme.
  * - Long-press letter: popup with special chars for that key
  * - Long-press backspace: clear all text
  * - Professional Unicode icons throughout
@@ -37,19 +40,6 @@ import java.util.concurrent.Executors
  */
 class MyKeyboardService : InputMethodService() {
 
-    // ── Theme ─────────────────────────────────────────────────────────────────
-    private val C_BG          = Color.parseColor("#EAF4FF")
-    private val C_KEY_LETTER  = Color.WHITE
-    private val C_KEY_ACTION  = Color.parseColor("#B9DCFF")
-    private val C_KEY_TEXT    = Color.parseColor("#0F172A")
-    private val C_HINT_TEXT   = Color.parseColor("#64748B")
-    private val C_TOOLBAR_BG  = Color.parseColor("#1E88FF")
-    private val C_TOOLBAR_TXT = Color.WHITE
-    private val C_RESULT_BG   = Color.parseColor("#F8FAFC")
-    private val C_PRIMARY     = Color.parseColor("#1E88FF")
-    private val C_SUGGESTION  = Color.parseColor("#DCEEFF")
-    private val C_ERROR_TEXT  = Color.parseColor("#DC2626")
-    private val C_SUCCESS     = Color.parseColor("#16A34A")
     // ── State ─────────────────────────────────────────────────────────────────
     private enum class Layer { ALPHA, SHIFT, CAPS, SYMBOLS, EMOJI }
     private var layer = Layer.ALPHA
@@ -126,244 +116,34 @@ class MyKeyboardService : InputMethodService() {
     private var pendingReplaceSelected = false
     private var pendingReplaceBeforeChars = 0
 
-    // ── Word suggestions ──────────────────────────────────────────────────────
-private val commonWords = listOf(
-    // --- TOP 100 HIGH FREQUENCY WORDS ---
-    "the","be","to","of","and","a","in","that","have","it","for","not","on",
-    "with","he","as","you","do","at","this","but","his","by","from","they",
-    "we","say","her","she","or","an","will","my","one","all","would","there",
-    "their","what","so","up","out","if","about","who","get","which","go","me",
-    "when","make","can","like","time","no","just","him","know","take","people",
-    "into","year","your","good","some","could","them","see","other","than",
-    "then","now","look","only","come","its","over","think","also","back",
-    "after","use","two","how","our","work","first","well","way","even","new",
-    "want","because","any","these","give","day","most","us","great","need",
-    
-    // --- CORE DAY-TO-DAY WORDS (101 - 500) ---
-    "should","state","never","become","high","really","something","another","much",
-    "own","leave","put","old","while","mean","keep","student","why","let",
-    "same","big","group","begin","seem","country","help","talk","where",
-    "turn","problem","every","start","hand","might","show","part","against",
-    "place","such","again","few","case","week","company","system","each","right",
-    "program","hear","question","during","play","government","run","small","number",
-    "off","always","move","night","live","point","believe","hold","today","bring",
-    "happen","next","without","before","large","million","must","home","under",
-    "water","room","write","mother","area","national","money","story","young",
-    "fact","month","different","lot","study","book","eye","job","word","though",
-    "business","issue","side","kind","four","head","far","black","long","both",
-    "little","house","yes","since","provide","service","around","friend","important",
-    "father","sit","away","until","power","hour","game","line","end","among",
-    "ever","stand","bad","lose","however","member","meet","car","city","almost",
-    "include","continue","set","later","community","name","five","once","white",
-    "least","president","learn","real","change","team","minute","best","several",
-    "idea","kid","body","information","nothing","ago","lead","social","understand",
-    "whether","watch","together","follow","parent","stop","face","anything","create",
-    "public","already","speak","others","read","level","allow","add","office",
-    "spend","door","health","person","art","sure","war","history","party",
-    "within","grow","result","open","morning","walk","reason","low","win",
-    "research","girl","guy","early","food","moment","himself","air","teacher",
-    "force","offer","enough","education","across","although","remember","foot",
-    "second","boy","maybe","toward","able","age","policy","everything","love",
-    "process","music","including","consider","appear","actually","buy","probably",
-    "human","wait","serve","market","die","send","expect","sense","build",
-    "stay","fall","oh","nation","plan","cut","college","interest","death",
-    "course","someone","experience","behind","reach","local","kill","six",
-    "remain","effect","suggest","class","control","raise","care","perhaps",
-    "late","hard","field","else","pass","former","sell","major","sometimes",
-    "require","along","development","themselves","report","role","better",
-    "economic","effort","decide","rate","strong","possible","heart","drug",
-    "leader","light","voice","wife","whole","police","mind","finally","pull",
-    "return","free","military","price","less","according","decision","explain",
-    "son","hope","develop","view","relationship","carry","town","road","drive",
-    "arm","true","federal","break","difference","thank","receive","value",
-    "international","building","action","full","model","join","season","society",
-    "tax","director","position","player","agree","especially","record","pick",
-    "wear","paper","special","space","ground","form","support","event","official",
-    "whose","matter","everyone","center","couple","site","project","hit","base",
-    "activity","star","table","court","produce","eat","american","teach","oil",
-    "half","situation","easy","cost","industry","figure","face","street","image",
-    "itself","phone","either","data","cover","quite","picture","clear","practice",
-    "piece","land","recent","doctor","wall","patient","worker","news","test",
-    
-    // --- EVERYDAY OBJECTS, ACTIONS & NOUNS (501 - 1000) ---
-    "movie","certain","north","love","personal","open","support","simply","third",
-    "technology","catch","step","baby","computer","type","attention","draw",
-    "film","republican","tree","source","red","nearly","choose","cause","hair",
-    "look","point","century","evidence","window","difficult","listen","soon",
-    "culture","billion","dear","chance","brother","energy","period","course",
-    "summer","realize","hundred","available","plant","likely","opportunity",
-    "term","short","letter","condition","choice","place","single","rule",
-    "daughter","administration","south","husband","congress","floor","campaign",
-    "material","population","well","call","economy","medical","hospital",
-    "church","close","thousand","risk","current","fire","future","wrong",
-    "involve","defense","anyone","increase","security","bank","myself",
-    "certainly","west","sport","board","seek","officer","strategy","deal",
-    "performance","drop","recent","realty","forward","individual","top",
-    "behavior","desire","firm","goal","quarter","agency","push","produce",
-    "guitar","microphone","drums","piano","trumpet","violin","flute","screen",
-    "keyboard","button","display","cable","adapter","charge","battery","power",
-    "network","internet","server","cloud","database","application","software",
-    "hardware","memory","storage","processor","graphics","sound","video","audio",
-    "camera","sensor","sensor","signal","frequency","antenna","channel","station",
-    "broadcast","satellite","radar","laser","fiber","copper","wire","switch",
-    "router","modem","gateway","packet","protocol","address","domain","website",
-    "browser","search","engine","index","query","result","link","click",
-    "scroll","swipe","touch","press","hold","drag","drop","pinch","zoom",
-    "rotate","shake","tilt","motion","speed","velocity","acceleration",
-    "force","gravity","mass","weight","volume","density","pressure","temperature",
-    "heat","cold","warm","cool","hot","freeze","melt","boil","vapor","steam",
-    "smoke","dust","dirt","mud","sand","rock","stone","clay","soil","earth",
-    "globe","map","compass","navigation","location","latitude","longitude",
-    "altitude","depth","height","width","length","distance","range","radius",
-    "diameter","circle","square","triangle","rectangle","polygon","cube",
-    "sphere","cylinder","cone","pyramid","box","container","bag","pack",
-    "package","pocket","wallet","purse","case","cover","sleeve","jacket",
-    "coat","shirt","pants","jeans","shorts","skirt","dress","suit","tie",
-    "hat","cap","helmet","mask","glasses","goggles","gloves","socks","shoes",
-    "boots","sandals","slippers","belt","watch","ring","necklace","bracelet",
-    "earring","button","zipper","pocket","thread","needle","scissors","knife",
-    "fork","spoon","plate","bowl","cup","mug","glass","bottle","can","jar",
-    "box","pot","pan","oven","stove","grill","toaster","blender","mixer",
-    "fridge","freezer","sink","faucet","drain","pipe","tube","hose","valve",
-    "pump","fan","blower","heater","cooler","filter","purifier","cleaner",
-    
-    // --- EXPANDED GENERAL DICTIONARY (1001 - 1500) ---
-    "vacuum","broom","mop","bucket","soap","sponge","towel","cloth","rag",
-    "brush","comb","razor","blade","scissors","clipper","file","mirror",
-    "sink","toilet","shower","tub","bath","mat","curtain","blind","shade",
-    "window","door","lock","key","handle","knob","hinge","latch","bolt",
-    "screw","nail","pin","clip","staple","tape","glue","paste","cement",
-    "brick","block","stone","tile","board","plank","beam","post","pillar",
-    "wall","floor","ceiling","roof","attic","basement","cellar","garage",
-    "porch","deck","patio","yard","lawn","garden","park","field","meadow",
-    "forest","woods","jungle","swamp","marsh","desert","dune","beach",
-    "coast","shore","cliff","cave","valley","canyon","hill","mountain",
-    "peak","summit","ridge","pass","trail","path","road","street","avenue",
-    "drive","lane","way","route","highway","freeway","bridge","tunnel",
-    "rail","track","train","subway","metro","bus","coach","taxi","cab",
-    "car","auto","truck","van","jeep","suv","pickup","wagon","trailer",
-    "camper","rv","bike","cycle","moped","scooter","skate","board","sled",
-    "skis","boat","ship","vessel","yacht","ferry","barge","tanker","sub",
-    "plane","jet","aircraft","glider","copter","rocket","shuttle","capsule",
-    "satellite","station","orbit","space","moon","sun","star","planet",
-    "comet","asteroid","meteor","galaxy","cluster","nebula","void","hole",
-    "time","date","year","month","week","day","hour","minute","second",
-    "milli","micro","nano","pico","kilo","mega","giga","tera","peta",
-    "byte","bit","word","code","data","file","folder","drive","disk",
-    "tape","card","chip","board","circuit","relay","diode","switch",
-    "plug","socket","cord","wire","cable","line","loop","mesh","grid",
-    "matrix","array","list","stack","queue","tree","graph","node","edge",
-    "vertex","face","mesh","solid","fluid","liquid","gas","plasma",
-    "atom","ion","molecule","bond","chain","ring","group","series",
-    "sequence","set","class","type","kind","sort","rank","order",
-    "level","grade","stage","phase","step","pace","rate","speed",
-    "flow","flux","current","wave","pulse","beam","ray","field",
-    "force","load","stress","strain","shear","tension","torque",
-    "twist","turn","spin","rotate","revolve","orbit","cycle","loop",
-    "ring","coil","wind","wrap","bind","tie","knot","hitch","lash",
-    "fasten","secure","lock","latch","bolt","screw","nail","pin",
-    "rivet","weld","solder","braze","glue","bond","cement","mortar",
-    "concrete","plaster","stucco","drywall","panel","sheet","plate",
-    "strip","wire","rod","bar","beam","tube","pipe","hose","duct",
-    "vent","drain","sewer","main","line","pipe","valve","cock","plug",
-    
-    // --- ADVANCED DAILY CHAT & PREDICTIVE TEXT (1501 - 2100+) ---
-    "faucet","spigot","nozzle","spray","mist","fog","cloud","rain","sleet",
-    "snow","hail","ice","frost","dew","condense","evaporate","sublime",
-    "melt","freeze","thaw","warm","heat","scald","burn","char","scorch",
-    "singe","smoke","blaze","flame","spark","ember","ash","soot","dust",
-    "dirt","grime","smudge","stain","spot","blot","mark","scratch","dent",
-    "crack","chip","break","fracture","shatter","smash","crush","grind",
-    "powder","dust","flake","chip","chunk","block","lump","mass","heap",
-    "pile","stack","bundle","bunch","pack","load","cargo","freight",
-    "shipment","delivery","parcel","package","packet","envelope","letter",
-    "note","card","ticket","pass","permit","license","badge","token",
-    "coin","bill","cash","money","funds","capital","wealth","assets",
-    "property","estate","land","ground","lot","plot","site","spot",
-    "place","space","room","hall","chamber","cell","vault","safe",
-    "box","chest","trunk","case","bag","sack","pouch","pocket",
-    "purse","wallet","holder","clip","clamp","vise","grip","tongs",
-    "pliers","wrench","spanner","driver","screw","bolt","nut","washer",
-    "shim","spacer","gasket","seal","ring","o-ring","packing","gland",
-    "bearing","bushing","sleeve","collar","shaft","axle","spindle",
-    "hub","wheel","tire","rim","spoke","gear","pinion","rack","cam",
-    "follower","lever","crank","arm","rod","link","pin","pivot",
-    "hinge","joint","socket","ball","swivel","caster","wheel","roller",
-    "track","slide","guide","rail","way","channel","groove","slot",
-    "notch","slit","hole","bore","port","vent","outlet","inlet",
-    "intake","exhaust","return","feed","supply","drain","waste",
-    "refuse","trash","garbage","rubbish","debris","wreck","ruin",
-    "spoil","waste","scrap","leftover","remnant","shred","scrap",
-    "sliver","splinter","chip","shaving","dust","powder","grain",
-    "speck","particle","molecule","atom","electron","proton","neutron",
-    "quark","photon","lepton","boson","gluon","graviton","neutrino",
-    "radiation","ray","beam","wave","pulse","signal","sign","token",
-    "mark","stamp","seal","brand","label","tag","ticket","card",
-    "slip","form","sheet","page","leaf","book","volume","tome",
-    "scroll","roll","strip","band","belt","strap","cord","rope",
-    "string","twine","thread","yarn","fiber","strand","filament",
-    "wire","cable","line","track","path","trail","route","course",
-    "way","road","street","avenue","boulevard","drive","lane",
-    "court","terrace","place","plaza","square","park","garden",
-    "yard","lawn","field","meadow","pasture","range","plain",
-    "prairie","savanna","steppe","tundra","desert","waste","wild",
-    "bush","jungle","forest","woods","grove","thicket","copse",
-    "orchard","vineyard","farm","ranch","plantation","estate",
-    "manor","house","home","abode","dwelling","residence","lodge",
-    "cabin","shack","hut","hovel","shanty","tent","camp","shelter",
-    "refuge","asylum","sanctuary","retreat","haven","port","harbor",
-    "dock","pier","wharf","quay","marina","anchorage","roadstead",
-    "sound","strait","channel","passage","pass","gap","gorge",
-    "canyon","ravine","gully","chasm","abyss","gulf","bay","bight",
-    "cove","inlet","fjord","estuary","delta","mouth","source",
-    "spring","well","fountain","geyser","pool","pond","mere",
-    "lake","loch","sea","ocean","deep","abyss","void","space",
-    "sky","heaven","firmament","ether","air","atmosphere","climate",
-    "weather","season","spring","summer","autumn","fall","winter",
-    "solstice","equinox","period","epoch","era","age","eon",
-    "time","moment","instant","second","minute","hour","day",
-    "night","dawn","sunrise","morning","noon","afternoon","dusk",
-    "sunset","evening","twilight","midnight","today","yesterday",
-    "tomorrow","fortnight","month","quarter","year","decade",
-    "century","millennium","forever","eternity","always","ever",
-    "never","sometimes","often","frequently","usually","normally",
-    "generally","typically","seldom","rarely","scarcely","hardly",
-    "barely","just","only","solely","simply","merely","nearly",
-    "almost","about","around","circa","roughly","approximately",
-    "exactly","precisely","correctly","right","true","factual",
-    "real","actual","genuine","authentic","sincere","honest",
-    "frank","candid","direct","straight","plain","simple","easy",
-    "smooth","flat","level","even","regular","uniform","steady",
-    "stable","firm","solid","hard","tough","strong","robust",
-    "hardy","sturdy","brave","bold","daring","heroic","valiant",
-    "fearless","intrepid","dauntless","gallant","noble","grand",
-    "great","huge","vast","immense","enormous","massive","giant",
-    "mammoth","monstrous","colossal","titanic","mighty","powerful",
-    "potent","strong","intense","sharp","keen","acute","shrewd",
-    "smart","clever","bright","intelligent","wise","sage","learned",
-    "expert","skilled","adept","proficient","capable","able","fit",
-    "ready","prepared","alert","watchful","vigilant","wary","cautious",
-    "careful","prudent","discreet","judicious","sane","rational",
-    "logical","sound","valid","solid","good","excellent","fine",
-    "choice","select","prime","first","chief","main","principal",
-    "major","leading","capital","cardinal","central","focal","core",
-    "middle","midst","center","heart","nucleus","hub","pivot",
-    "axis","spindle","shaft","rod","pole","post","stake","peg",
-    "pin","bolt","screw","nail","tack","brad","rivet","anchor",
-    "fastener","tie","bond","link","chain","shackle","fetter",
-    "handcuff","manacle","bond","rein","leash","tether","halter",
-    "yoke","harness","gear","tackle","rig","apparatus","device",
-    "engine","motor","machine","mechanism","tool","implement",
-    "instrument","utensil","weapon","arms","armaments","ordnance",
-    "artillery","cannon","gun","rifle","musket","pistol","revolver",
-    "dagger","dirk","knife","blade","sword","saber","foil","rapier",
-    "lance","spear","pike","halberd","javelin","dart","arrow","bolt",
-    "missile","rocket","torpedo","bomb","shell","grenade","mine",
-    "charge","blast","explosion","burst","eruption","outbreak",
-    "flare","flash","gleam","glimmer","glint","sparkle","twinkle",
-    "shimmer","glitter","glow","beam","ray","streak","line",
-    "strip","band","belt","zone","region","area","district"
-)
+    // ── Word suggestions (Datamuse API) ───────────────────────────────────────
+    private val datamuseExecutor = Executors.newSingleThreadExecutor()
+    private var suggestionsRequestSeq = 0L
+    private var suggestionDebounce: Runnable? = null
+    private var keyPreviewPopup: PopupWindow? = null
+    private var keyPreviewShownAt = 0L
+    private var keyPreviewDismissRunnable: Runnable? = null
+    private val keyPreviewMinVisibleMs = 200L
+    private lateinit var featureToolbar: LinearLayout
+    private lateinit var suggestionToolbarDivider: View
+    private var currentPartialWord = ""
+    private var isFetchingSuggestions = false
+    private lateinit var suggestionScroll: HorizontalScrollView
+    private var keyboardIsDark = false
+    private var theme = KeyboardTheme.light
+    private val C_BG get() = theme.bg
+    private val C_KEY_LETTER get() = theme.keyLetter
+    private val C_KEY_ACTION get() = theme.keyAction
+    private val C_KEY_TEXT get() = theme.keyText
+    private val C_HINT_TEXT get() = theme.hintText
+    private val C_TOOLBAR_BG get() = theme.toolbarBg
+    private val C_TOOLBAR_TXT get() = theme.toolbarText
+    private val C_RESULT_BG get() = theme.resultBg
+    private val C_PRIMARY get() = theme.primary
+    private val C_SUGGESTION get() = theme.suggestionBg
+    private val C_ERROR_TEXT get() = Color.parseColor("#DC2626")
+    private val C_SUCCESS get() = Color.parseColor("#16A34A")
+
 
     // ── Number hints for top row ──────────────────────────────────────────────
     private val topRowHints = mapOf(
@@ -428,19 +208,23 @@ private val commonWords = listOf(
             layoutParams = ViewGroup.LayoutParams(MATCH, WRAP)
         }
         buildSuggestionRow()
+        buildSuggestionToolbarDivider()
         buildFeatureToolbar()
         buildResultBar()
         buildVoiceBar()
         buildSettingsPanel()
         buildKeys()
         buildEmojiPanel()
+        applyThemeToViews()
         return rootLayout
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         refreshKeyboardConfig()
+        applyThemeToViews()
         renderSettingsPanel()
+        updateSuggestions()
         if (info != null) {
             val caps = (info.inputType and android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES) != 0
             if (caps && layer == Layer.ALPHA) setLayer(Layer.SHIFT)
@@ -449,19 +233,32 @@ private val commonWords = listOf(
 
     override fun onFinishInput() {
         super.onFinishInput()
-        popupWindow?.dismiss()
+        dismissAlternativesPopup()
         languagePopupWindow?.dismiss()
+        dismissKeyPreview(immediate = true)
         stopVoice()
         hideResult()
         if (showSettings) toggleSettings()
         if (layer == Layer.EMOJI) setLayer(Layer.ALPHA)
     }
 
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val wasDark = keyboardIsDark
+        keyboardIsDark = resolveKeyboardIsDark()
+        if (wasDark != keyboardIsDark && ::rootLayout.isInitialized) {
+            applyThemeToViews()
+        }
+    }
+
     override fun onDestroy() {
-        popupWindow?.dismiss()
+        dismissAlternativesPopup()
         languagePopupWindow?.dismiss()
+        dismissKeyPreview(immediate = true)
+        suggestionDebounce?.let { mainHandler.removeCallbacks(it) }
         stopVoice()
         executor.shutdownNow()
+        datamuseExecutor.shutdownNow()
         super.onDestroy()
     }
 
@@ -470,45 +267,49 @@ private val commonWords = listOf(
     // ─────────────────────────────────────────────────────────────────────────
 
     private fun buildSuggestionRow() {
-        val scroll = HorizontalScrollView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(MATCH, dp(36))
+        suggestionScroll = HorizontalScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(MATCH, dp(38))
             setBackgroundColor(C_SUGGESTION)
             isHorizontalScrollBarEnabled = false
         }
         suggestionRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = ViewGroup.LayoutParams(WRAP, MATCH)
-            setPadding(dp(8), 0, dp(8), 0)
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(6), dp(12), dp(6))
         }
-        scroll.addView(suggestionRow)
-        rootLayout.addView(scroll)
+        suggestionScroll.addView(suggestionRow)
+        rootLayout.addView(suggestionScroll)
+    }
+
+    private fun buildSuggestionToolbarDivider() {
+        suggestionToolbarDivider = View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(MATCH, dp(1))
+            setBackgroundColor(theme.suggestionDivider)
+        }
+        rootLayout.addView(suggestionToolbarDivider)
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Feature toolbar  — Unicode professional icons
-    //   文A = translate   A✓ = grammar   mic vector = voice   ⚙ = settings
+    // Feature toolbar — translate, grammar, voice, settings
     // ─────────────────────────────────────────────────────────────────────────
 
     private fun buildFeatureToolbar() {
-        val bar = LinearLayout(this).apply {
+        featureToolbar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(C_TOOLBAR_BG)
-            layoutParams = LinearLayout.LayoutParams(MATCH, dp(46))
-            setPadding(dp(8), dp(4), dp(8), dp(4))
+            layoutParams = LinearLayout.LayoutParams(MATCH, dp(44))
+            setPadding(dp(10), dp(4), dp(10), dp(4))
             gravity = Gravity.CENTER_VERTICAL
         }
-        // Translate icon: 文A (Unicode translation symbol)
-        bar.addView(toolBtn("文A") { onTranslatePress() })
-        bar.addView(toolDivider())
-        // Grammar icon: A✓
-        bar.addView(toolBtn("A✓") { onGrammarPress() })
-        bar.addView(toolDivider())
-        // Mic icon: flat white vector — matches 文A / A✓ toolbar style (not emoji)
-        bar.addView(toolBtnIcon(R.drawable.ic_mic) { onVoicePress() })
-        bar.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) })
-        // Settings: ⚙
-        bar.addView(toolBtn("⚙") { toggleSettings() })
-        rootLayout.addView(bar)
+        featureToolbar.addView(toolBtn("文A") { onTranslatePress() })
+        featureToolbar.addView(toolDivider())
+        featureToolbar.addView(toolBtn("A✓") { onGrammarPress() })
+        featureToolbar.addView(toolDivider())
+        featureToolbar.addView(toolBtnIcon(R.drawable.ic_mic) { onVoicePress() })
+        featureToolbar.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) })
+        featureToolbar.addView(toolBtn("⚙") { toggleSettings() })
+        rootLayout.addView(featureToolbar)
     }
 
     private fun toolBtn(icon: String, action: () -> Unit) = TextView(this).apply {
@@ -584,7 +385,7 @@ private val commonWords = listOf(
     private fun buildVoiceBar() {
         voiceBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(Color.parseColor("#E8EAF6"))
+            setBackgroundColor(theme.voiceBarBg)
             layoutParams = LinearLayout.LayoutParams(MATCH, dp(46))
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), 0, dp(12), 0)
@@ -622,7 +423,7 @@ private val commonWords = listOf(
     private fun buildSettingsPanel() {
         settingsPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#E8EAF6"))
+            setBackgroundColor(theme.settingsBg)
             layoutParams = LinearLayout.LayoutParams(MATCH, WRAP)
             setPadding(dp(12), dp(8), dp(12), dp(8))
             visibility = View.GONE
@@ -642,7 +443,7 @@ private val commonWords = listOf(
         row.addView(TextView(this).apply {
             text = "Translation :"
             textSize = 14f
-            setTextColor(Color.parseColor("#757575"))
+            setTextColor(C_HINT_TEXT)
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(0, WRAP, 1f)
         })
@@ -659,9 +460,9 @@ private val commonWords = listOf(
             textSize = 13f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
-            setTextColor(C_KEY_TEXT)
-            background = roundRect(Color.WHITE, dp(18)).apply {
-                setStroke(dp(1), Color.parseColor("#DADDE8"))
+            setTextColor(theme.pillText)
+            background = roundRect(theme.pillBg, dp(18)).apply {
+                setStroke(dp(1), theme.pillBorder)
             }
             contentDescription = name
             setPadding(dp(18), 0, dp(18), 0)
@@ -676,8 +477,8 @@ private val commonWords = listOf(
             textSize = 18f
             gravity = Gravity.CENTER
             setTextColor(C_PRIMARY)
-            background = roundRect(Color.WHITE, dp(17)).apply {
-                setStroke(dp(1), Color.parseColor("#DADDE8"))
+            background = roundRect(theme.pillBg, dp(17)).apply {
+                setStroke(dp(1), theme.pillBorder)
             }
             layoutParams = LinearLayout.LayoutParams(dp(36), dp(34)).also {
                 it.setMargins(dp(8), 0, dp(8), 0)
@@ -697,7 +498,7 @@ private val commonWords = listOf(
         languagePopupWindow?.dismiss()
         val list = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.WHITE)
+            setBackgroundColor(theme.popupBg)
         }
         languages.forEach { (code, name) ->
             list.addView(LinearLayout(this).apply {
@@ -708,19 +509,19 @@ private val commonWords = listOf(
                 addView(TextView(this@MyKeyboardService).apply {
                     text = name
                     textSize = 14f
-                    setTextColor(C_KEY_TEXT)
+                    setTextColor(theme.pillText)
                     layoutParams = LinearLayout.LayoutParams(0, WRAP, 1f)
                 })
                 addView(TextView(this@MyKeyboardService).apply {
                     text = languageShort(code).uppercase()
                     textSize = 11f
-                    setTextColor(Color.parseColor("#5F6368"))
+                    setTextColor(C_HINT_TEXT)
                     typeface = Typeface.DEFAULT_BOLD
                     gravity = Gravity.CENTER
                     layoutParams = LinearLayout.LayoutParams(dp(40), WRAP)
                 })
                 if ((isFrom && fromLang == code) || (!isFrom && toLang == code)) {
-                    setBackgroundColor(Color.parseColor("#EEF1FF"))
+                    setBackgroundColor(theme.popupSelectedBg)
                 }
                 setOnClickListener {
                     if (isFrom) fromLang = code else toLang = code
@@ -730,7 +531,7 @@ private val commonWords = listOf(
                 }
             })
             list.addView(View(this).apply {
-                setBackgroundColor(Color.parseColor("#EEEEEE"))
+                setBackgroundColor(theme.suggestionDivider)
                 layoutParams = LinearLayout.LayoutParams(MATCH, dp(1))
             })
         }
@@ -738,11 +539,15 @@ private val commonWords = listOf(
             addView(list)
             layoutParams = ViewGroup.LayoutParams(MATCH, dp(220))
         }
-        languagePopupWindow = PopupWindow(scroll, dp(260), dp(220), true).apply {
+        languagePopupWindow = PopupWindow(scroll, dp(260), dp(220), false).apply {
+            isFocusable = false
+            isTouchable = true
             isOutsideTouchable = true
+            inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
             setBackgroundDrawable(GradientDrawable().apply {
-                setColor(Color.WHITE)
+                setColor(theme.popupBg)
                 cornerRadius = dp(6).toFloat()
+                setStroke(dp(1), theme.popupStroke)
             })
             elevation = dp(6).toFloat()
             showAsDropDown(anchor, 0, dp(4))
@@ -815,7 +620,7 @@ private val commonWords = listOf(
 
         val bgColor = when {
             isShiftOn -> C_PRIMARY
-            isSpace   -> Color.WHITE
+            isSpace   -> C_KEY_LETTER
             isAction  -> C_KEY_ACTION
             else      -> C_KEY_LETTER
         }
@@ -831,9 +636,10 @@ private val commonWords = listOf(
                 .also { it.setMargins(dp(3), dp(3), dp(3), dp(3)) }
         }
 
+        val keyElevation = if (keyboardIsDark) dp(1).toFloat() else dp(2).toFloat()
         val keyView: View = if (isTopRow && isLetter) {
             FrameLayout(this).apply {
-                background = roundRect(bgColor, dp(8)); elevation = dp(1).toFloat()
+                background = roundRect(bgColor, dp(8)); elevation = keyElevation
                 layoutParams = FrameLayout.LayoutParams(MATCH, MATCH)
                 addView(TextView(this@MyKeyboardService).apply {
                     text = display; textSize = 18f; gravity = Gravity.CENTER
@@ -860,34 +666,56 @@ private val commonWords = listOf(
                 }
                 gravity = Gravity.CENTER
                 setTextColor(if (isShiftOn) Color.WHITE else C_KEY_TEXT)
-                background = roundRect(bgColor, dp(8)); elevation = dp(1).toFloat()
+                background = roundRect(bgColor, dp(8)); elevation = keyElevation
                 layoutParams = FrameLayout.LayoutParams(MATCH, MATCH)
             }
         }
 
         wrapper.addView(keyView)
-        wrapper.setOnClickListener { handleKey(logical) }
 
-        // Long-press: letter → show alternatives popup; backspace → clear all
-        wrapper.setOnLongClickListener {
+        val previewLabel = when {
+            isSpace -> "space"
+            logical == "ENTER" -> "↵"
+            else -> display
+        }
+        var suppressKeyOnUp = false
+        var longPressTriggered = false
+        val longPressMs = ViewConfiguration.getLongPressTimeout().toLong()
+        val longPressTask = Runnable {
+            longPressTriggered = true
+            suppressKeyOnUp = true
+            dismissKeyPreview(immediate = true)
             when {
-                isLetter -> {
+                logical == "BKSP" -> clearAllInputText()
+                isLetter && keyAlternatives.containsKey(logical) ->
                     showAlternativesPopup(logical, wrapper)
+            }
+        }
+
+        wrapper.setOnTouchListener { v, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    dismissAlternativesPopup()
+                    suppressKeyOnUp = false
+                    longPressTriggered = false
+                    showKeyPreview(previewLabel, v)
+                    mainHandler.removeCallbacks(longPressTask)
+                    mainHandler.postDelayed(longPressTask, longPressMs)
                     true
                 }
-                isTopRow && logical.length == 1 && logical[0].isLetter() -> {
-                    // Long-press top row → insert the number hint directly
-                    val num = topRowHints[logical]
-                    if (num != null) currentInputConnection?.commitText(num, 1)
+                MotionEvent.ACTION_UP -> {
+                    mainHandler.removeCallbacks(longPressTask)
+                    dismissKeyPreview()
+                    if (!suppressKeyOnUp && !longPressTriggered) handleKey(logical)
+                    suppressKeyOnUp = false
+                    longPressTriggered = false
                     true
                 }
-                logical == "BKSP" -> {
-                    val ic = currentInputConnection ?: return@setOnLongClickListener true
-                    ic.beginBatchEdit()
-                    ic.performContextMenuAction(android.R.id.selectAll)
-                    ic.commitText("", 1)
-                    ic.endBatchEdit()
-                    suggestionRow.removeAllViews()
+                MotionEvent.ACTION_CANCEL -> {
+                    mainHandler.removeCallbacks(longPressTask)
+                    dismissKeyPreview()
+                    suppressKeyOnUp = false
+                    longPressTriggered = false
                     true
                 }
                 else -> false
@@ -896,19 +724,34 @@ private val commonWords = listOf(
         return wrapper
     }
 
+    private fun clearAllInputText() {
+        val ic = currentInputConnection ?: return
+        ic.beginBatchEdit()
+        ic.performContextMenuAction(android.R.id.selectAll)
+        ic.commitText("", 1)
+        ic.endBatchEdit()
+        if (::suggestionRow.isInitialized) suggestionRow.removeAllViews()
+        currentPartialWord = ""
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Long-press alternatives popup
     // ─────────────────────────────────────────────────────────────────────────
 
+    private fun dismissAlternativesPopup() {
+        popupWindow?.dismiss()
+        popupWindow = null
+    }
+
     private fun showAlternativesPopup(logical: String, anchor: View) {
         val alts = keyAlternatives[logical] ?: return
-        popupWindow?.dismiss()
+        if (!::rootLayout.isInitialized) return
+        dismissAlternativesPopup()
 
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(Color.WHITE)
-            background = roundRect(Color.WHITE, dp(10)).also {
-                it.setStroke(dp(1), Color.parseColor("#C5CAE9"))
+            background = roundRect(theme.popupBg, dp(10)).also {
+                it.setStroke(dp(1), theme.popupStroke)
             }
             setPadding(dp(4), dp(4), dp(4), dp(4))
             elevation = dp(8).toFloat()
@@ -923,17 +766,36 @@ private val commonWords = listOf(
                     .also { it.setMargins(dp(2), 0, dp(2), 0) }
                 setOnClickListener {
                     currentInputConnection?.commitText(alt, 1)
-                    popupWindow?.dismiss()
+                    dismissAlternativesPopup()
                 }
             })
         }
 
         val totalWidth = (alts.size * (dp(38) + dp(4))) + dp(8)
-        popupWindow = PopupWindow(row, totalWidth, dp(52), true).apply {
+        val popupHeight = dp(52)
+        // Non-focusable popup anchored to the keyboard — focusable popups steal IME focus and restart the keyboard.
+        popupWindow = PopupWindow(row, totalWidth, popupHeight, false).apply {
+            isFocusable = false
+            isTouchable = true
             isOutsideTouchable = true
-            setBackgroundDrawable(null)
-            showAsDropDown(anchor, 0, -dp(100))
+            isClippingEnabled = false
+            inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
+            setBackgroundDrawable(roundRect(theme.popupBg, dp(10)).also {
+                it.setStroke(dp(1), theme.popupStroke)
+            })
+            elevation = dp(8).toFloat()
+            setOnDismissListener { popupWindow = null }
         }
+
+        val anchorLoc = IntArray(2)
+        anchor.getLocationInWindow(anchorLoc)
+        val rootLoc = IntArray(2)
+        rootLayout.getLocationInWindow(rootLoc)
+        var x = anchorLoc[0] - rootLoc[0] + (anchor.width - totalWidth) / 2
+        val y = anchorLoc[1] - rootLoc[1] - popupHeight - dp(8)
+        val maxX = (rootLayout.width - totalWidth).coerceAtLeast(0)
+        x = x.coerceIn(0, maxX)
+        popupWindow?.showAtLocation(rootLayout, Gravity.TOP or Gravity.START, x, y.coerceAtLeast(0))
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1088,27 +950,221 @@ private val commonWords = listOf(
     // Word suggestions
     // ─────────────────────────────────────────────────────────────────────────
 
+    private fun getCurrentPartialWord(): String? {
+        val ic = currentInputConnection ?: return null
+        val before = ic.getTextBeforeCursor(40, 0)?.toString() ?: return null
+        val match = Regex("[A-Za-z']+$").find(before) ?: return null
+        return match.value
+    }
+
     private fun updateSuggestions() {
-        val ic = currentInputConnection ?: return
-        val before = ic.getTextBeforeCursor(20, 0)?.toString() ?: return
-        val lastWord = before.trimEnd().split(Regex("\\s+")).lastOrNull()?.lowercase() ?: return
-        suggestionRow.removeAllViews()
-        if (lastWord.length < 2) return
-        commonWords.filter { it.startsWith(lastWord) && it != lastWord }.take(5).forEach { word ->
-            suggestionRow.addView(TextView(this).apply {
-                text = word; textSize = 13f; setTextColor(C_KEY_TEXT)
-                setPadding(dp(16), 0, dp(16), 0); gravity = Gravity.CENTER_VERTICAL
-                layoutParams = LinearLayout.LayoutParams(WRAP, MATCH)
-                setOnClickListener {
-                    ic.deleteSurroundingText(lastWord.length, 0)
-                    ic.commitText("$word ", 1)
-                    suggestionRow.removeAllViews()
+        if (!::suggestionRow.isInitialized) return
+        val partial = getCurrentPartialWord()?.lowercase().orEmpty()
+        if (partial.isEmpty()) {
+            currentPartialWord = ""
+            renderSuggestionChips(emptyList(), loading = false)
+            return
+        }
+        scheduleDatamuseFetch(partial)
+    }
+
+    private fun scheduleDatamuseFetch(query: String) {
+        suggestionDebounce?.let { mainHandler.removeCallbacks(it) }
+        if (query.length < 1) {
+            currentPartialWord = ""
+            renderSuggestionChips(emptyList(), loading = false)
+            return
+        }
+        renderSuggestionChips(emptyList(), loading = true)
+        val seq = ++suggestionsRequestSeq
+        val task = Runnable { fetchDatamuseSuggestions(query, seq) }
+        suggestionDebounce = task
+        mainHandler.postDelayed(task, 280)
+    }
+
+    private fun fetchDatamuseSuggestions(query: String, seq: Long) {
+        datamuseExecutor.execute {
+            val words = try {
+                val encoded = URLEncoder.encode(query, "UTF-8")
+                val url = URL("https://api.datamuse.com/sug?s=$encoded&max=8")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 8_000
+                conn.readTimeout = 8_000
+                conn.setRequestProperty("Accept", "application/json")
+                val code = conn.responseCode
+                val body = if (code in 200..299) {
+                    conn.inputStream.bufferedReader(Charsets.UTF_8).readText()
+                } else {
+                    ""
                 }
+                conn.disconnect()
+                parseDatamuseWords(body)
+            } catch (e: Exception) {
+                android.util.Log.w("TypeEasyKB", "Datamuse: ${e.message}")
+                emptyList()
+            }
+            mainHandler.post {
+                if (seq != suggestionsRequestSeq) return@post
+                currentPartialWord = query
+                isFetchingSuggestions = false
+                renderSuggestionChips(words, loading = false)
+            }
+        }
+    }
+
+    private fun parseDatamuseWords(json: String): List<String> {
+        if (json.isBlank()) return emptyList()
+        val arr = JSONArray(json)
+        val out = ArrayList<String>(arr.length())
+        for (i in 0 until arr.length()) {
+            val word = arr.optJSONObject(i)?.optString("word", "")?.trim().orEmpty()
+            if (word.isNotEmpty()) out.add(word)
+        }
+        return out
+    }
+
+    private fun renderSuggestionChips(words: List<String>, loading: Boolean) {
+        if (!::suggestionRow.isInitialized) return
+        suggestionRow.removeAllViews()
+        if (loading) {
+            suggestionRow.addView(TextView(this).apply {
+                text = "…"
+                textSize = 15f
+                setTextColor(C_HINT_TEXT)
+                gravity = Gravity.CENTER_VERTICAL
             })
-            suggestionRow.addView(View(this).apply {
-                setBackgroundColor(Color.parseColor("#BDBDBD"))
-                layoutParams = LinearLayout.LayoutParams(dp(1), MATCH)
+            return
+        }
+        if (words.isEmpty()) return
+        val partialLen = currentPartialWord.length
+        words.forEachIndexed { index, word ->
+            if (index > 0) {
+                suggestionRow.addView(TextView(this).apply {
+                    text = "·"
+                    textSize = 15f
+                    setTextColor(C_HINT_TEXT)
+                    setPadding(dp(10), 0, dp(10), 0)
+                    gravity = Gravity.CENTER_VERTICAL
+                })
+            }
+            suggestionRow.addView(TextView(this).apply {
+                text = word
+                textSize = 15f
+                setTextColor(if (index == 0) C_PRIMARY else C_KEY_TEXT)
+                typeface = if (index == 0) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(4), dp(2), dp(4), dp(2))
+                setOnClickListener { applySuggestionWord(word, partialLen) }
             })
+        }
+    }
+
+    private fun showKeyPreview(label: String, anchor: View) {
+        keyPreviewDismissRunnable?.let { mainHandler.removeCallbacks(it) }
+        keyPreviewDismissRunnable = null
+        keyPreviewPopup?.dismiss()
+        val bubble = TextView(this).apply {
+            text = label
+            textSize = 26f
+            setTextColor(C_KEY_TEXT)
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            minWidth = dp(52)
+            minHeight = dp(52)
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            background = roundRect(C_KEY_LETTER, dp(10)).apply {
+                setStroke(dp(1), theme.popupStroke)
+            }
+            elevation = dp(8).toFloat()
+        }
+        bubble.measure(
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        )
+        val bubbleH = bubble.measuredHeight
+        val anchorH = if (anchor.height > 0) anchor.height else dp(48)
+        val yOffset = -(anchorH + bubbleH + dp(10))
+
+        keyPreviewPopup = PopupWindow(bubble, WRAP, WRAP, false).apply {
+            isClippingEnabled = false
+            elevation = dp(12).toFloat()
+            showAsDropDown(anchor, 0, yOffset)
+        }
+        keyPreviewShownAt = System.currentTimeMillis()
+    }
+
+    private fun dismissKeyPreview(immediate: Boolean = false) {
+        keyPreviewDismissRunnable?.let { mainHandler.removeCallbacks(it) }
+        keyPreviewDismissRunnable = null
+        if (keyPreviewPopup == null) return
+
+        if (immediate) {
+            keyPreviewPopup?.dismiss()
+            keyPreviewPopup = null
+            keyPreviewShownAt = 0L
+            return
+        }
+
+        val elapsed = System.currentTimeMillis() - keyPreviewShownAt
+        val remaining = keyPreviewMinVisibleMs - elapsed
+        if (remaining <= 0) {
+            keyPreviewPopup?.dismiss()
+            keyPreviewPopup = null
+            keyPreviewShownAt = 0L
+            return
+        }
+
+        val task = Runnable {
+            keyPreviewPopup?.dismiss()
+            keyPreviewPopup = null
+            keyPreviewShownAt = 0L
+            keyPreviewDismissRunnable = null
+        }
+        keyPreviewDismissRunnable = task
+        mainHandler.postDelayed(task, remaining)
+    }
+
+    private fun applySuggestionWord(word: String, partialLen: Int) {
+        val ic = currentInputConnection ?: return
+        if (partialLen > 0) ic.deleteSurroundingText(partialLen, 0)
+        ic.commitText("$word ", 1)
+        currentPartialWord = ""
+        suggestionsRequestSeq++
+        renderSuggestionChips(emptyList(), loading = false)
+        checkAutoCap()
+    }
+
+    private fun resolveKeyboardIsDark(): Boolean {
+        if (!::prefs.isInitialized) return keyboardIsDark
+        return when (prefs.getString(KeyboardModule.KEY_THEME_MODE, "system")?.lowercase()) {
+            "dark" -> true
+            "light" -> false
+            else -> {
+                val night = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+                night == Configuration.UI_MODE_NIGHT_YES
+            }
+        }
+    }
+
+    private fun applyThemeToViews() {
+        theme = KeyboardTheme.fromIsDark(keyboardIsDark)
+        if (!::rootLayout.isInitialized) return
+        rootLayout.setBackgroundColor(C_BG)
+        if (::suggestionScroll.isInitialized) suggestionScroll.setBackgroundColor(C_SUGGESTION)
+        if (::suggestionToolbarDivider.isInitialized) {
+            suggestionToolbarDivider.setBackgroundColor(theme.suggestionDivider)
+        }
+        if (::featureToolbar.isInitialized) featureToolbar.setBackgroundColor(C_TOOLBAR_BG)
+        if (::keysContainer.isInitialized) {
+            keysContainer.setBackgroundColor(C_BG)
+            renderKeys()
+        }
+        if (::resultBar.isInitialized) resultBar.setBackgroundColor(C_RESULT_BG)
+        if (::voiceBar.isInitialized) voiceBar.setBackgroundColor(theme.voiceBarBg)
+        if (::settingsPanel.isInitialized) {
+            settingsPanel.setBackgroundColor(theme.settingsBg)
+            if (showSettings) renderSettingsPanel()
         }
     }
 
@@ -1335,6 +1391,13 @@ private val commonWords = listOf(
         fromLang = prefs.getString(KeyboardModule.KEY_FROM_LANG, "en")?.trim().orEmpty().ifEmpty { "en" }
         toLang = prefs.getString(KeyboardModule.KEY_TO_LANG, "ta")?.trim().orEmpty().ifEmpty { "ta" }
         userId = prefs.getString(KeyboardModule.KEY_USER_ID, "")?.trim().orEmpty()
+        val nextDark = resolveKeyboardIsDark()
+        if (nextDark != keyboardIsDark) {
+            keyboardIsDark = nextDark
+            if (::rootLayout.isInitialized) applyThemeToViews()
+        } else {
+            keyboardIsDark = nextDark
+        }
     }
 
     private fun hasUserId(): Boolean {
