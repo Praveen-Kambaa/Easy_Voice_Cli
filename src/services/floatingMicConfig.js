@@ -183,7 +183,7 @@ async function resolveKeyboardIsDark(isDarkOverride) {
 }
 
 export async function syncKeyboardSettingsToNative(userIdOverride, isDarkOverride, themeModeOverride) {
-  if (Platform.OS !== 'android' || typeof KeyboardModule?.syncKeyboardSettings !== 'function') return;
+  if (typeof KeyboardModule?.syncKeyboardSettings !== 'function') return;
   try {
     const fromLang = (await AsyncStorage.getItem('@from_language')) || 'en';
     const toLang = (await AsyncStorage.getItem('@to_language')) || 'ta';
@@ -191,6 +191,14 @@ export async function syncKeyboardSettingsToNative(userIdOverride, isDarkOverrid
       userIdOverride !== undefined && userIdOverride !== null
         ? String(userIdOverride).trim()
         : await getStoredAuthUserId();
+
+    if (Platform.OS === 'ios') {
+      await KeyboardModule.syncKeyboardSettings(userId, fromLang, toLang);
+      return;
+    }
+
+    if (Platform.OS !== 'android') return;
+
     const isDark = await resolveKeyboardIsDark(isDarkOverride);
     let themeMode = themeModeOverride;
     if (themeMode !== THEME_MODES.LIGHT && themeMode !== THEME_MODES.DARK && themeMode !== THEME_MODES.SYSTEM) {

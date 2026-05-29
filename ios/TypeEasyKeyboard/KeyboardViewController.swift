@@ -31,6 +31,11 @@ class KeyboardViewController: UIInputViewController {
   private var toLang = "ta"
   private var isEmojiMode = false
   private var isSettingsVisible = false
+  private let languagePickerContainer = UIView()
+  private let languageTableView = UITableView(frame: .zero, style: .plain)
+  private var languagePickerHeightConstraint: NSLayoutConstraint?
+  private var languagePickerIsFrom = true
+  private var isLanguagePickerVisible = false
 
   private let alphaRows: [[String]] = [
     ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
@@ -167,6 +172,31 @@ class KeyboardViewController: UIInputViewController {
     row.addArrangedSubview(swapBtn)
     row.addArrangedSubview(toLangButton)
     settingsPanel.addArrangedSubview(row)
+
+    languagePickerContainer.isHidden = true
+    languagePickerContainer.translatesAutoresizingMaskIntoConstraints = false
+    languagePickerContainer.backgroundColor = .white
+    languagePickerContainer.layer.cornerRadius = 8
+    languagePickerContainer.layer.borderWidth = 1
+    languagePickerContainer.layer.borderColor = UIColor(red: 0xDA / 255.0, green: 0xDD / 255.0, blue: 0xE8 / 255.0, alpha: 1).cgColor
+    languagePickerContainer.clipsToBounds = true
+
+    languageTableView.dataSource = self
+    languageTableView.delegate = self
+    languageTableView.rowHeight = 44
+    languageTableView.separatorInset = UIEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
+    languageTableView.register(UITableViewCell.self, forCellReuseIdentifier: "LanguageCell")
+    languageTableView.translatesAutoresizingMaskIntoConstraints = false
+    languagePickerContainer.addSubview(languageTableView)
+    languagePickerHeightConstraint = languagePickerContainer.heightAnchor.constraint(equalToConstant: 0)
+    NSLayoutConstraint.activate([
+      languagePickerHeightConstraint!,
+      languageTableView.topAnchor.constraint(equalTo: languagePickerContainer.topAnchor),
+      languageTableView.leadingAnchor.constraint(equalTo: languagePickerContainer.leadingAnchor),
+      languageTableView.trailingAnchor.constraint(equalTo: languagePickerContainer.trailingAnchor),
+      languageTableView.bottomAnchor.constraint(equalTo: languagePickerContainer.bottomAnchor),
+    ])
+    settingsPanel.addArrangedSubview(languagePickerContainer)
     panelsStack.addArrangedSubview(settingsPanel)
   }
 
@@ -602,6 +632,9 @@ class KeyboardViewController: UIInputViewController {
     hideEmojiPanel()
     isSettingsVisible.toggle()
     settingsPanel.isHidden = !isSettingsVisible
+    if !isSettingsVisible {
+      hideLanguagePicker()
+    }
     renderSettingsPanel()
   }
 
@@ -616,8 +649,17 @@ class KeyboardViewController: UIInputViewController {
     toLangButton.setTitle(KeyboardLanguages.shortLabel(for: toLang), for: .normal)
   }
 
-  private func persistLanguages() {
+  @discardableResult
+  private func persistLanguages() -> Bool {
+    guard hasFullAccess else {
+      showStatusMessage(
+        "Turn on \"Allow Full Access\" to save keyboard languages.",
+        isError: true
+      )
+      return false
+    }
     KeyboardSharedConfig.setLanguages(from: fromLang, to: toLang)
+    return true
   }
 
   @objc private func swapLanguages() {
@@ -625,48 +667,70 @@ class KeyboardViewController: UIInputViewController {
     let nextTo = fromLang
     fromLang = nextFrom
     toLang = nextTo
-    persistLanguages()
-    renderSettingsPanel()
+    if persistLanguages() {
+      renderSettingsPanel()
+    } else {
+      reloadLanguagesFromSharedConfig()
+    }
   }
 
   @objc private func pickFromLanguage() {
-    presentLanguagePicker(isFrom: true, sourceView: fromLangButton)
+    toggleLanguagePicker(isFrom: true)
   }
 
   @objc private func pickToLanguage() {
-    presentLanguagePicker(isFrom: false, sourceView: toLangButton)
+    toggleLanguagePicker(isFrom: false)
   }
 
-  private func presentLanguagePicker(isFrom: Bool, sourceView: UIView) {
-    let sheet = UIAlertController(
-      title: isFrom ? "From language" : "To language",
-      message: nil,
-      preferredStyle: .actionSheet
-    )
-    let selected = isFrom ? fromLang : toLang
-    for lang in KeyboardLanguages.all {
-      let title = lang.code == selected ? "✓ \(lang.name)" : lang.name
-      sheet.addAction(UIAlertAction(title: title, style: .default) { [weak self] _ in
-        guard let self else { return }
-        if isFrom {
-          self.fromLang = lang.code
-        } else {
-          self.toLang = lang.code
-        }
-        self.persistLanguages()
-        self.renderSettingsPanel()
-      })
+  /// Inline list — `UIAlertController` does not present reliably inside keyboard extensions.
+  private func toggleLanguagePicker(isFrom: Bool) {
+    guard hasFullAccess else {
+      showStatusMessage(
+        "Turn on \"Allow Full Access\" to change keyboard languages.",
+        isError: true
+      )
+      return
     }
-    sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-    if let popover = sheet.popoverPresentationController {
-      popover.sourceView = sourceView
-      popover.sourceRect = sourceView.bounds
+    if isLanguagePickerVisible && languagePickerIsFrom == isFrom {
+      hideLanguagePicker()
+      return
     }
-    present(sheet, animated: true)
+    languagePickerIsFrom = isFrom
+    isLanguagePickerVisible = true
+    languagePickerContainer.isHidden = false
+    languagePickerHeightConstraint?.constant = 220
+    languageTableView.reloadData()
+    if languageTableView.numberOfRows(inSection: 0) > 0 {
+      let selected = isFrom ? fromLang : toLang
+      if let index = KeyboardLanguages.all.firstIndex(where: { $0.code == selected }) {
+        languageTableView.scrollToRow(at: IndexPath(row: index, section: 0), at: .middle, animated: false)
+      }
+    }
+  }
+
+  private func hideLanguagePicker() {
+    isLanguagePickerVisible = false
+    languagePickerContainer.isHidden = true
+    languagePickerHeightConstraint?.constant = 0
+  }
+
+  private func selectLanguage(code: String) {
+    if languagePickerIsFrom {
+      fromLang = code
+    } else {
+      toLang = code
+    }
+    if persistLanguages() {
+      renderSettingsPanel()
+    } else {
+      reloadLanguagesFromSharedConfig()
+    }
+    hideLanguagePicker()
   }
 
   private func showEmojiPanel() {
     hideResult()
+    hideLanguagePicker()
     settingsPanel.isHidden = true
     isSettingsVisible = false
     isEmojiMode = true
@@ -805,5 +869,38 @@ class KeyboardViewController: UIInputViewController {
     } else {
       voiceBar.isHidden = true
     }
+  }
+}
+
+// MARK: - Language picker table (inline; action sheets fail in keyboard extensions)
+
+extension KeyboardViewController: UITableViewDataSource, UITableViewDelegate {
+  func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+    guard tableView === languageTableView else { return 0 }
+    return KeyboardLanguages.all.count
+  }
+
+  func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    let cell = tableView.dequeueReusableCell(withIdentifier: "LanguageCell", for: indexPath)
+    let lang = KeyboardLanguages.all[indexPath.row]
+    let selected = languagePickerIsFrom ? fromLang : toLang
+    var config = UIListContentConfiguration.cell()
+    config.text = lang.name
+    config.secondaryText = KeyboardLanguages.shortLabel(for: lang.code).uppercased()
+    config.secondaryTextProperties.color = UIColor(red: 0x5F / 255.0, green: 0x63 / 255.0, blue: 0x68 / 255.0, alpha: 1)
+    config.textProperties.font = .systemFont(ofSize: 14)
+    cell.contentConfiguration = config
+    cell.backgroundColor = lang.code == selected
+      ? UIColor(red: 0xEE / 255.0, green: 0xF1 / 255.0, blue: 0xFF / 255.0, alpha: 1)
+      : .white
+    cell.accessoryType = lang.code == selected ? .checkmark : .none
+    cell.tintColor = KeyboardTheme.primary
+    return cell
+  }
+
+  func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+    tableView.deselectRow(at: indexPath, animated: true)
+    let lang = KeyboardLanguages.all[indexPath.row]
+    selectLanguage(code: lang.code)
   }
 }
