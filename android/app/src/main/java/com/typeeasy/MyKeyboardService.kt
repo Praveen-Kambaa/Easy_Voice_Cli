@@ -1,6 +1,8 @@
 package com.typeeasy
 
 import com.typeeasy.generated.ApiConfig
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -138,6 +140,39 @@ class MyKeyboardService : InputMethodService() {
     private var pendingReplaceSelected = false
     private var pendingReplaceBeforeChars = 0
 
+    // ── Clipboard suggestion + history session ─────────────────────────────────
+    private lateinit var clipboardBar: LinearLayout
+    private lateinit var clipboardPreview: TextView
+    private lateinit var clipboardSessionPanel: LinearLayout
+    private lateinit var clipboardSessionContent: LinearLayout
+    private lateinit var clipboardBackBtn: ImageView
+    private lateinit var clipboardDeleteBtn: ImageView
+    private lateinit var clipboardPinBtn: ImageView
+    private lateinit var clipboardTitleView: TextView
+    private lateinit var clipboardSelectAllBtn: TextView
+    private var clipboardClipText: String? = null
+    /** Hash of clipboard text already pasted from the suggestion — persisted until new copy. */
+    private var consumedClipboardSignature: String? = null
+    private var clipboardListener: ClipboardManager.OnPrimaryClipChangedListener? = null
+    private var showClipboardSession = false
+    private var clipboardSelectionMode = false
+    private val clipboardSelectedIds = mutableSetOf<String>()
+    private var clipboardRecentExpanded = false
+    private var editorSupportsFirstCharCap = false
+    private var pendingFirstCharCapitalize = false
+    /** User tapped Shift to turn off caps — do not force first-letter uppercase. */
+    private var userDeclinedFirstCharCap = false
+
+    private data class ClipboardHistoryItem(val text: String, val pinned: Boolean = false)
+
+    private companion object {
+        const val PREF_CLIPBOARD_HISTORY = "kb_clipboard_history"
+        const val PREF_CONSUMED_CLIPBOARD_SIG = "kb_consumed_clipboard_sig"
+        const val MAX_CLIPBOARD_HISTORY = 15
+        const val CLIPBOARD_RECENT_COLLAPSED = 3
+        const val CLIPBOARD_CARD_WIDTH_DP = 196
+    }
+
     // ── Word suggestions (Datamuse API) ───────────────────────────────────────
     private val datamuseExecutor = Executors.newSingleThreadExecutor()
     private var suggestionsRequestSeq = 0L
@@ -145,7 +180,7 @@ class MyKeyboardService : InputMethodService() {
     private var keyPreviewPopup: PopupWindow? = null
     private var keyPreviewShownAt = 0L
     private var keyPreviewDismissRunnable: Runnable? = null
-    private val keyPreviewMinVisibleMs = 200L
+    private val keyPreviewMinVisibleMs = 11L
     private lateinit var featureToolbar: LinearLayout
     private lateinit var suggestionToolbarDivider: View
     private var currentPartialWord = ""
@@ -229,6 +264,8 @@ class MyKeyboardService : InputMethodService() {
             setBackgroundColor(C_BG)
             layoutParams = ViewGroup.LayoutParams(MATCH, WRAP)
         }
+        buildClipboardSuggestionBar()
+        buildClipboardSessionPanel()
         buildSuggestionRow()
         buildSuggestionToolbarDivider()
         buildFeatureToolbar()
@@ -240,6 +277,8 @@ class MyKeyboardService : InputMethodService() {
         buildEmojiPanel()
         buildSnackbarOverlay()
         applyThemeToViews()
+        registerClipboardListener()
+        refreshClipboardSuggestion()
         val wrapper = FrameLayout(this).apply {
             layoutParams = ViewGroup.LayoutParams(MATCH, WRAP)
             addView(rootLayout, FrameLayout.LayoutParams(MATCH, WRAP))
@@ -257,10 +296,11 @@ class MyKeyboardService : InputMethodService() {
         applyThemeToViews()
         renderSettingsPanel()
         updateSuggestions()
-        if (info != null) {
-            val caps = (info.inputType and android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES) != 0
-            if (caps && layer == Layer.ALPHA) setLayer(Layer.SHIFT)
-        }
+        userDeclinedFirstCharCap = false
+        editorSupportsFirstCharCap = shouldOfferFirstCharCapitalize(info)
+        pendingFirstCharCapitalize = editorSupportsFirstCharCap && isInputEmptyForFirstCharCap()
+        applyInitialShiftForEmptyField()
+        refreshClipboardSuggestion()
     }
 
     override fun onUpdateSelection(
@@ -282,6 +322,11 @@ class MyKeyboardService : InputMethodService() {
         if (voiceCommandUi?.shouldRouteKeysToTranscript() == true) {
             voiceCommandUi?.releaseTranscriptEditing()
         }
+        if (editorSupportsFirstCharCap && !userDeclinedFirstCharCap) {
+            val empty = isInputEmptyForFirstCharCap()
+            pendingFirstCharCapitalize = empty
+            if (empty) applyInitialShiftForEmptyField()
+        }
     }
 
     override fun onFinishInput() {
@@ -296,7 +341,12 @@ class MyKeyboardService : InputMethodService() {
         dictationAudioFile = null
         hideResult()
         hideSnackbar()
+        clipboardSelectionMode = false
+        clipboardSelectedIds.clear()
+        showClipboardSession = false
+        updateKeyboardPanelsVisibility()
         if (showSettings) toggleSettings()
+        userDeclinedFirstCharCap = false
         if (layer == Layer.EMOJI) setLayer(Layer.ALPHA)
     }
 
@@ -317,9 +367,553 @@ class MyKeyboardService : InputMethodService() {
         stopVoice()
         cancelVoiceCommandFlow()
         hideSnackbar()
+        unregisterClipboardListener()
         executor.shutdownNow()
         datamuseExecutor.shutdownNow()
         super.onDestroy()
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Clipboard suggestion (above word suggestions)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private fun buildClipboardSuggestionBar() {
+        clipboardBar = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH, WRAP)
+            visibility = View.GONE
+            setPadding(dp(12), dp(5), dp(12), dp(2))
+            setBackgroundColor(Color.TRANSPARENT)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { pasteClipboardToFocusedField() }
+        }
+        clipboardBar.addView(TextView(this).apply {
+            text = "Clipboard Suggestion"
+            textSize = 10f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(C_HINT_TEXT)
+            includeFontPadding = false
+            setPadding(0, 0, 0, 0)
+        })
+        clipboardPreview = TextView(this).apply {
+            textSize = 14f
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setTextColor(C_KEY_TEXT)
+            includeFontPadding = false
+            setPadding(0, dp(1), 0, 0)
+        }
+        clipboardBar.addView(clipboardPreview)
+        rootLayout.addView(clipboardBar, 0)
+    }
+
+    private fun buildClipboardSessionPanel() {
+        clipboardSessionPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH, dp(300))
+            visibility = View.GONE
+            setBackgroundColor(C_BG)
+        }
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(6), dp(8), dp(4))
+        }
+        clipboardBackBtn = ImageView(this).apply {
+            setImageResource(R.drawable.ic_arrow_back)
+            setColorFilter(C_KEY_TEXT, PorterDuff.Mode.SRC_IN)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            setOnClickListener { onClipboardBackPressed() }
+        }
+        clipboardSelectAllBtn = TextView(this).apply {
+            text = "All"
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(C_KEY_TEXT)
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            visibility = View.GONE
+            setOnClickListener { toggleClipboardSelectAll() }
+        }
+        clipboardTitleView = TextView(this).apply {
+            text = "Clipboard"
+            textSize = 17f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(C_KEY_TEXT)
+            layoutParams = LinearLayout.LayoutParams(0, WRAP, 1f)
+        }
+        clipboardPinBtn = ImageView(this).apply {
+            setImageResource(R.drawable.ic_pin)
+            setColorFilter(C_KEY_TEXT, PorterDuff.Mode.SRC_IN)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            setOnClickListener { onClipboardPinPressed() }
+        }
+        clipboardDeleteBtn = ImageView(this).apply {
+            setImageResource(R.drawable.ic_delete)
+            setColorFilter(C_KEY_TEXT, PorterDuff.Mode.SRC_IN)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            setOnClickListener { onClipboardDeletePressed() }
+        }
+        header.addView(clipboardBackBtn)
+        header.addView(clipboardSelectAllBtn)
+        header.addView(clipboardTitleView)
+        header.addView(clipboardPinBtn)
+        header.addView(clipboardDeleteBtn)
+
+        val scroll = ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(MATCH, 0, 1f)
+            isVerticalScrollBarEnabled = false
+        }
+        clipboardSessionContent = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(8), 0, dp(8), dp(8))
+        }
+        scroll.addView(clipboardSessionContent)
+        clipboardSessionPanel.addView(header)
+        clipboardSessionPanel.addView(scroll)
+        rootLayout.addView(clipboardSessionPanel)
+    }
+
+    private fun clipboardCardBgColor(): Int = C_KEY_LETTER
+
+    private fun clipboardCardTextColor(): Int = C_KEY_TEXT
+
+    private fun loadConsumedClipboardSignature(): String? {
+        if (consumedClipboardSignature == null) {
+            consumedClipboardSignature = prefs.getString(PREF_CONSUMED_CLIPBOARD_SIG, null)
+        }
+        return consumedClipboardSignature
+    }
+
+    private fun onClipboardBackPressed() {
+        if (clipboardSelectionMode) {
+            clipboardSelectionMode = false
+            clipboardSelectedIds.clear()
+            renderClipboardSession()
+            return
+        }
+        toggleClipboardSession(false)
+    }
+
+    private fun onClipboardDeletePressed() {
+        if (!clipboardSelectionMode || clipboardSelectedIds.isEmpty()) return
+        deleteClipboardItems(clipboardSelectedIds.toSet())
+        clipboardSelectionMode = false
+        clipboardSelectedIds.clear()
+        renderClipboardSession()
+    }
+
+    private fun onClipboardPinPressed() {
+        if (!clipboardSelectionMode || clipboardSelectedIds.isEmpty()) return
+        val list = loadClipboardHistory()
+        list.forEachIndexed { idx, item ->
+            if (clipboardSelectedIds.contains(item.id())) {
+                list[idx] = item.copy(pinned = !item.pinned)
+            }
+        }
+        val pinned = list.filter { it.pinned }
+        val unpinned = list.filter { !it.pinned }
+        saveClipboardHistory((pinned + unpinned).take(MAX_CLIPBOARD_HISTORY))
+        clipboardSelectionMode = false
+        clipboardSelectedIds.clear()
+        renderClipboardSession()
+    }
+
+    private fun toggleClipboardSelectAll() {
+        val items = loadClipboardHistory()
+        if (items.isEmpty()) return
+        val allSelected = clipboardSelectedIds.size >= items.size
+        if (allSelected) {
+            clipboardSelectionMode = false
+            clipboardSelectedIds.clear()
+        } else {
+            clipboardSelectionMode = true
+            clipboardSelectedIds.clear()
+            items.forEach { clipboardSelectedIds.add(it.id()) }
+        }
+        renderClipboardSession()
+    }
+
+    private fun updateClipboardHeaderForSelection() {
+        val items = loadClipboardHistory()
+        if (clipboardSelectionMode) {
+            clipboardSelectAllBtn.visibility = View.VISIBLE
+            val allSelected = items.isNotEmpty() && clipboardSelectedIds.size >= items.size
+            clipboardSelectAllBtn.text = if (allSelected) "✓ All" else "All"
+            clipboardTitleView.text = "${clipboardSelectedIds.size} selected"
+            clipboardPinBtn.alpha = if (clipboardSelectedIds.isEmpty()) 0.35f else 1f
+            clipboardDeleteBtn.alpha = if (clipboardSelectedIds.isEmpty()) 0.35f else 1f
+        } else {
+            clipboardSelectAllBtn.visibility = View.GONE
+            clipboardTitleView.text = "Clipboard"
+            clipboardPinBtn.alpha = 0.35f
+            clipboardDeleteBtn.alpha = 0.35f
+        }
+    }
+
+    private fun ClipboardHistoryItem.id(): String = text.hashCode().toString()
+
+    private fun deleteClipboardItems(ids: Set<String>) {
+        val list = loadClipboardHistory().filter { it.id() !in ids }
+        saveClipboardHistory(list)
+    }
+
+    private fun enterClipboardSelection(itemId: String) {
+        clipboardSelectionMode = true
+        clipboardSelectedIds.clear()
+        clipboardSelectedIds.add(itemId)
+        runCatching {
+            @Suppress("DEPRECATION")
+            (getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator)?.vibrate(20L)
+        }
+        renderClipboardSession()
+    }
+
+    private fun toggleClipboardItemSelection(itemId: String) {
+        if (clipboardSelectedIds.contains(itemId)) clipboardSelectedIds.remove(itemId)
+        else clipboardSelectedIds.add(itemId)
+        if (clipboardSelectedIds.isEmpty()) clipboardSelectionMode = false
+        renderClipboardSession()
+    }
+
+    private fun registerClipboardListener() {
+        val mgr = getSystemService(CLIPBOARD_SERVICE) as? ClipboardManager ?: return
+        if (clipboardListener != null) return
+        clipboardListener = ClipboardManager.OnPrimaryClipChangedListener {
+            mainHandler.post {
+                recordClipboardFromSystem()
+                refreshClipboardSuggestion()
+                if (showClipboardSession) renderClipboardSession()
+            }
+        }
+        mgr.addPrimaryClipChangedListener(clipboardListener!!)
+    }
+
+    private fun unregisterClipboardListener() {
+        val mgr = getSystemService(CLIPBOARD_SERVICE) as? ClipboardManager ?: return
+        clipboardListener?.let { mgr.removePrimaryClipChangedListener(it) }
+        clipboardListener = null
+    }
+
+    private fun readClipboardPlainText(): String? {
+        val mgr = getSystemService(CLIPBOARD_SERVICE) as? ClipboardManager ?: return null
+        if (!mgr.hasPrimaryClip()) return null
+        val clip = mgr.primaryClip ?: return null
+        if (clip.itemCount < 1) return null
+        val item = clip.getItemAt(0)
+        val text = item.coerceToText(this)?.toString()?.trim().orEmpty()
+        return text.ifBlank { null }
+    }
+
+    private fun clipboardSignature(text: String): String = text.hashCode().toString()
+
+    private fun loadClipboardHistory(): MutableList<ClipboardHistoryItem> {
+        val raw = prefs.getString(PREF_CLIPBOARD_HISTORY, null) ?: return mutableListOf()
+        return try {
+            val arr = JSONArray(raw)
+            val list = mutableListOf<ClipboardHistoryItem>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                val text = o.optString("text", "").trim()
+                if (text.isNotEmpty()) {
+                    list.add(ClipboardHistoryItem(text, o.optBoolean("pinned", false)))
+                }
+            }
+            list
+        } catch (_: Exception) {
+            mutableListOf()
+        }
+    }
+
+    private fun saveClipboardHistory(items: List<ClipboardHistoryItem>) {
+        val arr = JSONArray()
+        items.forEach { item ->
+            arr.put(
+                JSONObject()
+                    .put("text", item.text)
+                    .put("pinned", item.pinned),
+            )
+        }
+        prefs.edit().putString(PREF_CLIPBOARD_HISTORY, arr.toString()).apply()
+    }
+
+    private fun recordClipboardFromSystem() {
+        val text = readClipboardPlainText() ?: return
+        val list = loadClipboardHistory()
+        list.removeAll { it.text == text }
+        list.add(0, ClipboardHistoryItem(text))
+        val pinned = list.filter { it.pinned }
+        val unpinned = list.filter { !it.pinned }
+        val merged = (pinned + unpinned).take(MAX_CLIPBOARD_HISTORY)
+        saveClipboardHistory(merged)
+    }
+
+    private fun clearClipboardHistory() {
+        saveClipboardHistory(emptyList())
+    }
+
+    private fun toggleClipboardPin(item: ClipboardHistoryItem) {
+        val list = loadClipboardHistory()
+        val idx = list.indexOfFirst { it.text == item.text }
+        if (idx < 0) return
+        list[idx] = list[idx].copy(pinned = !list[idx].pinned)
+        val pinned = list.filter { it.pinned }
+        val unpinned = list.filter { !it.pinned }
+        saveClipboardHistory(pinned + unpinned)
+    }
+
+    private fun refreshClipboardSuggestion() {
+        if (!::clipboardBar.isInitialized) return
+        if (showClipboardSession || voiceCommandUi?.isActive == true) {
+            clipboardBar.visibility = View.GONE
+            return
+        }
+        val text = readClipboardPlainText()
+        clipboardClipText = text
+        if (text.isNullOrBlank()) {
+            clipboardBar.visibility = View.GONE
+            return
+        }
+        val sig = clipboardSignature(text)
+        if (sig == loadConsumedClipboardSignature()) {
+            clipboardBar.visibility = View.GONE
+            return
+        }
+        val preview = if (text.length > 140) text.take(137) + "…" else text
+        clipboardPreview.text = preview
+        clipboardBar.visibility = View.VISIBLE
+    }
+
+    private fun markClipboardConsumed(text: String) {
+        val sig = clipboardSignature(text)
+        consumedClipboardSignature = sig
+        prefs.edit().putString(PREF_CONSUMED_CLIPBOARD_SIG, sig).apply()
+        if (::clipboardBar.isInitialized) {
+            clipboardBar.visibility = View.GONE
+        }
+        clipboardClipText = null
+    }
+
+    private fun pasteClipboardText(text: String) {
+        markClipboardConsumed(text)
+        if (voiceCommandUi?.insertTranscriptText(text) == true) return
+        val ic = currentInputConnection ?: return
+        ic.commitText(text, 1)
+        pendingFirstCharCapitalize = false
+        if (layer == Layer.SHIFT) setLayer(Layer.ALPHA)
+        updateSuggestions()
+    }
+
+    private fun pasteClipboardToFocusedField() {
+        val text = clipboardClipText ?: readClipboardPlainText() ?: return
+        pasteClipboardText(text)
+    }
+
+    private fun toggleClipboardSession(show: Boolean) {
+        showClipboardSession = show
+        if (show) {
+            dismissAlternativesPopup()
+            languagePopupWindow?.dismiss()
+            if (showSettings) toggleSettings()
+            clipboardSelectionMode = false
+            clipboardSelectedIds.clear()
+            recordClipboardFromSystem()
+            renderClipboardSession()
+        }
+        updateKeyboardPanelsVisibility()
+    }
+
+    private fun renderClipboardSession() {
+        if (!::clipboardSessionContent.isInitialized) return
+        clipboardSessionContent.removeAllViews()
+        updateClipboardHeaderForSelection()
+
+        val items = loadClipboardHistory()
+        if (items.isEmpty()) {
+            clipboardSessionContent.addView(TextView(this).apply {
+                text = "Copy text to see it here"
+                textSize = 14f
+                setTextColor(C_HINT_TEXT)
+                gravity = Gravity.CENTER
+                setPadding(0, dp(32), 0, dp(32))
+            })
+            return
+        }
+
+        val pinned = items.filter { it.pinned }
+        val recent = items.filter { !it.pinned }
+        val recentVisible = if (clipboardRecentExpanded) recent else recent.take(CLIPBOARD_RECENT_COLLAPSED)
+
+        // Pinned clips always listed first (reference: pinned section on top)
+        if (pinned.isNotEmpty()) {
+            addClipboardSectionHeader(title = "Pinned", actionText = null, onAction = null)
+            addClipboardHorizontalRow(pinned)
+        }
+
+        if (recent.isNotEmpty()) {
+            addClipboardSectionHeader(
+                title = "Recent",
+                actionText = when {
+                    recent.size <= CLIPBOARD_RECENT_COLLAPSED -> null
+                    clipboardRecentExpanded -> "Show less"
+                    else -> "Show more"
+                },
+                onAction = {
+                    clipboardRecentExpanded = !clipboardRecentExpanded
+                    renderClipboardSession()
+                },
+            )
+            addClipboardHorizontalRow(recentVisible)
+        }
+    }
+
+    private fun addClipboardSectionHeader(
+        title: String,
+        actionText: String?,
+        onAction: (() -> Unit)?,
+    ) {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).also { it.topMargin = dp(8) }
+            setPadding(dp(4), dp(4), dp(4), dp(6))
+        }
+        row.addView(TextView(this).apply {
+            text = title
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(C_KEY_TEXT)
+            layoutParams = LinearLayout.LayoutParams(0, WRAP, 1f)
+        })
+        if (actionText != null && onAction != null) {
+            row.addView(TextView(this).apply {
+                text = actionText
+                textSize = 13f
+                setTextColor(C_PRIMARY)
+                setPadding(dp(8), dp(4), dp(4), dp(4))
+                setOnClickListener { onAction() }
+            })
+        }
+        clipboardSessionContent.addView(row)
+    }
+
+    private fun addClipboardHorizontalRow(items: List<ClipboardHistoryItem>) {
+        val scroll = HorizontalScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(MATCH, WRAP)
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            isFillViewport = false
+        }
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 0, dp(8), dp(4))
+        }
+        items.forEach { item -> row.addView(buildClipboardCard(item, scroll)) }
+        scroll.addView(row)
+        clipboardSessionContent.addView(scroll)
+    }
+
+    private fun buildClipboardCard(item: ClipboardHistoryItem, parentScroll: HorizontalScrollView): View {
+        val itemId = item.id()
+        val selected = clipboardSelectionMode && clipboardSelectedIds.contains(itemId)
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(dp(CLIPBOARD_CARD_WIDTH_DP), WRAP).also {
+                it.setMargins(0, 0, dp(8), 0)
+            }
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            background = roundRect(
+                if (selected) theme.popupSelectedBg else clipboardCardBgColor(),
+                dp(14),
+            ).also {
+                if (selected) it.setStroke(dp(2), C_PRIMARY)
+            }
+            minimumHeight = dp(72)
+            isClickable = true
+            isLongClickable = true
+        }
+
+        val indicatorRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH, WRAP)
+        }
+        val circle = TextView(this).apply {
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(if (selected) C_PRIMARY else C_HINT_TEXT)
+            layoutParams = LinearLayout.LayoutParams(WRAP, WRAP).also { it.setMargins(0, 0, dp(6), 0) }
+        }
+        if (clipboardSelectionMode) {
+            circle.text = if (selected) "●" else "○"
+            indicatorRow.addView(circle)
+        } else if (item.pinned) {
+            circle.text = "📌"
+            circle.textSize = 12f
+            indicatorRow.addView(circle)
+        }
+        card.addView(indicatorRow)
+
+        card.addView(TextView(this).apply {
+            text = item.text
+            textSize = 13f
+            setTextColor(clipboardCardTextColor())
+            maxLines = 8
+            ellipsize = null
+        })
+
+        val suppressClick = booleanArrayOf(false)
+        card.setOnLongClickListener {
+            suppressClick[0] = true
+            parentScroll.requestDisallowInterceptTouchEvent(true)
+            if (!clipboardSelectionMode) {
+                enterClipboardSelection(itemId)
+            } else {
+                toggleClipboardItemSelection(itemId)
+            }
+            mainHandler.postDelayed({ suppressClick[0] = false }, 350L)
+            true
+        }
+        card.setOnClickListener {
+            if (suppressClick[0]) return@setOnClickListener
+            if (clipboardSelectionMode) {
+                toggleClipboardItemSelection(itemId)
+            } else {
+                pasteClipboardText(item.text)
+                toggleClipboardSession(false)
+            }
+        }
+        return card
+    }
+
+    private fun updateKeyboardPanelsVisibility() {
+        if (!::keysContainer.isInitialized) return
+        if (showClipboardSession) {
+            if (::clipboardSessionPanel.isInitialized) clipboardSessionPanel.visibility = View.VISIBLE
+            keysContainer.visibility = View.GONE
+            emojiPanel.visibility = View.GONE
+            if (::suggestionScroll.isInitialized) suggestionScroll.visibility = View.GONE
+            if (::clipboardBar.isInitialized) clipboardBar.visibility = View.GONE
+        } else {
+            if (::clipboardSessionPanel.isInitialized) clipboardSessionPanel.visibility = View.GONE
+            if (layer == Layer.EMOJI) {
+                keysContainer.visibility = View.GONE
+                emojiPanel.visibility = View.VISIBLE
+            } else {
+                emojiPanel.visibility = View.GONE
+                keysContainer.visibility = View.VISIBLE
+            }
+            if (::suggestionScroll.isInitialized) suggestionScroll.visibility = View.VISIBLE
+            refreshClipboardSuggestion()
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -369,6 +963,8 @@ class MyKeyboardService : InputMethodService() {
         featureToolbar.addView(toolBtnIcon(R.drawable.ic_mic) { onVoicePress() })
         featureToolbar.addView(toolDivider())
         featureToolbar.addView(toolBtnIcon(R.drawable.ic_floating_menu_command) { onVoiceCommandPress() })
+        featureToolbar.addView(toolDivider())
+        featureToolbar.addView(toolBtnIcon(R.drawable.ic_clipboard) { toggleClipboardSession(true) })
         featureToolbar.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) })
         featureToolbar.addView(toolBtn("⚙") { toggleSettings() })
         rootLayout.addView(featureToolbar)
@@ -378,7 +974,7 @@ class MyKeyboardService : InputMethodService() {
         text = icon; textSize = 17f; gravity = Gravity.CENTER
         setTextColor(C_TOOLBAR_TXT); setBackgroundColor(Color.TRANSPARENT)
         typeface = Typeface.DEFAULT_BOLD
-        layoutParams = LinearLayout.LayoutParams(dp(48), dp(38))
+        layoutParams = LinearLayout.LayoutParams(dp(52), dp(40))
         setOnClickListener { action() }
     }
 
@@ -386,7 +982,7 @@ class MyKeyboardService : InputMethodService() {
         setImageResource(drawableRes)
         setColorFilter(C_TOOLBAR_TXT, PorterDuff.Mode.SRC_IN)
         scaleType = ImageView.ScaleType.CENTER_INSIDE
-        layoutParams = LinearLayout.LayoutParams(dp(48), dp(38))
+        layoutParams = LinearLayout.LayoutParams(dp(52), dp(40))
         setPadding(dp(10), dp(6), dp(10), dp(6))
         setOnClickListener { action() }
     }
@@ -680,7 +1276,7 @@ class MyKeyboardService : InputMethodService() {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(MATCH, WRAP)
             setBackgroundColor(C_BG)
-            setPadding(dp(4), dp(4), dp(4), dp(6))
+            setPadding(dp(4), dp(2), dp(4), dp(4))
         }
         rootLayout.addView(keysContainer)
         renderKeys()
@@ -694,10 +1290,10 @@ class MyKeyboardService : InputMethodService() {
         rows.forEachIndexed { rowIdx, keys ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
-                layoutParams = LinearLayout.LayoutParams(MATCH, dp(52))
+                layoutParams = LinearLayout.LayoutParams(MATCH, dp(64))
                 gravity = Gravity.CENTER
-                setPadding(if (rowIdx == 1) dp(20) else dp(2), dp(2),
-                           if (rowIdx == 1) dp(20) else dp(2), dp(2))
+                setPadding(if (rowIdx == 1) dp(10) else dp(2), dp(2),
+                           if (rowIdx == 1) dp(10) else dp(2), dp(2))
             }
             keys.forEach { logical ->
                 val display = when {
@@ -736,7 +1332,8 @@ class MyKeyboardService : InputMethodService() {
 
         val wrapper = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(0, MATCH, weight)
-                .also { it.setMargins(dp(3), dp(3), dp(3), dp(3)) }
+                .also { it.setMargins(dp(2), dp(2), dp(2), dp(2)) }
+            minimumHeight = dp(48)
         }
 
         val keyElevation = if (keyboardIsDark) dp(1).toFloat() else dp(2).toFloat()
@@ -745,7 +1342,7 @@ class MyKeyboardService : InputMethodService() {
                 background = roundRect(bgColor, dp(8)); elevation = keyElevation
                 layoutParams = FrameLayout.LayoutParams(MATCH, MATCH)
                 addView(TextView(this@MyKeyboardService).apply {
-                    text = display; textSize = 18f; gravity = Gravity.CENTER
+                    text = display; textSize = 22f; gravity = Gravity.CENTER
                     setTextColor(C_KEY_TEXT)
                     layoutParams = FrameLayout.LayoutParams(MATCH, MATCH)
                 })
@@ -764,8 +1361,8 @@ class MyKeyboardService : InputMethodService() {
                     logical in listOf("?123","ABC") -> 13f
                     logical == "EMOJI" -> 20f
                     logical in listOf("SHIFT","ENTER") -> 24f
-                    logical in listOf("BKSP") -> 18f
-                    else -> 18f
+                    logical in listOf("BKSP") -> 22f
+                    else -> 22f
                 }
                 gravity = Gravity.CENTER
                 setTextColor(if (isShiftOn) Color.WHITE else C_KEY_TEXT)
@@ -783,15 +1380,18 @@ class MyKeyboardService : InputMethodService() {
         }
         var suppressKeyOnUp = false
         var longPressTriggered = false
-        val longPressMs = ViewConfiguration.getLongPressTimeout().toLong()
+        var keyHandledOnDown = false
+        val hasAltPopup = isLetter && keyAlternatives.containsKey(logical)
+        val commitOnDown = !hasAltPopup && logical !in listOf("SHIFT", "BKSP", "ENTER", "EMOJI", "?123", "ABC")
+        val longPressMs = if (hasAltPopup) ViewConfiguration.getLongPressTimeout().toLong() else 380L
         val longPressTask = Runnable {
             longPressTriggered = true
             suppressKeyOnUp = true
+            keyHandledOnDown = true
             dismissKeyPreview(immediate = true)
             when {
                 logical == "BKSP" -> clearAllInputText()
-                isLetter && keyAlternatives.containsKey(logical) ->
-                    showAlternativesPopup(logical, wrapper)
+                hasAltPopup -> showAlternativesPopup(logical, wrapper)
             }
         }
 
@@ -801,17 +1401,25 @@ class MyKeyboardService : InputMethodService() {
                     dismissAlternativesPopup()
                     suppressKeyOnUp = false
                     longPressTriggered = false
+                    keyHandledOnDown = false
                     showKeyPreview(previewLabel, v)
                     mainHandler.removeCallbacks(longPressTask)
                     mainHandler.postDelayed(longPressTask, longPressMs)
+                    if (commitOnDown) {
+                        handleKey(logical)
+                        keyHandledOnDown = true
+                    }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
                     mainHandler.removeCallbacks(longPressTask)
                     dismissKeyPreview()
-                    if (!suppressKeyOnUp && !longPressTriggered) handleKey(logical)
+                    if (!keyHandledOnDown && !suppressKeyOnUp && !longPressTriggered) {
+                        handleKey(logical)
+                    }
                     suppressKeyOnUp = false
                     longPressTriggered = false
+                    keyHandledOnDown = false
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> {
@@ -819,6 +1427,7 @@ class MyKeyboardService : InputMethodService() {
                     dismissKeyPreview()
                     suppressKeyOnUp = false
                     longPressTriggered = false
+                    keyHandledOnDown = false
                     true
                 }
                 else -> false
@@ -1021,12 +1630,28 @@ class MyKeyboardService : InputMethodService() {
                 val sel = ic.getSelectedText(0)
                 if (!TextUtils.isEmpty(sel)) ic.commitText("", 1)
                 else ic.deleteSurroundingText(1, 0)
+                if (editorSupportsFirstCharCap && !userDeclinedFirstCharCap) {
+                    pendingFirstCharCapitalize = isInputEmptyForFirstCharCap()
+                    if (pendingFirstCharCapitalize) applyInitialShiftForEmptyField()
+                }
                 updateSuggestions()
             }
             logical == "ENTER" -> {
                 recordCompletedWordFromContext()
                 ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
                 ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP,   KeyEvent.KEYCODE_ENTER))
+            }
+            logical == "SHIFT" -> {
+                val before = layer
+                setLayer(
+                    when (layer) {
+                        Layer.ALPHA -> Layer.SHIFT
+                        Layer.SHIFT -> Layer.CAPS
+                        Layer.CAPS -> Layer.ALPHA
+                        else -> Layer.ALPHA
+                    },
+                )
+                onManualShiftLayerChange(before, layer)
             }
             logical == "," -> {
                 recordCompletedWordFromContext()
@@ -1048,10 +1673,28 @@ class MyKeyboardService : InputMethodService() {
             logical == "ABC"   -> setLayer(Layer.ALPHA)
             logical == "EMOJI" -> setLayer(Layer.EMOJI)
             else -> {
-                val out = if (layer == Layer.SHIFT || layer == Layer.CAPS) logical.uppercase() else logical
+                val shiftOn = layer == Layer.SHIFT
+                val capsOn = layer == Layer.CAPS
+                var out = if (shiftOn || capsOn) logical.uppercase() else logical
+                if (logical.length == 1 && logical[0].isLetter()) {
+                    val applyAutoFirstCap = pendingFirstCharCapitalize &&
+                        editorSupportsFirstCharCap &&
+                        !userDeclinedFirstCharCap &&
+                        (layer == Layer.SHIFT || layer == Layer.CAPS)
+                    if (applyAutoFirstCap) {
+                        out = out.uppercase()
+                        if (layer == Layer.SHIFT) setLayer(Layer.ALPHA)
+                    }
+                    if (pendingFirstCharCapitalize) {
+                        pendingFirstCharCapitalize = false
+                    }
+                }
                 ic.commitText(out, 1)
-                if (layer == Layer.SHIFT) setLayer(Layer.ALPHA)
-                checkAutoCap()
+                if (layer == Layer.SHIFT && logical !in listOf("BKSP", "space", "ENTER") &&
+                    logical.length == 1 && !pendingFirstCharCapitalize
+                ) {
+                    setLayer(Layer.ALPHA)
+                }
                 updateSuggestions()
             }
         }
@@ -1059,14 +1702,11 @@ class MyKeyboardService : InputMethodService() {
 
     private fun setLayer(l: Layer) {
         layer = l
-        if (l == Layer.EMOJI) {
-            keysContainer.visibility = View.GONE
-            emojiPanel.visibility = View.VISIBLE
-        } else {
-            emojiPanel.visibility = View.GONE
-            keysContainer.visibility = View.VISIBLE
-            renderKeys()
+        if (l != Layer.EMOJI) {
+            showClipboardSession = false
         }
+        renderKeys()
+        updateKeyboardPanelsVisibility()
     }
 
     private fun toggleSettings() {
@@ -1074,11 +1714,51 @@ class MyKeyboardService : InputMethodService() {
         settingsPanel.visibility = if (showSettings) View.VISIBLE else View.GONE
     }
 
-    private fun checkAutoCap() {
-        if (layer != Layer.ALPHA) return
-        val ic = currentInputConnection ?: return
-        val before = ic.getTextBeforeCursor(3, 0)?.toString() ?: return
-        if (before.length >= 2 && before.takeLast(2) in listOf(". ", "! ", "? ")) setLayer(Layer.SHIFT)
+    private fun shouldOfferFirstCharCapitalize(info: EditorInfo?): Boolean {
+        if (info == null) return false
+        val variation = info.inputType and android.text.InputType.TYPE_MASK_VARIATION
+        if (
+            variation == android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD ||
+            variation == android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
+            variation == android.text.InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
+        ) {
+            return false
+        }
+        val typeClass = info.inputType and android.text.InputType.TYPE_MASK_CLASS
+        if (typeClass != android.text.InputType.TYPE_CLASS_TEXT) return false
+        return (info.inputType and android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES) != 0
+    }
+
+    private fun applyInitialShiftForEmptyField() {
+        if (!editorSupportsFirstCharCap || !pendingFirstCharCapitalize || userDeclinedFirstCharCap) return
+        if (!isInputEmptyForFirstCharCap()) return
+        if (showClipboardSession || layer == Layer.EMOJI || layer == Layer.SYMBOLS) return
+        if (layer == Layer.ALPHA) setLayer(Layer.SHIFT)
+    }
+
+    /** Sync auto-capitalize state when the user toggles Shift (UI and behavior must match). */
+    private fun onManualShiftLayerChange(before: Layer, after: Layer) {
+        if (!editorSupportsFirstCharCap) return
+        if (after == Layer.ALPHA && before != Layer.ALPHA) {
+            userDeclinedFirstCharCap = true
+            pendingFirstCharCapitalize = false
+            return
+        }
+        if (
+            (after == Layer.SHIFT || after == Layer.CAPS) &&
+            before == Layer.ALPHA &&
+            userDeclinedFirstCharCap &&
+            isInputEmptyForFirstCharCap()
+        ) {
+            userDeclinedFirstCharCap = false
+            pendingFirstCharCapitalize = true
+        }
+    }
+
+    private fun isInputEmptyForFirstCharCap(): Boolean {
+        val ic = currentInputConnection ?: return true
+        val before = ic.getTextBeforeCursor(512, 0)?.toString().orEmpty()
+        return before.isEmpty()
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1313,7 +1993,6 @@ class MyKeyboardService : InputMethodService() {
         currentPartialWord = ""
         suggestionsRequestSeq++
         renderSuggestionChips(emptyList(), loading = false)
-        checkAutoCap()
     }
 
     private fun resolveKeyboardIsDark(): Boolean {
@@ -1332,6 +2011,23 @@ class MyKeyboardService : InputMethodService() {
         theme = KeyboardTheme.fromIsDark(keyboardIsDark)
         if (!::rootLayout.isInitialized) return
         rootLayout.setBackgroundColor(C_BG)
+        if (::clipboardBar.isInitialized) {
+            clipboardBar.setBackgroundColor(Color.TRANSPARENT)
+            (clipboardBar.getChildAt(0) as? TextView)?.setTextColor(C_HINT_TEXT)
+            clipboardPreview.setTextColor(C_KEY_TEXT)
+        }
+        if (::clipboardSessionPanel.isInitialized) {
+            clipboardSessionPanel.setBackgroundColor(C_BG)
+            clipboardBackBtn.setColorFilter(C_KEY_TEXT, PorterDuff.Mode.SRC_IN)
+            clipboardDeleteBtn.setColorFilter(C_KEY_TEXT, PorterDuff.Mode.SRC_IN)
+            clipboardPinBtn.setColorFilter(C_KEY_TEXT, PorterDuff.Mode.SRC_IN)
+            clipboardTitleView.setTextColor(C_KEY_TEXT)
+            clipboardSelectAllBtn.setTextColor(C_KEY_TEXT)
+            if (showClipboardSession) {
+                updateClipboardHeaderForSelection()
+                renderClipboardSession()
+            }
+        }
         if (::suggestionScroll.isInitialized) suggestionScroll.setBackgroundColor(C_SUGGESTION)
         if (::suggestionToolbarDivider.isInitialized) {
             suggestionToolbarDivider.setBackgroundColor(theme.suggestionDivider)
@@ -1788,9 +2484,13 @@ class MyKeyboardService : InputMethodService() {
 
         dismissVoiceCommandPanel()
         showSnackbar(voiceCommandSuccessMessage(payload))
+        refreshClipboardSuggestion()
 
         if (::rootLayout.isInitialized) {
-            rootLayout.post { dismissVoiceCommandPanel() }
+            rootLayout.post {
+                dismissVoiceCommandPanel()
+                refreshClipboardSuggestion()
+            }
         }
     }
 
@@ -1804,6 +2504,7 @@ class MyKeyboardService : InputMethodService() {
             }
         }
         rootLayout.requestLayout()
+        refreshClipboardSuggestion()
     }
 
     private fun cancelVoiceCommandFlow() {
