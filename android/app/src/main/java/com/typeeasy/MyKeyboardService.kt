@@ -889,6 +889,7 @@ class MyKeyboardService : InputMethodService() {
         val ic = currentInputConnection ?: return
         when {
             logical == "space" -> {
+                recordCompletedWordFromContext()
                 ic.commitText(" ", 1)
                 if (layer == Layer.SHIFT) setLayer(Layer.ALPHA)
                 updateSuggestions()
@@ -900,8 +901,19 @@ class MyKeyboardService : InputMethodService() {
                 updateSuggestions()
             }
             logical == "ENTER" -> {
+                recordCompletedWordFromContext()
                 ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
                 ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP,   KeyEvent.KEYCODE_ENTER))
+            }
+            logical == "," -> {
+                recordCompletedWordFromContext()
+                ic.commitText(",", 1)
+                updateSuggestions()
+            }
+            logical == "." -> {
+                recordCompletedWordFromContext()
+                ic.commitText(".", 1)
+                updateSuggestions()
             }
             logical == "SHIFT" -> setLayer(when (layer) {
                 Layer.ALPHA -> Layer.SHIFT
@@ -984,32 +996,77 @@ class MyKeyboardService : InputMethodService() {
 
     private fun fetchDatamuseSuggestions(query: String, seq: Long) {
         datamuseExecutor.execute {
-            val words = try {
+            val local = KeyboardSuggestionLexicon.suggestions(query, 8)
+            val recent = KeyboardRecentWords.suggestions(this@MyKeyboardService, query, 8)
+            val remote = try {
                 val encoded = URLEncoder.encode(query, "UTF-8")
-                val url = URL("https://api.datamuse.com/sug?s=$encoded&max=8")
-                val conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = "GET"
-                conn.connectTimeout = 8_000
-                conn.readTimeout = 8_000
-                conn.setRequestProperty("Accept", "application/json")
-                val code = conn.responseCode
-                val body = if (code in 200..299) {
-                    conn.inputStream.bufferedReader(Charsets.UTF_8).readText()
-                } else {
-                    ""
-                }
-                conn.disconnect()
-                parseDatamuseWords(body)
+                val merged = ArrayList<String>()
+                merged.addAll(fetchDatamuseUrl("https://api.datamuse.com/sug?s=$encoded&max=8"))
+                merged.addAll(fetchDatamuseUrl("https://api.datamuse.com/words?sp=$encoded*&max=8"))
+                merged.addAll(fetchDatamuseUrl("https://api.datamuse.com/words?sp=$encoded&max=8"))
+                merged
             } catch (e: Exception) {
                 android.util.Log.w("TypeEasyKB", "Datamuse: ${e.message}")
                 emptyList()
             }
+            val words = mergeSuggestionWords(recent, local, remote, query, 8)
             mainHandler.post {
                 if (seq != suggestionsRequestSeq) return@post
                 currentPartialWord = query
                 isFetchingSuggestions = false
                 renderSuggestionChips(words, loading = false)
             }
+        }
+    }
+
+    private fun fetchDatamuseUrl(urlString: String): List<String> {
+        val conn = URL(urlString).openConnection() as HttpURLConnection
+        conn.requestMethod = "GET"
+        conn.connectTimeout = 8_000
+        conn.readTimeout = 8_000
+        conn.setRequestProperty("Accept", "application/json")
+        val body = if (conn.responseCode in 200..299) {
+            conn.inputStream.bufferedReader(Charsets.UTF_8).readText()
+        } else {
+            ""
+        }
+        conn.disconnect()
+        return parseDatamuseWords(body)
+    }
+
+    private fun mergeSuggestionWords(
+        recent: List<String>,
+        local: List<String>,
+        remote: List<String>,
+        query: String,
+        max: Int,
+    ): List<String> {
+        val q = query.lowercase()
+        val seen = LinkedHashSet<String>()
+        val out = ArrayList<String>(max)
+        fun push(word: String) {
+            val key = word.trim().lowercase()
+            if (key.isEmpty() || !seen.add(key)) return
+            out.add(word)
+        }
+        recent.forEach { push(it) }
+        local.forEach { push(it) }
+        remote.sortedWith(compareBy { rankSuggestionWord(it, q) }).forEach { push(it) }
+        return out.take(max)
+    }
+
+    private fun recordCompletedWordFromContext() {
+        val word = getCurrentPartialWord() ?: return
+        if (word.length < 2) return
+        KeyboardRecentWords.record(this, word)
+    }
+
+    private fun rankSuggestionWord(word: String, query: String): Int {
+        val w = word.lowercase()
+        return when {
+            w.startsWith(query) -> 0
+            w.contains(query) -> 1
+            else -> 2
         }
     }
 
@@ -1129,6 +1186,7 @@ class MyKeyboardService : InputMethodService() {
         val ic = currentInputConnection ?: return
         if (partialLen > 0) ic.deleteSurroundingText(partialLen, 0)
         ic.commitText("$word ", 1)
+        KeyboardRecentWords.record(this, word)
         currentPartialWord = ""
         suggestionsRequestSeq++
         renderSuggestionChips(emptyList(), loading = false)

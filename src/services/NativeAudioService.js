@@ -65,12 +65,28 @@ class NativeAudioService {
   async requestAudioPermission() {
     if (Platform.OS === 'ios') {
       const perm = PERMISSIONS.IOS.MICROPHONE;
-      const current = await check(perm);
+      let current = await check(perm);
       if (current === RESULTS.GRANTED || current === RESULTS.LIMITED) {
         return true;
       }
-      const next = await request(perm);
-      return next === RESULTS.GRANTED || next === RESULTS.LIMITED;
+      if (current === RESULTS.DENIED) {
+        const next = await request(perm);
+        current = next;
+      }
+      if (current === RESULTS.GRANTED || current === RESULTS.LIMITED) {
+        return true;
+      }
+      if (current === RESULTS.BLOCKED) {
+        Alert.alert(
+          'Microphone access required',
+          'Enable microphone for Type Easy in Settings to record voice commands.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings().catch(() => {}) },
+          ],
+        );
+      }
+      return false;
     }
     return true;
   }

@@ -27,6 +27,10 @@
 		KB0100431A68108700A75B9A /* KeyboardHostLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100421A68108700A75B9A /* KeyboardHostLink.swift */; };
 		KB0100441A68108700A75B9A /* KeyboardLanguages.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100451A68108700A75B9A /* KeyboardLanguages.swift */; };
 		KB0100461A68108700A75B9A /* KeyboardEmojiData.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100471A68108700A75B9A /* KeyboardEmojiData.swift */; };
+		KB0100481A68108700A75B9A /* KeyboardDatamuseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100491A68108700A75B9A /* KeyboardDatamuseClient.swift */; };
+		KB01004A1A68108700A75B9A /* KeyboardSuggestionLexicon.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB01004B1A68108700A75B9A /* KeyboardSuggestionLexicon.swift */; };
+		KB01004C1A68108700A75B9A /* KeyboardRecentWordsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB01004D1A68108700A75B9A /* KeyboardRecentWordsStore.swift */; };
+		KB01004E1A68108700A75B9A /* KeyboardSuggestionMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB01004F1A68108700A75B9A /* KeyboardSuggestionMatcher.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -81,6 +85,10 @@
 		KB0100421A68108700A75B9A /* KeyboardHostLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardHostLink.swift; path = Shared/KeyboardHostLink.swift; sourceTree = "<group>"; };
 		KB0100451A68108700A75B9A /* KeyboardLanguages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardLanguages.swift; path = Shared/KeyboardLanguages.swift; sourceTree = "<group>"; };
 		KB0100471A68108700A75B9A /* KeyboardEmojiData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardEmojiData.swift; path = Shared/KeyboardEmojiData.swift; sourceTree = "<group>"; };
+		KB0100491A68108700A75B9A /* KeyboardDatamuseClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardDatamuseClient.swift; path = Shared/KeyboardDatamuseClient.swift; sourceTree = "<group>"; };
+		KB01004B1A68108700A75B9A /* KeyboardSuggestionLexicon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardSuggestionLexicon.swift; path = Shared/KeyboardSuggestionLexicon.swift; sourceTree = "<group>"; };
+		KB01004D1A68108700A75B9A /* KeyboardRecentWordsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardRecentWordsStore.swift; path = Shared/KeyboardRecentWordsStore.swift; sourceTree = "<group>"; };
+		KB01004F1A68108700A75B9A /* KeyboardSuggestionMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardSuggestionMatcher.swift; path = Shared/KeyboardSuggestionMatcher.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -180,6 +188,10 @@
 				KB0100421A68108700A75B9A /* KeyboardHostLink.swift */,
 				KB0100451A68108700A75B9A /* KeyboardLanguages.swift */,
 				KB0100471A68108700A75B9A /* KeyboardEmojiData.swift */,
+				KB0100491A68108700A75B9A /* KeyboardDatamuseClient.swift */,
+				KB01004B1A68108700A75B9A /* KeyboardSuggestionLexicon.swift */,
+				KB01004D1A68108700A75B9A /* KeyboardRecentWordsStore.swift */,
+				KB01004F1A68108700A75B9A /* KeyboardSuggestionMatcher.swift */,
 			);
 			name = Shared;
 			sourceTree = "<group>";
@@ -398,6 +410,10 @@
 				KB0100431A68108700A75B9A /* KeyboardHostLink.swift in Sources */,
 				KB0100441A68108700A75B9A /* KeyboardLanguages.swift in Sources */,
 				KB0100461A68108700A75B9A /* KeyboardEmojiData.swift in Sources */,
+				KB0100481A68108700A75B9A /* KeyboardDatamuseClient.swift in Sources */,
+				KB01004A1A68108700A75B9A /* KeyboardSuggestionLexicon.swift in Sources */,
+				KB01004C1A68108700A75B9A /* KeyboardRecentWordsStore.swift in Sources */,
+				KB01004E1A68108700A75B9A /* KeyboardSuggestionMatcher.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -15,10 +15,13 @@ import { useTheme } from '../../context/ThemeContext';
 import { TIME_LABELS, USER } from '../../constants';
 import VoiceRecorderScreen from '../VoiceRecorder/VoiceRecorderScreen';
 import { useAuth } from '../../context/AuthContext';
+import { useAlert } from '../../context/AlertContext';
+import NativeAudioService from '../../services/NativeAudioService';
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
   const { colors } = useTheme();
+  const showAlert = useAlert();
   const styles = useMemo(() => createHomeStyles(colors), [colors]);
   const [refreshing, setRefreshing] = useState(false);
   const voiceCommandRef = useRef(null);
@@ -38,6 +41,36 @@ const HomeScreen = ({ navigation }) => {
     homeStartRef.current = null;
     setHomeElapsedMs(0);
   }, []);
+
+  const startHomeVoiceCommand = useCallback(async () => {
+    if (homeRecording) return;
+    if (!NativeAudioService.isNativeRecorderAvailable()) {
+      showAlert(
+        'Recording unavailable',
+        'Rebuild the iOS app so audio recording is included:\nnpx expo run:ios --device',
+      );
+      return;
+    }
+    if (!voiceCommandRef.current?.startRecording) {
+      showAlert('Recording unavailable', 'Voice recorder is still loading. Try again in a moment.');
+      return;
+    }
+    const ok = await voiceCommandRef.current.startRecording();
+    if (ok) {
+      setHomeRecording(true);
+      homeStartRef.current = Date.now();
+      homeTimerRef.current = setInterval(() => {
+        if (!homeStartRef.current) return;
+        setHomeElapsedMs(Date.now() - homeStartRef.current);
+      }, 200);
+    }
+  }, [homeRecording, showAlert]);
+
+  const stopHomeVoiceCommand = useCallback(async () => {
+    stopHomeTimer();
+    setHomeRecording(false);
+    await voiceCommandRef.current?.stopRecording?.();
+  }, [stopHomeTimer]);
 
   useEffect(() => {
     return () => {
@@ -82,18 +115,7 @@ const HomeScreen = ({ navigation }) => {
             </View>
             <TouchableOpacity
               style={styles.micOrb}
-            onPress={async () => {
-              if (homeRecording) return;
-              const ok = await voiceCommandRef.current?.startRecording?.();
-              if (ok) {
-                setHomeRecording(true);
-                homeStartRef.current = Date.now();
-                homeTimerRef.current = setInterval(() => {
-                  if (!homeStartRef.current) return;
-                  setHomeElapsedMs(Date.now() - homeStartRef.current);
-                }, 200);
-              }
-            }}
+              onPress={startHomeVoiceCommand}
               activeOpacity={0.9}
             >
               <Mic size={22} color="#FFFFFF" strokeWidth={2.2} />
@@ -103,17 +125,7 @@ const HomeScreen = ({ navigation }) => {
           {!homeRecording ? (
             <TouchableOpacity
               style={styles.ctaBtn}
-              onPress={async () => {
-                const ok = await voiceCommandRef.current?.startRecording?.();
-                if (ok) {
-                  setHomeRecording(true);
-                  homeStartRef.current = Date.now();
-                  homeTimerRef.current = setInterval(() => {
-                    if (!homeStartRef.current) return;
-                    setHomeElapsedMs(Date.now() - homeStartRef.current);
-                  }, 200);
-                }
-              }}
+              onPress={startHomeVoiceCommand}
               activeOpacity={0.9}
             >
               <View style={styles.ctaIconBadge}>
@@ -133,18 +145,19 @@ const HomeScreen = ({ navigation }) => {
           {homeRecording ? (
             <TouchableOpacity
               style={styles.stopBtnHome}
-              onPress={async () => {
-                setHomeRecording(false);
-                stopHomeTimer();
-                await voiceCommandRef.current?.stopRecording?.();
-              }}
+              onPress={stopHomeVoiceCommand}
               activeOpacity={0.9}
             >
               <Text style={styles.stopBtnHomeText}>Stop</Text>
             </TouchableOpacity>
           ) : null}
 
-          <VoiceRecorderScreen ref={voiceCommandRef} navigation={navigation} embedded homeEmbedded />
+          <VoiceRecorderScreen
+            ref={voiceCommandRef}
+            navigation={navigation}
+            embedded
+            homeEmbedded
+          />
         </View>
       </ScrollView>
     </ScreenContainer>

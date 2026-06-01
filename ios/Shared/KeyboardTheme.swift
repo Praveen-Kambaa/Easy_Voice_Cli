@@ -9,6 +9,9 @@ enum KeyboardTheme {
   static let keyLetterBackground = UIColor.white
   static let keyActionBackground = UIColor(red: 0xC5 / 255.0, green: 0xCA / 255.0, blue: 0xE9 / 255.0, alpha: 1)
   static let keyText = UIColor(red: 0x21 / 255.0, green: 0x21 / 255.0, blue: 0x21 / 255.0, alpha: 1)
+  static let suggestionBackground = UIColor(red: 0xD1 / 255.0, green: 0xD9 / 255.0, blue: 0xE6 / 255.0, alpha: 1)
+  static let suggestionDivider = UIColor(red: 0x9C / 255.0, green: 0xA3 / 255.0, blue: 0xAF / 255.0, alpha: 1)
+  static let hintText = UIColor(red: 0x75 / 255.0, green: 0x75 / 255.0, blue: 0x75 / 255.0, alpha: 1)
 
   static let translateIcon = "文A"
   static let grammarIcon = "A✓"

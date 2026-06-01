@@ -19,6 +19,7 @@ import {
   TextInput,
   Clipboard,
   NativeModules,
+  Platform,
 } from 'react-native';
 import {
   Mic,
@@ -152,7 +153,16 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
   );
 
   const handleStart = useCallback(async () => {
-    if (isRecording) return;
+    if (isRecording) return false;
+    if (!NativeAudioService.isNativeRecorderAvailable()) {
+      showAlert(
+        'Recording unavailable',
+        Platform.OS === 'ios'
+          ? 'Audio recording native module is missing. Rebuild the app from Xcode (npx expo run:ios --device).'
+          : 'Audio recorder native module is not available.',
+      );
+      return false;
+    }
     setTranscript(null);
     setTranscriptError(null);
     const result = await NativeAudioService.startRecording();
@@ -166,20 +176,10 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
         label: 'Recording started',
       });
       return true;
-    } else {
-      showAlert('Recording Error', result.error || 'Failed to start recording');
-      return false;
     }
+    showAlert('Recording Error', result.error || 'Failed to start recording');
+    return false;
   }, [showAlert, isRecording]);
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      startRecording: handleStart,
-      stopRecording: handleStop,
-    }),
-    [handleStart],
-  );
 
   const handleStop = async () => {
     if (!isRecording) return;
@@ -203,6 +203,15 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
     });
     await handleTranscription(result.filePath, result.recordingData);
   };
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      startRecording: handleStart,
+      stopRecording: handleStop,
+    }),
+    [handleStart],
+  );
 
   const handlePlayPause = async () => {
     const path = lastRecording?.filePath || filePath;

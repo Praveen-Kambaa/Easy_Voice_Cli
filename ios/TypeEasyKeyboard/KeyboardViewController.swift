@@ -37,6 +37,13 @@ class KeyboardViewController: UIInputViewController {
   private var languagePickerIsFrom = true
   private var isLanguagePickerVisible = false
 
+  private let suggestionScroll = UIScrollView()
+  private let suggestionRow = UIStackView()
+  private let suggestionDivider = UIView()
+  private var suggestionDebounceTimer: Timer?
+  private var suggestionsRequestSeq: UInt64 = 0
+  private var currentPartialWord = ""
+
   private let alphaRows: [[String]] = [
     ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
     ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
@@ -47,6 +54,7 @@ class KeyboardViewController: UIInputViewController {
   override func viewDidLoad() {
     super.viewDidLoad()
     view.backgroundColor = KeyboardTheme.keyboardBackground
+    setupSuggestionRow()
     setupToolbar()
     setupPanelsStack()
     setupSettingsPanel()
@@ -60,15 +68,56 @@ class KeyboardViewController: UIInputViewController {
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
     reloadLanguagesFromSharedConfig()
+    updateSuggestions()
   }
 
   override func viewWillDisappear(_ animated: Bool) {
     super.viewWillDisappear(animated)
     stopVoice()
+    suggestionDebounceTimer?.invalidate()
+    suggestionDebounceTimer = nil
   }
 
   deinit {
     dictationPollTimer?.invalidate()
+    suggestionDebounceTimer?.invalidate()
+  }
+
+  private func setupSuggestionRow() {
+    suggestionScroll.translatesAutoresizingMaskIntoConstraints = false
+    suggestionScroll.backgroundColor = KeyboardTheme.suggestionBackground
+    suggestionScroll.showsHorizontalScrollIndicator = false
+    suggestionScroll.alwaysBounceHorizontal = true
+
+    suggestionRow.axis = .horizontal
+    suggestionRow.alignment = .center
+    suggestionRow.spacing = 0
+    suggestionRow.translatesAutoresizingMaskIntoConstraints = false
+    suggestionScroll.addSubview(suggestionRow)
+
+    suggestionDivider.backgroundColor = KeyboardTheme.suggestionDivider
+    suggestionDivider.translatesAutoresizingMaskIntoConstraints = false
+
+    view.addSubview(suggestionScroll)
+    view.addSubview(suggestionDivider)
+
+    NSLayoutConstraint.activate([
+      suggestionScroll.topAnchor.constraint(equalTo: view.topAnchor),
+      suggestionScroll.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      suggestionScroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      suggestionScroll.heightAnchor.constraint(equalToConstant: 38),
+
+      suggestionRow.leadingAnchor.constraint(equalTo: suggestionScroll.contentLayoutGuide.leadingAnchor, constant: 12),
+      suggestionRow.trailingAnchor.constraint(equalTo: suggestionScroll.contentLayoutGuide.trailingAnchor, constant: -12),
+      suggestionRow.topAnchor.constraint(equalTo: suggestionScroll.contentLayoutGuide.topAnchor),
+      suggestionRow.bottomAnchor.constraint(equalTo: suggestionScroll.contentLayoutGuide.bottomAnchor),
+      suggestionRow.heightAnchor.constraint(equalTo: suggestionScroll.frameLayoutGuide.heightAnchor),
+
+      suggestionDivider.topAnchor.constraint(equalTo: suggestionScroll.bottomAnchor),
+      suggestionDivider.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      suggestionDivider.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      suggestionDivider.heightAnchor.constraint(equalToConstant: 1),
+    ])
   }
 
   private func setupToolbar() {
@@ -106,7 +155,7 @@ class KeyboardViewController: UIInputViewController {
 
     view.addSubview(toolbar)
     NSLayoutConstraint.activate([
-      toolbar.topAnchor.constraint(equalTo: view.topAnchor),
+      toolbar.topAnchor.constraint(equalTo: suggestionDivider.bottomAnchor),
       toolbar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       toolbar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
       toolbar.heightAnchor.constraint(equalToConstant: 46),
@@ -462,12 +511,17 @@ class KeyboardViewController: UIInputViewController {
     guard let proxy = textDocumentProxy as UITextDocumentProxy? else { return }
     switch key {
     case "space":
+      recordCompletedWordFromContext()
       proxy.insertText(" ")
       if isShifted { isShifted = false; renderKeys() }
     case "⌫":
       proxy.deleteBackward()
     case "↵":
+      recordCompletedWordFromContext()
       proxy.insertText("\n")
+    case ".":
+      recordCompletedWordFromContext()
+      proxy.insertText(".")
     case "⇧":
       isShifted.toggle()
       renderKeys()
@@ -483,6 +537,112 @@ class KeyboardViewController: UIInputViewController {
         }
       }
     }
+    updateSuggestions()
+  }
+
+  // MARK: - Word suggestions (Datamuse)
+
+  private func recordCompletedWordFromContext() {
+    guard let word = partialWordFromContext(), word.count >= 2 else { return }
+    KeyboardRecentWordsStore.record(word)
+  }
+
+  private func partialWordFromContext() -> String? {
+    guard let before = textDocumentProxy.documentContextBeforeInput, !before.isEmpty else {
+      return nil
+    }
+    let tail = String(before.suffix(40))
+    guard let match = tail.range(of: "[A-Za-z']+$", options: .regularExpression) else {
+      return nil
+    }
+    return String(tail[match])
+  }
+
+  private func updateSuggestions() {
+    guard !isEmojiMode else {
+      renderSuggestionChips(words: [], loading: false)
+      return
+    }
+    let partial = partialWordFromContext()?.lowercased() ?? ""
+    if partial.isEmpty {
+      currentPartialWord = ""
+      renderSuggestionChips(words: [], loading: false)
+      return
+    }
+    scheduleDatamuseFetch(query: partial)
+  }
+
+  private func scheduleDatamuseFetch(query: String) {
+    suggestionDebounceTimer?.invalidate()
+    guard !query.isEmpty else {
+      currentPartialWord = ""
+      renderSuggestionChips(words: [], loading: false)
+      return
+    }
+    renderSuggestionChips(words: [], loading: true)
+    let seq = suggestionsRequestSeq + 1
+    suggestionsRequestSeq = seq
+    suggestionDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.28, repeats: false) { [weak self] _ in
+      self?.fetchDatamuseSuggestions(query: query, seq: seq)
+    }
+  }
+
+  private func fetchDatamuseSuggestions(query: String, seq: UInt64) {
+    Task { [weak self] in
+      let words = await KeyboardDatamuseClient.fetchSuggestions(query: query)
+      await MainActor.run {
+        guard let self, seq == self.suggestionsRequestSeq else { return }
+        self.currentPartialWord = query
+        self.renderSuggestionChips(words: words, loading: false)
+      }
+    }
+  }
+
+  private func renderSuggestionChips(words: [String], loading: Bool) {
+    suggestionRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
+    if loading {
+      let label = UILabel()
+      label.text = "…"
+      label.font = .systemFont(ofSize: 15)
+      label.textColor = KeyboardTheme.hintText
+      suggestionRow.addArrangedSubview(label)
+      return
+    }
+    if words.isEmpty { return }
+
+    let partialLen = currentPartialWord.count
+    for (index, word) in words.enumerated() {
+      if index > 0 {
+        let dot = UILabel()
+        dot.text = "·"
+        dot.font = .systemFont(ofSize: 15)
+        dot.textColor = KeyboardTheme.hintText
+        suggestionRow.addArrangedSubview(dot)
+      }
+      let chip = UIButton(type: .system)
+      chip.setTitle(word, for: .normal)
+      chip.titleLabel?.font = index == 0 ? .boldSystemFont(ofSize: 15) : .systemFont(ofSize: 15)
+      chip.setTitleColor(index == 0 ? KeyboardTheme.primary : KeyboardTheme.keyText, for: .normal)
+      chip.contentEdgeInsets = UIEdgeInsets(top: 2, left: 4, bottom: 2, right: 4)
+      chip.addAction(UIAction { [weak self] _ in
+        self?.applySuggestionWord(word, partialLength: partialLen)
+      }, for: .touchUpInside)
+      suggestionRow.addArrangedSubview(chip)
+    }
+  }
+
+  private func applySuggestionWord(_ word: String, partialLength: Int) {
+    if partialLength > 0 {
+      for _ in 0..<partialLength {
+        textDocumentProxy.deleteBackward()
+      }
+    }
+    textDocumentProxy.insertText(word + " ")
+    KeyboardRecentWordsStore.record(word)
+    currentPartialWord = ""
+    suggestionsRequestSeq += 1
+    renderSuggestionChips(words: [], loading: false)
+    updateSuggestions()
   }
 
   @objc private func onTranslate() {
@@ -743,6 +903,7 @@ class KeyboardViewController: UIInputViewController {
     isEmojiMode = false
     keysStack.isHidden = false
     emojiPanel.isHidden = true
+    updateSuggestions()
   }
 
   @objc private func emojiTabTapped(_ sender: UIButton) {
@@ -772,6 +933,7 @@ class KeyboardViewController: UIInputViewController {
       btn.titleLabel?.font = .systemFont(ofSize: 22)
       btn.addAction(UIAction { [weak self] _ in
         self?.textDocumentProxy.insertText(emoji)
+        self?.updateSuggestions()
       }, for: .touchUpInside)
       row?.addArrangedSubview(btn)
     }

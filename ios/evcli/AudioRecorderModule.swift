@@ -12,6 +12,10 @@ class AudioRecorderModule: RCTEventEmitter, AVAudioPlayerDelegate {
   private var isRecording = false
   private var isPlaying = false
 
+  override static func moduleName() -> String! {
+    "AudioRecorderModule"
+  }
+
   override static func requiresMainQueueSetup() -> Bool {
     true
   }
@@ -19,6 +23,10 @@ class AudioRecorderModule: RCTEventEmitter, AVAudioPlayerDelegate {
   override func supportedEvents() -> [String]! {
     ["onPlaybackComplete"]
   }
+
+  /// Required stubs so RN can subscribe to `onPlaybackComplete` (New Architecture / EventEmitter).
+  @objc override func addListener(_ eventName: String!) {}
+  @objc override func removeListeners(_ count: Double) {}
 
   private func recordingsDirectory() throws -> URL {
     let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -30,11 +38,15 @@ class AudioRecorderModule: RCTEventEmitter, AVAudioPlayerDelegate {
   private func activateSession(playAndRecord: Bool) throws {
     let session = AVAudioSession.sharedInstance()
     if playAndRecord {
-      try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
+      try session.setCategory(
+        .playAndRecord,
+        mode: .default,
+        options: [.defaultToSpeaker, .allowBluetooth]
+      )
     } else {
       try session.setCategory(.playback, mode: .default, options: [.defaultToSpeaker])
     }
-    try session.setActive(true)
+    try session.setActive(true, options: [])
   }
 
   private func normalizePath(_ filePath: String) -> String {
@@ -45,6 +57,38 @@ class AudioRecorderModule: RCTEventEmitter, AVAudioPlayerDelegate {
     return path
   }
 
+  private func requestMicrophonePermission(_ completion: @escaping (Bool) -> Void) {
+    let session = AVAudioSession.sharedInstance()
+    if #available(iOS 17.0, *) {
+      switch AVAudioApplication.shared.recordPermission {
+      case .granted:
+        completion(true)
+      case .denied:
+        completion(false)
+      case .undetermined:
+        AVAudioApplication.requestRecordPermission { granted in
+          DispatchQueue.main.async { completion(granted) }
+        }
+      @unknown default:
+        completion(false)
+      }
+      return
+    }
+
+    switch session.recordPermission {
+    case .granted:
+      completion(true)
+    case .denied:
+      completion(false)
+    case .undetermined:
+      session.requestRecordPermission { granted in
+        DispatchQueue.main.async { completion(granted) }
+      }
+    @unknown default:
+      completion(false)
+    }
+  }
+
   @objc
   func startRecording(
     _ fileName: String,
@@ -52,21 +96,26 @@ class AudioRecorderModule: RCTEventEmitter, AVAudioPlayerDelegate {
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
     if isRecording {
-      reject("ALREADY_RECORDING", "Recording is already in progress", nil)
+      DispatchQueue.main.async {
+        reject("ALREADY_RECORDING", "Recording is already in progress", nil)
+      }
       return
     }
 
-    AVAudioSession.sharedInstance().requestRecordPermission { [weak self] granted in
+    requestMicrophonePermission { [weak self] granted in
       guard let self else { return }
-      if !granted {
-        reject("PERMISSION_DENIED", "Microphone permission denied", nil)
-        return
-      }
-
       DispatchQueue.main.async {
+        if !granted {
+          reject("PERMISSION_DENIED", "Microphone permission denied", nil)
+          return
+        }
+
         do {
           try self.activateSession(playAndRecord: true)
           let fileURL = try self.recordingsDirectory().appendingPathComponent(fileName)
+          if FileManager.default.fileExists(atPath: fileURL.path) {
+            try FileManager.default.removeItem(at: fileURL)
+          }
           let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
             AVSampleRateKey: 44100,
@@ -95,14 +144,17 @@ class AudioRecorderModule: RCTEventEmitter, AVAudioPlayerDelegate {
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
-    guard isRecording, let recorder else {
-      reject("NOT_RECORDING", "No active recording to stop", nil)
-      return
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      guard self.isRecording, let recorder = self.recorder else {
+        reject("NOT_RECORDING", "No active recording to stop", nil)
+        return
+      }
+      recorder.stop()
+      self.recorder = nil
+      self.isRecording = false
+      resolve(self.currentFilePath)
     }
-    recorder.stop()
-    self.recorder = nil
-    isRecording = false
-    resolve(currentFilePath)
   }
 
   @objc
@@ -110,13 +162,16 @@ class AudioRecorderModule: RCTEventEmitter, AVAudioPlayerDelegate {
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
-    recorder?.stop()
-    recorder = nil
-    player?.stop()
-    player = nil
-    isRecording = false
-    isPlaying = false
-    resolve("Force stop completed")
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.recorder?.stop()
+      self.recorder = nil
+      self.player?.stop()
+      self.player = nil
+      self.isRecording = false
+      self.isPlaying = false
+      resolve("Force stop completed")
+    }
   }
 
   @objc
@@ -125,31 +180,34 @@ class AudioRecorderModule: RCTEventEmitter, AVAudioPlayerDelegate {
     resolver resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
-    if isPlaying {
-      reject("ALREADY_PLAYING", "Audio is already playing", nil)
-      return
-    }
-
-    let path = normalizePath(filePath)
-    guard FileManager.default.fileExists(atPath: path) else {
-      reject("FILE_NOT_FOUND", "Audio file not found: \(path)", nil)
-      return
-    }
-
-    do {
-      try activateSession(playAndRecord: false)
-      let url = URL(fileURLWithPath: path)
-      let audioPlayer = try AVAudioPlayer(contentsOf: url)
-      audioPlayer.delegate = self
-      guard audioPlayer.play() else {
-        reject("PLAYBACK_FAILED", "Could not start playback", nil)
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      if self.isPlaying {
+        reject("ALREADY_PLAYING", "Audio is already playing", nil)
         return
       }
-      player = audioPlayer
-      isPlaying = true
-      resolve(true)
-    } catch {
-      reject("PLAYBACK_FAILED", error.localizedDescription, error)
+
+      let path = self.normalizePath(filePath)
+      guard FileManager.default.fileExists(atPath: path) else {
+        reject("FILE_NOT_FOUND", "Audio file not found: \(path)", nil)
+        return
+      }
+
+      do {
+        try self.activateSession(playAndRecord: false)
+        let url = URL(fileURLWithPath: path)
+        let audioPlayer = try AVAudioPlayer(contentsOf: url)
+        audioPlayer.delegate = self
+        guard audioPlayer.play() else {
+          reject("PLAYBACK_FAILED", "Could not start playback", nil)
+          return
+        }
+        self.player = audioPlayer
+        self.isPlaying = true
+        resolve(true)
+      } catch {
+        reject("PLAYBACK_FAILED", error.localizedDescription, error)
+      }
     }
   }
 
@@ -158,19 +216,25 @@ class AudioRecorderModule: RCTEventEmitter, AVAudioPlayerDelegate {
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
-    guard let player else {
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      guard let player = self.player else {
+        resolve(true)
+        return
+      }
+      player.stop()
+      self.player = nil
+      self.isPlaying = false
       resolve(true)
-      return
     }
-    player.stop()
-    self.player = nil
-    isPlaying = false
-    resolve(true)
   }
 
   func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-    self.player = nil
-    isPlaying = false
-    sendEvent(withName: "onPlaybackComplete", body: nil)
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.player = nil
+      self.isPlaying = false
+      self.sendEvent(withName: "onPlaybackComplete", body: nil)
+    }
   }
 }
