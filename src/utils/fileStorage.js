@@ -1,3 +1,4 @@
+import logger from './logger';
 import { FileSystem, Dirs } from 'react-native-file-access';
 
 const STORAGE_DIR = `${Dirs.DocumentDir}/app_kv_store`;
@@ -19,7 +20,7 @@ export const FileStorage = {
       await FileSystem.writeFile(filePath(key), JSON.stringify(value));
       return { success: true };
     } catch (error) {
-      console.error('[FileStorage] setItem error:', error);
+      logger.error('[FileStorage] setItem error:', error);
       return { success: false, error: error.message };
     }
   },
@@ -32,7 +33,7 @@ export const FileStorage = {
       const raw = await FileSystem.readFile(path);
       return JSON.parse(raw);
     } catch (error) {
-      console.error('[FileStorage] getItem error:', error);
+      logger.error('[FileStorage] getItem error:', error);
       return null;
     }
   },
@@ -46,7 +47,7 @@ export const FileStorage = {
       }
       return { success: true };
     } catch (error) {
-      console.error('[FileStorage] removeItem error:', error);
+      logger.error('[FileStorage] removeItem error:', error);
       return { success: false, error: error.message };
     }
   },

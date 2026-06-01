@@ -1,3 +1,4 @@
+import logger from './logger';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const AUDIO_RECORDINGS_KEY = '@audio_recordings';
@@ -20,7 +21,7 @@ export const AudioStorage = {
       await AsyncStorage.setItem(AUDIO_RECORDINGS_KEY, JSON.stringify(updatedRecordings));
       return newRecording;
     } catch (error) {
-      console.error('Failed to save audio recording:', error);
+      logger.error('Failed to save audio recording:', error);
       return null;
     }
   },
@@ -31,7 +32,7 @@ export const AudioStorage = {
       const recordings = await AsyncStorage.getItem(AUDIO_RECORDINGS_KEY);
       return recordings ? JSON.parse(recordings) : [];
     } catch (error) {
-      console.error('Failed to get recordings:', error);
+      logger.error('Failed to get recordings:', error);
       return [];
     }
   },
@@ -42,7 +43,7 @@ export const AudioStorage = {
       const recordings = await this.getRecordings();
       return recordings.length > 0 ? recordings[0] : null;
     } catch (error) {
-      console.error('Failed to get latest recording:', error);
+      logger.error('Failed to get latest recording:', error);
       return null;
     }
   },
@@ -60,7 +61,7 @@ export const AudioStorage = {
       await AsyncStorage.setItem(AUDIO_RECORDINGS_KEY, JSON.stringify(filteredRecordings));
       return filteredRecordings;
     } catch (error) {
-      console.error('Failed to clear old recordings:', error);
+      logger.error('Failed to clear old recordings:', error);
       return [];
     }
   },
@@ -76,7 +77,7 @@ export const AudioStorage = {
       await AsyncStorage.setItem(AUDIO_RECORDINGS_KEY, JSON.stringify(filteredRecordings));
       return true;
     } catch (error) {
-      console.error('Failed to delete recording:', error);
+      logger.error('Failed to delete recording:', error);
       return false;
     }
   },
@@ -87,7 +88,7 @@ export const AudioStorage = {
       const recordings = await this.getRecordings();
       return recordings.length;
     } catch (error) {
-      console.error('Failed to get recording count:', error);
+      logger.error('Failed to get recording count:', error);
       return 0;
     }
   }

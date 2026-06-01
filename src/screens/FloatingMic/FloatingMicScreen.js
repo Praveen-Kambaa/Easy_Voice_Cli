@@ -1,3 +1,4 @@
+import logger from '../../utils/logger';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -64,7 +65,7 @@ const FloatingMicScreen = ({ navigation }) => {
   useEffect(() => {
     const listeners = [
       DeviceEventEmitter.addListener('FloatingMic_onAudioRecorded', (audioPath) => {
-        console.log('Audio recorded:', audioPath);
+        logger.debug('Audio recorded:', audioPath);
       }),
       DeviceEventEmitter.addListener('FloatingMicService_onTranscriptionComplete', (text) => {
         setLastTranscription(typeof text === 'string' ? text : String(text ?? ''));
@@ -315,288 +316,289 @@ const FloatingMicScreen = ({ navigation }) => {
 
 function createStyles(colors) {
   return StyleSheet.create({
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 40,
-    gap: 14,
-  },
+    scroll: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: 40,
+      gap: 14,
+    },
 
-  hero: {
-    paddingTop: 6,
-    paddingBottom: 4,
-  },
-  heroCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.07,
-    shadowRadius: 20,
-    elevation: 3,
-  },
-  heroGlowA: {
-    position: 'absolute',
-    top: -140,
-    right: -120,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: 'rgba(30, 136, 255, 0.14)',
-  },
-  heroGlowB: {
-    position: 'absolute',
-    bottom: -160,
-    left: -150,
-    width: 320,
-    height: 320,
-    borderRadius: 160,
-    backgroundColor: 'rgba(96, 165, 250, 0.10)',
-  },
-  heroTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  heroTitleCol: {
-    flex: 1,
-  },
-  heroTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: colors.text.primary,
-    letterSpacing: -0.7,
-    lineHeight: 32,
-  },
-  heroSub: {
-    marginTop: 6,
-    fontSize: 13,
-    color: colors.text.secondary,
-    lineHeight: 19,
-  },
-  orbWrap: {
-    width: 54,
-    height: 54,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  orbWrapDisabled: {
-    opacity: 0.6,
-  },
-  orbPulse: {
-    position: 'absolute',
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: colors.primary,
-  },
-  orb: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.20,
-    shadowRadius: 16,
-    elevation: 6,
-  },
-  orbActive: {
-    shadowOpacity: 0.28,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  heroMetaRow: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  heroMetaText: {
-    flex: 1,
-    fontSize: 12,
-    color: colors.text.secondary,
-  },
+    hero: {
+      paddingTop: 6,
+      paddingBottom: 4,
+    },
+    heroCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      overflow: 'hidden',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 0.07,
+      shadowRadius: 20,
+      elevation: 3,
+    },
+    heroGlowA: {
+      position: 'absolute',
+      top: -140,
+      right: -120,
+      width: 260,
+      height: 260,
+      borderRadius: 130,
+      backgroundColor: 'rgba(30, 136, 255, 0.14)',
+    },
+    heroGlowB: {
+      position: 'absolute',
+      bottom: -160,
+      left: -150,
+      width: 320,
+      height: 320,
+      borderRadius: 160,
+      backgroundColor: 'rgba(96, 165, 250, 0.10)',
+    },
+    heroTop: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    heroTitleCol: {
+      flex: 1,
+    },
+    heroTitle: {
+      fontSize: 26,
+      fontWeight: '800',
+      color: colors.text.primary,
+      letterSpacing: -0.7,
+      lineHeight: 32,
+    },
+    heroSub: {
+      marginTop: 6,
+      fontSize: 13,
+      color: colors.text.secondary,
+      lineHeight: 19,
+    },
+    orbWrap: {
+      width: 54,
+      height: 54,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    orbWrapDisabled: {
+      opacity: 0.6,
+    },
+    orbPulse: {
+      position: 'absolute',
+      width: 54,
+      height: 54,
+      borderRadius: 27,
+      backgroundColor: colors.primary,
+    },
+    orb: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.20,
+      shadowRadius: 16,
+      elevation: 6,
+    },
+    orbActive: {
+      shadowOpacity: 0.28,
+      shadowRadius: 20,
+      elevation: 8,
+    },
+    heroMetaRow: {
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.borderLight,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    heroMetaText: {
+      flex: 1,
+      fontSize: 12,
+      color: colors.text.secondary,
+    },
 
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  sectionTitleLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
+    sectionTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+    },
+    sectionTitleLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
 
-  historyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    marginBottom: 16,
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.06,
-    shadowRadius: 18,
-    elevation: 3,
-  },
-  historyRowText: {
-    flex: 1,
-  },
-  historyRowTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  historyRowSub: {
-    fontSize: 12,
-    color: colors.text.secondary,
-    marginTop: 2,
-  },
+    historyRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      marginBottom: 16,
+      gap: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.06,
+      shadowRadius: 18,
+      elevation: 3,
+    },
+    historyRowText: {
+      flex: 1,
+    },
+    historyRowTitle: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    historyRowSub: {
+      fontSize: 12,
+      color: colors.text.secondary,
+      marginTop: 2,
+    },
 
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
+    sectionTitle: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.text.primary,
+      paddingBottom: 10,
+    },
 
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  rowDivider: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  rowLabel: {
-    fontSize: 14,
-    color: colors.text.secondary,
-    flex: 1,
-    marginRight: 12,
-  },
+    infoRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 8,
+    },
+    rowDivider: {
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    rowLabel: {
+      fontSize: 14,
+      color: colors.text.secondary,
+      flex: 1,
+      marginRight: 12,
+    },
 
-  resultBox: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: colors.status.grantedBg,
-    borderRadius: 8,
-  },
-  resultLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.status.granted,
-    marginBottom: 4,
-    letterSpacing: 0.5,
-  },
-  resultText: {
-    fontSize: 14,
-    color: colors.text.primary,
-    lineHeight: 20,
-  },
+    resultBox: {
+      marginTop: 12,
+      padding: 12,
+      backgroundColor: colors.status.grantedBg,
+      borderRadius: 8,
+    },
+    resultLabel: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.status.granted,
+      marginBottom: 4,
+      letterSpacing: 0.5,
+    },
+    resultText: {
+      fontSize: 14,
+      color: colors.text.primary,
+      lineHeight: 20,
+    },
 
-  errorBox: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: colors.status.blockedBg,
-    borderRadius: 8,
-  },
-  errorLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.status.blocked,
-    marginBottom: 4,
-    letterSpacing: 0.5,
-  },
-  errorText: {
-    fontSize: 14,
-    color: colors.text.primary,
-    lineHeight: 20,
-  },
+    errorBox: {
+      marginTop: 12,
+      padding: 12,
+      backgroundColor: colors.status.blockedBg,
+      borderRadius: 8,
+    },
+    errorLabel: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.status.blocked,
+      marginBottom: 4,
+      letterSpacing: 0.5,
+    },
+    errorText: {
+      fontSize: 14,
+      color: colors.text.primary,
+      lineHeight: 20,
+    },
 
-  transcriptionBox: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: colors.backgroundAlt,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  transcriptionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.text.secondary,
-    marginBottom: 4,
-    letterSpacing: 0.5,
-  },
-  transcriptionText: {
-    fontSize: 14,
-    color: colors.text.primary,
-    lineHeight: 20,
-  },
+    transcriptionBox: {
+      marginTop: 12,
+      padding: 12,
+      backgroundColor: colors.backgroundAlt,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    transcriptionLabel: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.text.secondary,
+      marginBottom: 4,
+      letterSpacing: 0.5,
+    },
+    transcriptionText: {
+      fontSize: 14,
+      color: colors.text.primary,
+      lineHeight: 20,
+    },
 
-  mainControlBtn: {
-    marginBottom: 10,
-  },
-  secondaryActionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  secondaryActionCol: {
-    flex: 1,
-  },
-  secondaryActionColFull: {
-    flex: 1,
-  },
-  secondaryBtn: {
-    minHeight: 46,
-  },
+    mainControlBtn: {
+      marginBottom: 10,
+    },
+    secondaryActionsRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    secondaryActionCol: {
+      flex: 1,
+    },
+    secondaryActionColFull: {
+      flex: 1,
+    },
+    secondaryBtn: {
+      minHeight: 46,
+    },
 
-  instructionRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 10,
-    gap: 10,
-  },
-  instructionNumber: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.primary,
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-    textAlign: 'center',
-    lineHeight: 22,
-    flexShrink: 0,
-  },
-  instructionText: {
-    fontSize: 13,
-    color: colors.text.secondary,
-    lineHeight: 20,
-    flex: 1,
-  },
-});
+    instructionRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginBottom: 10,
+      gap: 10,
+    },
+    instructionNumber: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: colors.primary,
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontWeight: '700',
+      textAlign: 'center',
+      lineHeight: 22,
+      flexShrink: 0,
+    },
+    instructionText: {
+      fontSize: 13,
+      color: colors.text.secondary,
+      lineHeight: 20,
+      flex: 1,
+    },
+  });
 }
 
 

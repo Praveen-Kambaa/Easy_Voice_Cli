@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 import { useState, useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
 import {
@@ -32,7 +33,7 @@ export const usePermissionsManager = () => {
       const result = await check(permission);
       return result;
     } catch (error) {
-      console.error(`Error checking ${permissionType} permission:`, error);
+      logger.error(`Error checking ${permissionType} permission:`, error);
       return RESULTS.UNAVAILABLE;
     }
   }, []);
@@ -54,7 +55,7 @@ export const usePermissionsManager = () => {
 
       return result;
     } catch (error) {
-      console.error(`Error requesting ${permissionType} permission:`, error);
+      logger.error(`Error requesting ${permissionType} permission:`, error);
       return RESULTS.UNAVAILABLE;
     } finally {
       setLoading(false);
@@ -73,7 +74,7 @@ export const usePermissionsManager = () => {
       
       setPermissionStatuses(statuses);
     } catch (error) {
-      console.error('Error checking all permissions:', error);
+      logger.error('Error checking all permissions:', error);
     } finally {
       setLoading(false);
     }
@@ -82,7 +83,7 @@ export const usePermissionsManager = () => {
   // Open app settings
   const openAppSettings = useCallback(() => {
     openSettings().catch(error => {
-      console.error('Error opening app settings:', error);
+      logger.error('Error opening app settings:', error);
     });
   }, []);
 

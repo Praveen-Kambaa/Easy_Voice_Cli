@@ -1,3 +1,4 @@
+import logger from '../../utils/logger';
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useDebounce } from '../../utils/debounce';
 import {
@@ -24,7 +25,7 @@ import {
   getLanguageName,
   normalizeStoredLanguageCode,
 } from '../../constants/translationLanguages';
-import { translateViaApi } from '../../services/translationService';
+import { translateSmart } from '../../services/translationService';
 import {
   startTranslatorRecording,
   stopTranslatorRecordingAndTranscribe,
@@ -179,11 +180,12 @@ const TranslatorScreen = ({ navigation }) => {
       const sourceAppCode = sttSourceLangRef.current ?? fromCode;
       setTranslating(true);
       setTranslateError('');
-      console.log('[Translator] runTranslation via API', { sourceAppCode, toCode, len: trimmed.length });
+      logger.debug('[Translator] runTranslation', { sourceAppCode, toCode, len: trimmed.length });
       try {
-        const result = await translateViaApi({
+        const result = await translateSmart({
           text: trimmed,
-          targetLangCode: toCode,
+          sourceAppCode,
+          targetAppCode: toCode,
           userId: user?.userId,
         });
         if (id !== requestIdRef.current) return;
@@ -294,10 +296,11 @@ const TranslatorScreen = ({ navigation }) => {
         setTranslatedText('');
         setTranslating(true);
         setTranslateError('');
-        console.log('[Translator] voice → API translate (en → target)', toCode);
-        const tr = await translateViaApi({
+        logger.debug('[Translator] voice → translate (en → target)', toCode);
+        const tr = await translateSmart({
           text: tx.transcript,
-          targetLangCode: toCode,
+          sourceAppCode: 'en',
+          targetAppCode: toCode,
           userId: user?.userId,
         });
         if (id !== requestIdRef.current) return;
@@ -329,7 +332,7 @@ const TranslatorScreen = ({ navigation }) => {
       return;
     }
     setRecordingVoice(true);
-    console.log('[Translator] recording started');
+    logger.debug('[Translator] recording started');
   };
 
   const onAskPress = async () => {
@@ -583,6 +586,8 @@ function TranslatorScrollBody({
   onSpeakTranslation,
   onCopyTranslation,
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const showOutputActions = !!translatedText;
 
   return (

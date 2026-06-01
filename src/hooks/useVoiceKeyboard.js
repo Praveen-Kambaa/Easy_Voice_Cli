@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 import { useState, useEffect, useCallback } from 'react';
 import { Platform, NativeModules } from 'react-native';
 import { useAlert } from '../context/AlertContext';
@@ -23,7 +24,7 @@ export const useVoiceKeyboard = () => {
    */
   const insertText = useCallback(async (text) => {
     if (!text || text.trim().length === 0) {
-      console.warn('[VoiceKeyboard] Empty text provided');
+      logger.warn('[VoiceKeyboard] Empty text provided');
       return { success: false, reason: 'empty_text' };
     }
 
@@ -31,7 +32,7 @@ export const useVoiceKeyboard = () => {
       setLoading(true);
       const result = await VoiceKeyboard.insertText(text);
       
-      console.log('[VoiceKeyboard] Insert result:', result);
+      logger.debug('[VoiceKeyboard] Insert result:', result);
       
       if (result.status === 'success') {
         return { success: true, method: 'ime', text };
@@ -43,7 +44,7 @@ export const useVoiceKeyboard = () => {
         return { success: false, reason: result.reason, needsSetup: true };
       }
     } catch (error) {
-      console.error('[VoiceKeyboard] Insert error:', error);
+      logger.error('[VoiceKeyboard] Insert error:', error);
       return { success: false, reason: 'error', error: error.message };
     } finally {
       setLoading(false);
@@ -63,7 +64,7 @@ export const useVoiceKeyboard = () => {
       });
       return result;
     } catch (error) {
-      console.error('[VoiceKeyboard] Status check error:', error);
+      logger.error('[VoiceKeyboard] Status check error:', error);
       return { active: false, current: false, status: 'error' };
     }
   }, []);
@@ -76,7 +77,7 @@ export const useVoiceKeyboard = () => {
       await VoiceKeyboard.showKeyboardSelector();
       return { success: true };
     } catch (error) {
-      console.error('[VoiceKeyboard] Selector error:', error);
+      logger.error('[VoiceKeyboard] Selector error:', error);
       return { success: false, error: error.message };
     }
   }, []);
@@ -89,7 +90,7 @@ export const useVoiceKeyboard = () => {
       await VoiceKeyboard.openKeyboardSettings();
       return { success: true };
     } catch (error) {
-      console.error('[VoiceKeyboard] Settings error:', error);
+      logger.error('[VoiceKeyboard] Settings error:', error);
       return { success: false, error: error.message };
     }
   }, []);
@@ -102,7 +103,7 @@ export const useVoiceKeyboard = () => {
       const result = await VoiceKeyboard.getAvailableKeyboards();
       return { success: true, keyboards: result.keyboards };
     } catch (error) {
-      console.error('[VoiceKeyboard] Keyboards error:', error);
+      logger.error('[VoiceKeyboard] Keyboards error:', error);
       return { success: false, error: error.message };
     }
   }, []);

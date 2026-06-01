@@ -1,9 +1,8 @@
 /**
  * Centralized Error Handling Utility
- * Provides consistent error handling across the application
  */
-
 import React from 'react';
+import logger from './logger';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { showGlobalAlert } from './alertPresenter';
 
@@ -253,14 +252,12 @@ export const logError = (processedError, context = {}) => {
     },
   };
 
-  // In development, log to console
   if (__DEV__) {
-    console.group(`🚨 ${processedError.category} Error`);
-    console.error('Message:', processedError.userMessage);
-    console.error('Severity:', processedError.severity);
-    console.error('Original Error:', processedError.originalError);
-    console.error('Context:', logEntry.context);
-    console.groupEnd();
+    logger.error(`${processedError.category} Error`, processedError.userMessage, {
+      severity: processedError.severity,
+      original: processedError.originalError?.message,
+      context: logEntry.context,
+    });
   }
 
   // In production, send to error tracking service

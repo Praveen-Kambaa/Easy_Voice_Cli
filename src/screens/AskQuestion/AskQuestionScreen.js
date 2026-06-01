@@ -1,3 +1,4 @@
+import logger from '../../utils/logger';
 import React, { useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
@@ -51,7 +52,7 @@ const AskQuestionScreen = ({ navigation }) => {
         try {
           await syncFloatingMicSettingsToNative();
         } catch (e) {
-          console.warn('[AskQuestionScreen] sync floating mic settings:', e?.message || e);
+          logger.warn('[AskQuestionScreen] sync floating mic settings:', e?.message || e);
         }
         const ok = await canAccessAskQuestionFeature();
         if (!cancelled) {

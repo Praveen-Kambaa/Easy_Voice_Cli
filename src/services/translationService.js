@@ -1,6 +1,8 @@
+import logger from '../utils/logger';
 import { Platform } from 'react-native';
 import TranslateText from '@react-native-ml-kit/translate-text';
 import { appLanguageToMlKit, isAppLanguageSupportedByMlKit } from './mlKitLanguageMap';
+import { getInternalFloatingTranslationEnabled } from './floatingMicConfig';
 import { API_SERVERS, API_ENDPOINTS } from '../config/api';
 
 /** @type {Set<string>} language pairs that already completed download this app session */
@@ -41,7 +43,7 @@ export async function translateOffline({
   }
 
   if (Platform.OS !== 'android') {
-    console.warn('[translationService] ML Kit translate is only wired on Android (iOS native module is not implemented).');
+    logger.warn('[translationService] ML Kit translate is only wired on Android (iOS native module is not implemented).');
     return {
       success: false,
       error: 'On-device translation (ML Kit) is only available on Android in this build.',
@@ -65,14 +67,14 @@ export async function translateOffline({
   }
 
   if (sourceMl === targetMl) {
-    console.log('[translationService] source === target, returning original text');
+    logger.debug('[translationService] source === target, returning original text');
     return { success: true, translatedText: trimmed };
   }
 
   const key = pairKey(sourceMl, targetMl);
   const needDownload = !downloadedModelPairs.has(key);
 
-  console.log('[translationService] translate', {
+  logger.debug('[translationService] translate', {
     sourceAppCode,
     targetAppCode,
     sourceMl,
@@ -99,10 +101,10 @@ export async function translateOffline({
     }
 
     downloadedModelPairs.add(key);
-    console.log('[translationService] OK, cached pair', key);
+    logger.debug('[translationService] OK, cached pair', key);
     return { success: true, translatedText };
   } catch (e) {
-    console.warn('[translationService] ML Kit error', e);
+    logger.warn('[translationService] ML Kit error', e);
     return { success: false, error: formatMlKitError(e) };
   }
 }
@@ -119,6 +121,28 @@ export function translateEnglishToTarget(englishText, targetAppCode) {
 }
 
 export { isAppLanguageSupportedByMlKit };
+
+/**
+ * Uses ML Kit when Settings → Internal Translation is on; otherwise the TypeEasy REST API.
+ *
+ * @param {object} params
+ * @param {string} params.text
+ * @param {string} params.sourceAppCode
+ * @param {string} params.targetAppCode
+ * @param {string | number} [params.userId]
+ */
+export async function translateSmart({
+  text,
+  sourceAppCode,
+  targetAppCode,
+  userId,
+}) {
+  const useInternal = await getInternalFloatingTranslationEnabled();
+  if (useInternal) {
+    return translateOffline({ text, sourceAppCode, targetAppCode });
+  }
+  return translateViaApi({ text, targetLangCode: targetAppCode, userId });
+}
 
 /**
  * Translate text via the TypeEasy REST API.

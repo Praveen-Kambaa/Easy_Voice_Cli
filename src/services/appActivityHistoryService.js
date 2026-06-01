@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DeviceEventEmitter } from 'react-native';
 import {
@@ -67,7 +68,7 @@ export async function logActivity(category, action, details = {}) {
     await writeAll(trimmed);
     return { success: true, entry };
   } catch (e) {
-    console.warn('[appActivityHistory]', e);
+    logger.warn('[appActivityHistory]', e);
     return { success: false, error: e?.message };
   }
 }

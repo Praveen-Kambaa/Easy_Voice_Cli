@@ -1,3 +1,4 @@
+import logger from '../../utils/logger';
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   View,
@@ -229,7 +230,7 @@ export default function CallLogsScreen() {
         await saveTranscriptForPath(path, finalText);
       }
     } catch (e) {
-      console.warn('[CallLogsScreen] Call transcription failed:', e?.message || e);
+      logger.warn('[CallLogsScreen] Call transcription failed:', e?.message || e);
     } finally {
       transcriptJobsRef.current.delete(path);
       setTranscribingMap((prev) => ({ ...prev, [path]: false }));
@@ -269,7 +270,7 @@ export default function CallLogsScreen() {
             }
           }
         } catch (e) {
-          console.error('CallLogsScreen start recording service:', e);
+          logger.error('CallLogsScreen start recording service:', e);
         }
       }
     } catch {
@@ -328,7 +329,7 @@ export default function CallLogsScreen() {
       }
       setLogSyncedMap(next);
     } catch (e) {
-      console.warn('[CallLogsScreen] Call log sync failed:', e?.message || e);
+      logger.warn('[CallLogsScreen] Call log sync failed:', e?.message || e);
     } finally {
       setSyncingCallLogs(false);
     }
@@ -372,7 +373,7 @@ export default function CallLogsScreen() {
         map[path] = true;
         setUploadedMap((prev) => ({ ...prev, [path]: true }));
       } catch (e) {
-        console.warn('[CallLogsScreen] Auto-upload failed:', path, e?.message || e);
+        logger.warn('[CallLogsScreen] Auto-upload failed:', path, e?.message || e);
       } finally {
         setUploadingPath(null);
       }
@@ -395,7 +396,7 @@ export default function CallLogsScreen() {
       const [logList] = await Promise.all([fetchCallLogs(), fetchRecordings()]);
       await syncCallLogsIfNeeded(logList || []);
     } catch (e) {
-      console.error('CallLogsScreen refresh:', e);
+      logger.error('CallLogsScreen refresh:', e);
     } finally {
       setRefreshing(false);
       setLoading(false);
@@ -466,7 +467,7 @@ export default function CallLogsScreen() {
             await requestMultiple(denied);
           }
         } catch (e) {
-          console.error('CallLogsScreen feature permissions:', e);
+          logger.error('CallLogsScreen feature permissions:', e);
         }
       })();
     }, []),
@@ -527,7 +528,7 @@ export default function CallLogsScreen() {
         }
         setRecordingEnabled(enabled);
       } catch (e) {
-        console.error(e);
+        logger.error(e);
         showAlert('Recording', e?.message || 'Could not start or stop call recording.', [{ text: 'OK' }]);
       }
     },

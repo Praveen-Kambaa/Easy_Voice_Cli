@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 import { useEffect } from 'react';
 import { DeviceEventEmitter, Platform } from 'react-native';
 import { addAiQaHistory } from '../services/aiQaStorage';
@@ -20,7 +21,7 @@ export const AiQaHistorySync = () => {
           const a = o?.answer != null ? String(o.answer).trim() : '';
           if (q && a) addAiQaHistory({ question: q, answer: a });
         } catch (e) {
-          console.warn('[AiQaHistorySync] parse/save', e?.message || e);
+          logger.warn('[AiQaHistorySync] parse/save', e?.message || e);
         }
       },
     );

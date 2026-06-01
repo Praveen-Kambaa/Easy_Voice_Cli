@@ -1,5 +1,6 @@
+import logger from '../utils/logger';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { NativeModules, DeviceEventEmitter, Platform } from 'react-native';
+import { NativeModules, DeviceEventEmitter, Platform, AppState } from 'react-native';
 import { syncFloatingMicSettingsToNative } from '../services/floatingMicConfig';
 import { logActivity, ActivityCategory } from '../services/appActivityHistoryService';
 import { useAlert } from '../context/AlertContext';
@@ -26,14 +27,14 @@ export const useFloatingMic = () => {
   const checkPermissions = useCallback(async () => {
     try {
       if (Platform.OS !== 'android') {
-        console.warn('FloatingMic is only available on Android');
+        logger.warn('FloatingMic is only available on Android');
         return;
       }
 
       const perms = await FloatingMicModule.checkPermissions();
       setPermissions(perms);
     } catch (error) {
-      console.error('Failed to check permissions:', error);
+      logger.error('Failed to check permissions:', error);
     }
   }, []);
 
@@ -57,7 +58,7 @@ export const useFloatingMic = () => {
       'FloatingMicService_onRecordingStarted',
       () => {
         setRecordingState(prev => ({ ...prev, state: 'RECORDING', error: null }));
-        console.log('🎤 Recording Started');
+        logger.debug('🎤 Recording Started');
       }
     );
 
@@ -65,14 +66,14 @@ export const useFloatingMic = () => {
       'FloatingMicService_onRecordingStopped',
       () => {
         setRecordingState(prev => ({ ...prev, state: 'STOPPED', error: null }));
-        console.log('🛑 Recording Stopped');
+        logger.debug('🛑 Recording Stopped');
       }
     );
 
     const recordingFileReadyListener = DeviceEventEmitter.addListener(
       'FloatingMicService_onPartialResult',
       (partialText) => {
-        console.log('🔄 Partial result:', partialText);
+        logger.debug('🔄 Partial result:', partialText);
         setRecordingState(prev => ({ 
           ...prev, 
           lastResult: partialText,
@@ -95,14 +96,14 @@ export const useFloatingMic = () => {
     const overlayCreatedListener = DeviceEventEmitter.addListener(
       'FloatingMicService_onOverlayCreated',
       () => {
-        console.log('Overlay created');
+        logger.debug('Overlay created');
       }
     );
 
     const transcriptionCompleteListener = DeviceEventEmitter.addListener(
       'FloatingMicService_onTranscriptionComplete',
       (transcribedText) => {
-        console.log('✅ Transcription completed:', transcribedText);
+        logger.debug('✅ Transcription completed:', transcribedText);
         setRecordingState(prev => ({ 
           ...prev, 
           state: 'IDLE',
@@ -115,11 +116,35 @@ export const useFloatingMic = () => {
     const transcriptionErrorListener = DeviceEventEmitter.addListener(
       'FloatingMicService_onTranscriptionError',
       (errorMessage) => {
-        console.error('❌ Transcription error:', errorMessage);
+        logger.error('❌ Transcription error:', errorMessage);
         setRecordingState(prev => ({ 
           ...prev, 
           state: 'IDLE',
           error: `Transcription failed: ${errorMessage}`
+        }));
+      }
+    );
+
+    const serviceStoppedListener = DeviceEventEmitter.addListener(
+      'FloatingMicService_onServiceStopped',
+      () => {
+        setIsServiceActive(false);
+        setRecordingState({
+          state: 'IDLE',
+          lastResult: null,
+          error: null,
+        });
+      }
+    );
+
+    const voiceCommandExecutedListener = DeviceEventEmitter.addListener(
+      'FloatingMicService_onVoiceCommandExecuted',
+      (result) => {
+        setRecordingState(prev => ({
+          ...prev,
+          state: 'IDLE',
+          lastResult: typeof result === 'string' ? result : String(result ?? ''),
+          error: null,
         }));
       }
     );
@@ -132,11 +157,22 @@ export const useFloatingMic = () => {
       overlayCreatedListener,
       transcriptionCompleteListener,
       transcriptionErrorListener,
+      serviceStoppedListener,
+      voiceCommandExecutedListener,
     ];
 
     return () => {
       eventListeners.current.forEach(listener => listener.remove());
     };
+  }, [refreshFloatingMicSnapshot]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        refreshFloatingMicSnapshot();
+      }
+    });
+    return () => sub.remove();
   }, [refreshFloatingMicSnapshot]);
 
   const startFloatingMic = async () => {
@@ -156,12 +192,12 @@ export const useFloatingMic = () => {
       await syncFloatingMicSettingsToNative();
       const result = await FloatingMicModule.startFloatingMic();
       setIsServiceActive(true);
-      console.log('Floating mic started:', result);
+      logger.debug('Floating mic started:', result);
       await logActivity(ActivityCategory.FLOATING_MIC, 'service_started', {
         label: 'Floating mic overlay started',
       });
     } catch (error) {
-      console.error('Failed to start floating mic:', error);
+      logger.error('Failed to start floating mic:', error);
       showAlert('Error', error.message || 'Failed to start floating microphone');
     }
   };
@@ -179,12 +215,12 @@ export const useFloatingMic = () => {
         lastResult: null,
         error: null,
       });
-      console.log('Floating mic stopped:', result);
+      logger.debug('Floating mic stopped:', result);
       await logActivity(ActivityCategory.FLOATING_MIC, 'service_stopped', {
         label: 'Floating mic overlay stopped',
       });
     } catch (error) {
-      console.error('Failed to stop floating mic:', error);
+      logger.error('Failed to stop floating mic:', error);
       showAlert('Error', error.message || 'Failed to stop floating microphone');
     }
   };
@@ -230,7 +266,7 @@ export const useFloatingMic = () => {
         );
       }
     } catch (error) {
-      console.error('Failed to open settings:', error);
+      logger.error('Failed to open settings:', error);
     }
   };
 
@@ -246,7 +282,7 @@ export const useFloatingMic = () => {
     try {
       await FloatingMicModule.startRecording();
     } catch (error) {
-      console.error('Failed to start recording:', error);
+      logger.error('Failed to start recording:', error);
       throw error;
     }
   };
@@ -255,7 +291,7 @@ export const useFloatingMic = () => {
     try {
       await FloatingMicModule.stopRecording();
     } catch (error) {
-      console.error('Failed to stop recording:', error);
+      logger.error('Failed to stop recording:', error);
       throw error;
     }
   };

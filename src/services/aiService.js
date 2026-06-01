@@ -3,7 +3,7 @@ import {
   AI_CHAT_MODEL,
   AI_PROVIDER_API_KEY,
 } from '../config/aiProvider';
-import { transcribeAudio } from '../api/voiceApi';
+import { transcribeBySettings } from './transcribeService';
 import { fetchLiveContext } from './liveContextService';
 
 /**
@@ -133,7 +133,7 @@ const DEFAULT_TRANSCRIBE_OPTS = {
  * >}
  */
 export async function transcribeAndAskQuestion(audioFilePath, transcribeOptions = {}) {
-  const tr = await transcribeAudio(audioFilePath, {
+  const tr = await transcribeBySettings(audioFilePath, {
     ...DEFAULT_TRANSCRIBE_OPTS,
     ...transcribeOptions,
   });

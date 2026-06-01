@@ -2,6 +2,7 @@ package com.typeeasy
 
 import com.typeeasy.generated.ApiConfig
 import android.content.Context
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.content.SharedPreferences
 import android.graphics.Color
@@ -9,8 +10,11 @@ import android.graphics.PorterDuff
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.inputmethodservice.InputMethodService
+import android.media.MediaRecorder
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import androidx.core.content.ContextCompat
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -23,6 +27,7 @@ import android.content.Intent
 import android.os.Bundle
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -96,6 +101,20 @@ class MyKeyboardService : InputMethodService() {
     private var speechRecognizer: SpeechRecognizer? = null
     private var isListening = false
 
+    // ── Voice command (cloud record → transcribe → execute) ───────────────────
+    private var voiceCommandUi: KeyboardVoiceCommandUi? = null
+    private var commandMediaRecorder: MediaRecorder? = null
+    private var commandAudioFile: File? = null
+    private var commandVoiceAssetId: String? = null
+    private var commandOriginalTranscript: String = ""
+    private var commandRecordingStartedAt = 0L
+    private var commandTimerRunnable: Runnable? = null
+
+    // Cloud dictation when Internal Transcribe is off
+    private var dictationMediaRecorder: MediaRecorder? = null
+    private var dictationAudioFile: File? = null
+    private var isCloudDictationRecording = false
+
     // ── Background work ───────────────────────────────────────────────────────
     private val executor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -106,6 +125,9 @@ class MyKeyboardService : InputMethodService() {
     private lateinit var resultBar: LinearLayout
     private lateinit var resultLabel: TextView
     private lateinit var resultInsertBtn: TextView
+    private lateinit var snackbarHost: FrameLayout
+    private lateinit var snackbarLabel: TextView
+    private var snackbarDismissRunnable: Runnable? = null
     private lateinit var voiceBar: LinearLayout
     private lateinit var voiceLabel: TextView
     private lateinit var settingsPanel: LinearLayout
@@ -212,11 +234,21 @@ class MyKeyboardService : InputMethodService() {
         buildFeatureToolbar()
         buildResultBar()
         buildVoiceBar()
+        buildVoiceCommandPanel()
         buildSettingsPanel()
         buildKeys()
         buildEmojiPanel()
+        buildSnackbarOverlay()
         applyThemeToViews()
-        return rootLayout
+        val wrapper = FrameLayout(this).apply {
+            layoutParams = ViewGroup.LayoutParams(MATCH, WRAP)
+            addView(rootLayout, FrameLayout.LayoutParams(MATCH, WRAP))
+            addView(
+                snackbarHost,
+                FrameLayout.LayoutParams(MATCH, WRAP, Gravity.BOTTOM),
+            )
+        }
+        return wrapper
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
@@ -231,13 +263,39 @@ class MyKeyboardService : InputMethodService() {
         }
     }
 
+    override fun onUpdateSelection(
+        oldSelStart: Int,
+        oldSelEnd: Int,
+        newSelStart: Int,
+        newSelEnd: Int,
+        candidatesStart: Int,
+        candidatesEnd: Int,
+    ) {
+        super.onUpdateSelection(
+            oldSelStart,
+            oldSelEnd,
+            newSelStart,
+            newSelEnd,
+            candidatesStart,
+            candidatesEnd,
+        )
+        if (voiceCommandUi?.shouldRouteKeysToTranscript() == true) {
+            voiceCommandUi?.releaseTranscriptEditing()
+        }
+    }
+
     override fun onFinishInput() {
         super.onFinishInput()
         dismissAlternativesPopup()
         languagePopupWindow?.dismiss()
         dismissKeyPreview(immediate = true)
         stopVoice()
+        cancelVoiceCommandFlow()
+        releaseDictationRecorder()
+        runCatching { dictationAudioFile?.delete() }
+        dictationAudioFile = null
         hideResult()
+        hideSnackbar()
         if (showSettings) toggleSettings()
         if (layer == Layer.EMOJI) setLayer(Layer.ALPHA)
     }
@@ -257,6 +315,8 @@ class MyKeyboardService : InputMethodService() {
         dismissKeyPreview(immediate = true)
         suggestionDebounce?.let { mainHandler.removeCallbacks(it) }
         stopVoice()
+        cancelVoiceCommandFlow()
+        hideSnackbar()
         executor.shutdownNow()
         datamuseExecutor.shutdownNow()
         super.onDestroy()
@@ -307,6 +367,8 @@ class MyKeyboardService : InputMethodService() {
         featureToolbar.addView(toolBtn("A✓") { onGrammarPress() })
         featureToolbar.addView(toolDivider())
         featureToolbar.addView(toolBtnIcon(R.drawable.ic_mic) { onVoicePress() })
+        featureToolbar.addView(toolDivider())
+        featureToolbar.addView(toolBtnIcon(R.drawable.ic_floating_menu_command) { onVoiceCommandPress() })
         featureToolbar.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) })
         featureToolbar.addView(toolBtn("⚙") { toggleSettings() })
         rootLayout.addView(featureToolbar)
@@ -378,6 +440,29 @@ class MyKeyboardService : InputMethodService() {
         rootLayout.addView(resultBar)
     }
 
+    private fun buildSnackbarOverlay() {
+        snackbarLabel = TextView(this).apply {
+            textSize = 13f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setPadding(dp(20), dp(10), dp(20), dp(10))
+            background = roundRect(Color.parseColor("#323232"), dp(20))
+            elevation = dp(6).toFloat()
+            alpha = 0f
+        }
+        snackbarHost = FrameLayout(this).apply {
+            isClickable = false
+            isFocusable = false
+            visibility = View.GONE
+            setPadding(dp(24), 0, dp(24), dp(12))
+            addView(
+                snackbarLabel,
+                FrameLayout.LayoutParams(WRAP, WRAP, Gravity.CENTER_HORIZONTAL),
+            )
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Voice bar — mic icon + status + stop icon (■)
     // ─────────────────────────────────────────────────────────────────────────
@@ -414,6 +499,24 @@ class MyKeyboardService : InputMethodService() {
         voiceBar.addView(voiceLabel)
         voiceBar.addView(stopBtn)
         rootLayout.addView(voiceBar)
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Voice command panel — record → transcribe → edit → execute
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private fun buildVoiceCommandPanel() {
+        voiceCommandUi = KeyboardVoiceCommandUi(
+            this,
+            object : KeyboardVoiceCommandUi.Callbacks {
+                override fun onRecordingStop() = stopCommandRecording()
+                override fun onRecordingCancel() = cancelVoiceCommandFlow()
+                override fun onReviewCancel() = cancelVoiceCommandFlow()
+                override fun onReviewSend(editedText: String) =
+                    executeVoiceCommandFromReview(editedText)
+            },
+        )
+        rootLayout.addView(voiceCommandUi!!.root)
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -725,6 +828,7 @@ class MyKeyboardService : InputMethodService() {
     }
 
     private fun clearAllInputText() {
+        if (voiceCommandUi?.clearTranscript() == true) return
         val ic = currentInputConnection ?: return
         ic.beginBatchEdit()
         ic.performContextMenuAction(android.R.id.selectAll)
@@ -765,7 +869,9 @@ class MyKeyboardService : InputMethodService() {
                 layoutParams = LinearLayout.LayoutParams(dp(38), dp(40))
                     .also { it.setMargins(dp(2), 0, dp(2), 0) }
                 setOnClickListener {
-                    currentInputConnection?.commitText(alt, 1)
+                    if (voiceCommandUi?.insertTranscriptText(alt) != true) {
+                        currentInputConnection?.commitText(alt, 1)
+                    }
                     dismissAlternativesPopup()
                 }
             })
@@ -837,7 +943,11 @@ class MyKeyboardService : InputMethodService() {
                         width = dp(40); height = dp(40)
                         setMargins(dp(2), dp(2), dp(2), dp(2))
                     }
-                    setOnClickListener { currentInputConnection?.commitText(emoji, 1) }
+                    setOnClickListener {
+                        if (voiceCommandUi?.insertTranscriptText(emoji) != true) {
+                            currentInputConnection?.commitText(emoji, 1)
+                        }
+                    }
                 })
             }
         }
@@ -872,7 +982,11 @@ class MyKeyboardService : InputMethodService() {
         backRow.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(0,1,1f) })
         backRow.addView(TextView(this).apply {
             text = "⌫"; textSize = 18f; setTextColor(C_KEY_TEXT)
-            setOnClickListener { currentInputConnection?.deleteSurroundingText(1, 0) }
+            setOnClickListener {
+                if (voiceCommandUi?.routeKey("BKSP", shiftOn = false, capsOn = false) != true) {
+                    currentInputConnection?.deleteSurroundingText(1, 0)
+                }
+            }
         })
 
         tabBar.addView(tabs); gridScroll.addView(grid)
@@ -886,6 +1000,15 @@ class MyKeyboardService : InputMethodService() {
     // ─────────────────────────────────────────────────────────────────────────
 
     private fun handleKey(logical: String) {
+        val shiftOn = layer == Layer.SHIFT
+        val capsOn = layer == Layer.CAPS
+        if (voiceCommandUi?.routeKey(logical, shiftOn, capsOn) == true) {
+            if (shiftOn && logical.length == 1 && logical !in listOf("BKSP", "space", "ENTER")) {
+                setLayer(Layer.ALPHA)
+            }
+            return
+        }
+
         val ic = currentInputConnection ?: return
         when {
             logical == "space" -> {
@@ -1220,6 +1343,7 @@ class MyKeyboardService : InputMethodService() {
         }
         if (::resultBar.isInitialized) resultBar.setBackgroundColor(C_RESULT_BG)
         if (::voiceBar.isInitialized) voiceBar.setBackgroundColor(theme.voiceBarBg)
+        voiceCommandUi?.applyTheme(theme)
         if (::settingsPanel.isInitialized) {
             settingsPanel.setBackgroundColor(theme.settingsBg)
             if (showSettings) renderSettingsPanel()
@@ -1240,26 +1364,40 @@ class MyKeyboardService : InputMethodService() {
             showResult("Type or select text first.", isError = true)
             return
         }
-        if (!hasUserId()) {
+        val useInternal = FloatingMicConfigStore.isInternalFloatingTranslationEnabled(this)
+        if (!useInternal && !hasUserId()) {
             showResult("Open Type Easy and log in before using Translate.", isError = true)
             return
         }
         showResult("Translating…", isError = false, isLoading = true)
         rememberReplacementTarget(selected, beforeCursor)
         executor.execute {
-            val result = callApi(
-                ApiConfig.typeEasyUrl(ApiConfig.Endpoints.TRANSLATE),
-                "user_id" to userId,
-                "text" to text,
-                "target_language" to toLang
-            )
-            val out = extractApiText(result, "translated_text", "translation", "result", "data")
-            val error = extractApiText(result, "error", "message", "detail")
-            mainHandler.post {
-                if (!out.isNullOrBlank()) {
-                    showResult(out, isError = false)
-                } else {
-                    showResult(error ?: "Translation failed", isError = true)
+            if (useInternal) {
+                val tr = MlKitTranslateHelper.translate(this, text, fromLang, toLang)
+                mainHandler.post {
+                    tr.onSuccess { showResult(it, isError = false) }
+                        .onFailure { e ->
+                            showResult(
+                                VoiceCommandErrorMapper.toUserMessage(e.message ?: "Translation failed"),
+                                isError = true,
+                            )
+                        }
+                }
+            } else {
+                val result = callApi(
+                    ApiConfig.typeEasyUrl(ApiConfig.Endpoints.TRANSLATE),
+                    "user_id" to userId,
+                    "text" to text,
+                    "target_language" to toLang,
+                )
+                val out = extractApiText(result, "translated_text", "translation", "result", "data")
+                val error = extractApiText(result, "error", "message", "detail")
+                mainHandler.post {
+                    if (!out.isNullOrBlank()) {
+                        showResult(out, isError = false)
+                    } else {
+                        showResult(error ?: "Translation failed", isError = true)
+                    }
                 }
             }
         }
@@ -1309,6 +1447,18 @@ class MyKeyboardService : InputMethodService() {
     // ─────────────────────────────────────────────────────────────────────────
 
     private fun onVoicePress() {
+        if (FloatingMicConfigStore.isInternalTranscribeEnabled(this)) {
+            startInternalVoiceInput()
+        } else {
+            if (isCloudDictationRecording) {
+                stopCloudDictationAndUpload()
+            } else {
+                startCloudDictation()
+            }
+        }
+    }
+
+    private fun startInternalVoiceInput() {
         if (isListening) { stopVoice(); return }
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             showResult("Speech recognition not available.", isError = true)
@@ -1372,12 +1522,335 @@ class MyKeyboardService : InputMethodService() {
         )
     }
 
+    private fun startCloudDictation() {
+        stopVoice()
+        if (!hasRecordAudioPermission()) {
+            showResult("Allow microphone access in Type Easy settings.", isError = true)
+            return
+        }
+        val baseUrl = FloatingMicConfigStore.getVoiceTranscribeBaseUrl(this)
+        val useElevenLabs = FloatingMicConfigStore.shouldUseElevenLabsForMicTranscribe(this)
+        if (baseUrl.isBlank() && !useElevenLabs) {
+            showResult("Voice service is not set up. Open Type Easy → Settings.", isError = true)
+            return
+        }
+        try {
+            dictationAudioFile = File(cacheDir, "keyboard_dictation_${System.currentTimeMillis()}.m4a")
+            val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                MediaRecorder(this)
+            } else {
+                @Suppress("DEPRECATION")
+                MediaRecorder()
+            }
+            recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            recorder.setOutputFile(dictationAudioFile!!.absolutePath)
+            recorder.prepare()
+            recorder.start()
+            dictationMediaRecorder = recorder
+            isCloudDictationRecording = true
+            voiceBar.visibility = View.VISIBLE
+            voiceLabel.text = "Recording… tap mic to stop"
+        } catch (e: Exception) {
+            releaseDictationRecorder()
+            dictationAudioFile?.delete()
+            dictationAudioFile = null
+            showResult(
+                VoiceCommandErrorMapper.toUserMessage(e.message ?: "Recording failed"),
+                isError = true,
+            )
+        }
+    }
+
+    private fun stopCloudDictationAndUpload() {
+        val file = dictationAudioFile
+        try {
+            dictationMediaRecorder?.stop()
+        } catch (_: Exception) {
+        }
+        releaseDictationRecorder()
+        isCloudDictationRecording = false
+        voiceBar.visibility = View.GONE
+        voiceLabel.text = "Processing…"
+
+        if (file == null || !file.exists() || file.length() == 0L) {
+            file?.delete()
+            dictationAudioFile = null
+            showResult("Recording file empty", isError = true)
+            return
+        }
+
+        showResult("Transcribing…", isError = false, isLoading = true)
+        val baseUrl = FloatingMicConfigStore.getVoiceTranscribeBaseUrl(this)
+        executor.execute {
+            val result = if (FloatingMicConfigStore.shouldUseElevenLabsForMicTranscribe(this)) {
+                val eleven = ElevenLabsTranscribeClient.transcribeFile(
+                    FloatingMicConfigStore.getElevenLabsApiKey(this),
+                    file,
+                    FloatingMicConfigStore.getTranslateSourceLang(this)
+                        .trim()
+                        .takeIf { it.isNotEmpty() && it.lowercase() != "auto" }
+                        ?.substringBefore('-'),
+                )
+                if (eleven.isFailure && baseUrl.isNotBlank()) {
+                    VoiceTranscribeClient.transcribeFile(baseUrl, file)
+                } else {
+                    eleven
+                }
+            } else {
+                VoiceTranscribeClient.transcribeFile(baseUrl, file)
+            }
+            mainHandler.post {
+                runCatching { file.delete() }
+                dictationAudioFile = null
+                hideResult()
+                val text = result.getOrNull()
+                if (!text.isNullOrBlank()) {
+                    currentInputConnection?.commitText("$text ", 1)
+                    updateSuggestions()
+                } else {
+                    showResult(
+                        VoiceCommandErrorMapper.toUserMessage(
+                            result.exceptionOrNull()?.message ?: "Transcription failed",
+                        ),
+                        isError = true,
+                    )
+                }
+            }
+        }
+    }
+
+    private fun releaseDictationRecorder() {
+        try {
+            dictationMediaRecorder?.reset()
+            dictationMediaRecorder?.release()
+        } catch (_: Exception) {
+        }
+        dictationMediaRecorder = null
+        isCloudDictationRecording = false
+    }
+
     private fun stopVoice() {
+        if (isCloudDictationRecording) {
+            stopCloudDictationAndUpload()
+            return
+        }
         speechRecognizer?.stopListening()
         speechRecognizer?.destroy()
         speechRecognizer = null
         isListening = false
         if (::voiceBar.isInitialized) voiceBar.visibility = View.GONE
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Feature: Voice Command
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private fun onVoiceCommandPress() {
+        refreshKeyboardConfig()
+        val ui = voiceCommandUi ?: return
+        if (ui.isActive) {
+            if (ui.isRecording) stopCommandRecording() else cancelVoiceCommandFlow()
+            return
+        }
+        stopVoice()
+        hideResult()
+        if (!hasRecordAudioPermission()) {
+            showResult("Allow microphone access in Type Easy settings.", isError = true)
+            return
+        }
+        val baseUrl = FloatingMicConfigStore.getVoiceTranscribeBaseUrl(this)
+        if (baseUrl.isBlank()) {
+            showResult("Voice service is not set up. Open Type Easy → Settings.", isError = true)
+            return
+        }
+        if (!hasUserId()) {
+            showResult("Open Type Easy and log in before using Voice Command.", isError = true)
+            return
+        }
+        startCommandRecording()
+    }
+
+    private fun hasRecordAudioPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun startCommandRecording() {
+        if (commandMediaRecorder != null) return
+        try {
+            commandAudioFile = File(cacheDir, "keyboard_cmd_${System.currentTimeMillis()}.m4a")
+            val outPath = commandAudioFile!!.absolutePath
+            val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                MediaRecorder(this)
+            } else {
+                @Suppress("DEPRECATION")
+                MediaRecorder()
+            }
+            recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            recorder.setOutputFile(outPath)
+            recorder.prepare()
+            recorder.start()
+            commandMediaRecorder = recorder
+            commandRecordingStartedAt = System.currentTimeMillis()
+            voiceCommandUi?.showRecording()
+            startCommandTimer()
+        } catch (e: Exception) {
+            releaseCommandRecorder()
+            commandAudioFile?.delete()
+            commandAudioFile = null
+            showResult(
+                VoiceCommandErrorMapper.toUserMessage(e.message ?: "Recording failed"),
+                isError = true,
+            )
+        }
+    }
+
+    private fun stopCommandRecording() {
+        stopCommandTimer()
+        val file = commandAudioFile
+        try {
+            commandMediaRecorder?.stop()
+        } catch (_: Exception) {
+        }
+        releaseCommandRecorder()
+        if (file == null || !file.exists() || file.length() == 0L) {
+            file?.delete()
+            commandAudioFile = null
+            voiceCommandUi?.showReviewError("Recording file empty")
+            return
+        }
+        val baseUrl = FloatingMicConfigStore.getVoiceTranscribeBaseUrl(this)
+        voiceCommandUi?.showReviewLoading("Transcribing your recording…")
+        executor.execute {
+            val result = VoiceTranscribeClient.transcribeFileFull(baseUrl, file)
+            mainHandler.post {
+                runCatching { file.delete() }
+                commandAudioFile = null
+                if (result.isSuccess) {
+                    val tr = result.getOrNull()!!
+                    commandVoiceAssetId = tr.voiceAssetId
+                    commandOriginalTranscript = tr.transcript
+                    voiceCommandUi?.showReview(tr.transcript)
+                } else {
+                    val msg = result.exceptionOrNull()?.message ?: "Transcription failed"
+                    voiceCommandUi?.showReviewError(msg)
+                }
+            }
+        }
+    }
+
+    private fun executeVoiceCommandFromReview(editedText: String) {
+        val baseUrl = FloatingMicConfigStore.getVoiceTranscribeBaseUrl(this)
+        voiceCommandUi?.setLoading(true, "Sending command…")
+        executor.execute {
+            var assetId = commandVoiceAssetId
+            if (assetId.isNullOrBlank()) {
+                mainHandler.post {
+                    voiceCommandUi?.showReviewError("Missing voice asset ID — re-record and try again.")
+                }
+                return@execute
+            }
+            if (editedText != commandOriginalTranscript) {
+                val updateResult = VoiceCommandClient.updateTranscript(baseUrl, assetId, editedText)
+                updateResult.onSuccess { assetId = it }
+                if (updateResult.isFailure) {
+                    mainHandler.post {
+                        voiceCommandUi?.showReviewError(
+                            updateResult.exceptionOrNull()?.message ?: "Failed to update transcript",
+                        )
+                    }
+                    return@execute
+                }
+            }
+            val execResult = VoiceCommandClient.executeVoiceCommand(baseUrl, assetId!!)
+            mainHandler.post {
+                if (execResult.isSuccess) {
+                    completeVoiceCommandSuccess(execResult.getOrNull())
+                } else {
+                    voiceCommandUi?.showReviewError(
+                        execResult.exceptionOrNull()?.message ?: "Execution failed",
+                    )
+                }
+            }
+        }
+    }
+
+    private fun completeVoiceCommandSuccess(payload: VoiceCommandClient.ExecuteResult?) {
+        stopCommandTimer()
+        releaseCommandRecorder()
+        runCatching { commandAudioFile?.delete() }
+        commandAudioFile = null
+        commandVoiceAssetId = null
+        commandOriginalTranscript = ""
+
+        dismissVoiceCommandPanel()
+        showSnackbar(voiceCommandSuccessMessage(payload))
+
+        if (::rootLayout.isInitialized) {
+            rootLayout.post { dismissVoiceCommandPanel() }
+        }
+    }
+
+    private fun dismissVoiceCommandPanel() {
+        voiceCommandUi?.dismiss()
+        if (!::rootLayout.isInitialized) return
+        for (i in 0 until rootLayout.childCount) {
+            val child = rootLayout.getChildAt(i)
+            if (child.tag == "voice_command_panel") {
+                child.visibility = View.GONE
+            }
+        }
+        rootLayout.requestLayout()
+    }
+
+    private fun cancelVoiceCommandFlow() {
+        stopCommandTimer()
+        try {
+            commandMediaRecorder?.stop()
+        } catch (_: Exception) {
+        }
+        releaseCommandRecorder()
+        runCatching { commandAudioFile?.delete() }
+        commandAudioFile = null
+        commandVoiceAssetId = null
+        commandOriginalTranscript = ""
+        dismissVoiceCommandPanel()
+    }
+
+    private fun releaseCommandRecorder() {
+        try {
+            commandMediaRecorder?.reset()
+            commandMediaRecorder?.release()
+        } catch (_: Exception) {
+        }
+        commandMediaRecorder = null
+    }
+
+    private fun startCommandTimer() {
+        stopCommandTimer()
+        commandTimerRunnable = object : Runnable {
+            override fun run() {
+                val elapsed = System.currentTimeMillis() - commandRecordingStartedAt
+                voiceCommandUi?.updateRecordingTimer(formatCommandElapsed(elapsed))
+                mainHandler.postDelayed(this, 500L)
+            }
+        }
+        mainHandler.post(commandTimerRunnable!!)
+    }
+
+    private fun stopCommandTimer() {
+        commandTimerRunnable?.let { mainHandler.removeCallbacks(it) }
+        commandTimerRunnable = null
+    }
+
+    private fun formatCommandElapsed(ms: Long): String {
+        val totalSec = (ms / 1000).coerceAtLeast(0)
+        val min = totalSec / 60
+        val sec = totalSec % 60
+        return String.format("%d:%02d", min, sec)
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1475,6 +1948,40 @@ class MyKeyboardService : InputMethodService() {
             }
         }
         return null
+    }
+
+    private fun voiceCommandSuccessMessage(payload: VoiceCommandClient.ExecuteResult?): String {
+        val status = payload?.status?.trim()?.lowercase().orEmpty()
+        return when {
+            status.contains("success") -> "Success"
+            status.contains("execut") -> "Done"
+            status.contains("complete") -> "Done"
+            status.contains("ok") -> "Done"
+            else -> "Done"
+        }
+    }
+
+    private fun showSnackbar(message: String, durationMs: Long = 2200L) {
+        if (!::snackbarLabel.isInitialized) return
+        snackbarDismissRunnable?.let { mainHandler.removeCallbacks(it) }
+        snackbarLabel.text = message
+        snackbarHost.visibility = View.VISIBLE
+        snackbarLabel.animate().cancel()
+        snackbarLabel.alpha = 0f
+        snackbarLabel.animate().alpha(1f).setDuration(180).start()
+        val task = Runnable { hideSnackbar() }
+        snackbarDismissRunnable = task
+        mainHandler.postDelayed(task, durationMs)
+    }
+
+    private fun hideSnackbar() {
+        snackbarDismissRunnable?.let { mainHandler.removeCallbacks(it) }
+        snackbarDismissRunnable = null
+        if (!::snackbarLabel.isInitialized || snackbarHost.visibility != View.VISIBLE) return
+        snackbarLabel.animate().cancel()
+        snackbarLabel.animate().alpha(0f).setDuration(180).withEndAction {
+            snackbarHost.visibility = View.GONE
+        }.start()
     }
 
     private fun showResult(text: String, isError: Boolean = false, isLoading: Boolean = false) {

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { TouchableOpacity, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { Pressable, Text, ActivityIndicator, StyleSheet, Keyboard } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 
 export const PrimaryButton = ({
@@ -10,24 +10,38 @@ export const PrimaryButton = ({
   style,
   textStyle,
   variant = 'primary',
+  dismissKeyboardOnPress = false,
 }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
+  const handlePress = (event) => {
+    if (disabled || loading) return;
+    if (dismissKeyboardOnPress) {
+      Keyboard.dismiss();
+    }
+    onPress?.(event);
+  };
+
   return (
-    <TouchableOpacity
-      style={[
+    <Pressable
+      style={({ pressed }) => [
         styles.base,
         variant === 'primary' && styles.primary,
         variant === 'outline' && styles.outline,
         variant === 'ghost' && styles.ghost,
         variant === 'danger' && styles.danger,
         (disabled || loading) && styles.disabled,
+        pressed && !disabled && !loading && styles.pressed,
         style,
       ]}
-      onPress={onPress}
+      onPress={handlePress}
       disabled={disabled || loading}
-      activeOpacity={0.8}
+      android_ripple={
+        variant === 'primary' || variant === 'danger'
+          ? { color: 'rgba(255,255,255,0.2)' }
+          : { color: 'rgba(0,0,0,0.08)' }
+      }
     >
       {loading ? (
         <ActivityIndicator
@@ -46,7 +60,7 @@ export const PrimaryButton = ({
           {title}
         </Text>
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 
@@ -76,6 +90,9 @@ const createStyles = (colors) =>
     },
     disabled: {
       opacity: 0.5,
+    },
+    pressed: {
+      opacity: 0.88,
     },
     text: {
       color: '#FFFFFF',

@@ -20,6 +20,7 @@ import {
   Clipboard,
   NativeModules,
   Platform,
+  Keyboard,
 } from 'react-native';
 import {
   Mic,
@@ -35,6 +36,10 @@ import {
 import { FileSystem } from 'react-native-file-access';
 import NativeAudioService from '../../services/NativeAudioService';
 import { voiceApi } from '../../api/voiceApi';
+import {
+  transcribeForVoiceCommand,
+  executeEditedVoiceCommand,
+} from '../../services/voiceCommandWorkflow';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { AppCard } from '../../components/common/AppCard';
 import { PrimaryButton } from '../../components/common/PrimaryButton';
@@ -72,6 +77,7 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
   const durationInterval = useRef(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pulseRef = useRef(null);
+  const transcriptInputRef = useRef(null);
 
   useEffect(() => {
     if (isRecording && !isPaused) {
@@ -295,14 +301,16 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
       const exists = await FileSystem.exists(absPath);
       if (!exists) throw new Error('Audio file missing before upload: ' + absPath);
 
-      const result = await voiceApi.transcribeAudio(audioFilePath, {
+      const result = await transcribeForVoiceCommand(audioFilePath, {
         language: 'en-US',
         enablePunctuation: true,
         enableTimestamps: false,
       });
 
       if (result.success) {
-        const { rawTranscript, refinedTranscript, voiceAssetId: assetId } = result.data;
+        const { transcript, voiceAssetId: assetId } = result;
+        const rawTranscript = transcript;
+        const refinedTranscript = transcript;
         if (recordingData) {
           const updated = { ...recordingData, rawTranscript, refinedTranscript, voiceAssetId: assetId };
           await NativeAudioService.updateRecordingTranscript(recordingData.id, updated);
@@ -404,52 +412,42 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
   };
 
   const handleExecuteVoiceCommand = async () => {
-    if (!voiceAssetId) {
-      showAlert('Error', 'No voice asset ID available for execution');
+    transcriptInputRef.current?.blur();
+    Keyboard.dismiss();
+    const currentTranscript = isEditingTranscript ? editableTranscript.trim() : transcript;
+    if (!currentTranscript?.trim()) {
+      showAlert('Error', 'Enter a command before sending');
+      return;
+    }
+    const audioPath = lastRecording?.filePath || filePath;
+    if (!voiceAssetId && !audioPath) {
+      showAlert('Error', 'No recording available for command execution');
       return;
     }
     try {
       setIsExecuting(true);
-      const currentTranscript = isEditingTranscript ? editableTranscript.trim() : transcript;
-      const hasChanged = currentTranscript !== transcript;
-      let finalVoiceAssetId = voiceAssetId;
-
-      if (hasChanged && isEditingTranscript) {
-        const updateResult = await voiceApi.updateTranscript(voiceAssetId, currentTranscript);
-        if (updateResult.success) {
-          finalVoiceAssetId = updateResult.data.voiceAssetId;
-          setVoiceAssetId(finalVoiceAssetId);
-          setTranscript(currentTranscript);
-          if (lastRecording) {
-            const updated = { ...lastRecording, refinedTranscript: currentTranscript };
-            await NativeAudioService.updateRecordingTranscript(lastRecording.id, updated);
-            setLastRecording(updated);
-          }
-        } else {
-          throw new Error(`Failed to update transcript: ${updateResult.error}`);
-        }
+      const exec = await executeEditedVoiceCommand(
+        voiceAssetId,
+        currentTranscript,
+        transcript,
+        audioPath,
+      );
+      if (!exec.success) {
+        throw new Error(exec.error || 'Failed to execute voice command');
       }
-
-      const executeResult = await voiceApi.executeVoiceCommand(finalVoiceAssetId, {
-        timestamp: new Date().toISOString(),
+      setTranscript(currentTranscript);
+      setIsEditingTranscript(false);
+      await logActivity(ActivityCategory.VOICE_RECORDER, 'command_executed', {
+        label: 'Voice command sent',
+        meta: currentTranscript.slice(0, 160),
       });
-
-      if (executeResult.success) {
-        setIsEditingTranscript(false);
-        await logActivity(ActivityCategory.VOICE_RECORDER, 'command_executed', {
-          label: 'Voice command sent',
-          meta: currentTranscript.slice(0, 160),
-        });
-        showAlert(
-          'Command Executed!',
-          `Voice command processed successfully.\n\n${hasChanged ? '(Transcript was updated before execution)' : '(Original transcript used)'}`,
-          [{ text: 'OK' }],
-        );
-        if (homeEmbedded) {
-          resetVoiceCommandState();
-        }
-      } else {
-        throw new Error(executeResult.error);
+      showAlert(
+        'Command Executed!',
+        `Voice command processed successfully.\n\n${exec.result}`,
+        [{ text: 'OK' }],
+      );
+      if (homeEmbedded) {
+        resetVoiceCommandState();
       }
     } catch (error) {
       showAlert('Execution Failed', error.message || 'Failed to execute voice command');
@@ -642,18 +640,22 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
             <>
               <Text style={styles.editLabel}>Edit Transcript</Text>
               <TextInput
+                ref={transcriptInputRef}
                 style={styles.transcriptInput}
                 multiline
                 value={editableTranscript}
                 onChangeText={setEditableTranscript}
                 placeholder="Edit transcript…"
                 autoFocus
+                blurOnSubmit
+                returnKeyType="done"
               />
               <View style={[styles.editActionsRow, homeEmbedded && styles.editActionsRowHome]}>
                 <PrimaryButton
                   title="Save"
                   onPress={handleSaveTranscript}
                   variant="ghost"
+                  dismissKeyboardOnPress
                   style={[styles.editActionBtn, homeEmbedded && styles.editActionBtnHome]}
                   textStyle={[{ color: colors.status.granted }, homeEmbedded && styles.editActionTextHome]}
                 />
@@ -661,6 +663,7 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
                   title="Send"
                   onPress={handleExecuteVoiceCommand}
                   loading={isExecuting}
+                  dismissKeyboardOnPress
                   style={[styles.editActionBtn, homeEmbedded && styles.editActionBtnHome, { backgroundColor: colors.primary }]}
                   textStyle={homeEmbedded ? styles.editActionTextHomeLight : undefined}
                 />
@@ -668,6 +671,7 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
                   title="Cancel"
                   onPress={handleCancelEdit}
                   variant="danger"
+                  dismissKeyboardOnPress
                   style={[styles.editActionBtn, homeEmbedded && styles.editActionBtnHome]}
                   textStyle={homeEmbedded ? styles.editActionTextHomeLight : undefined}
                 />
@@ -818,7 +822,12 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
           </View>
         }
       />
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
         {mainBody}
       </ScrollView>
     </View>

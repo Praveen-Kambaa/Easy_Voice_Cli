@@ -1,27 +1,28 @@
+import logger from '../utils/logger';
 import { NativeModules, Platform, Linking } from 'react-native';
 import { showGlobalAlert } from '../utils/alertPresenter';
 
 const { FloatingMicModule } = NativeModules;
 
 export const debugFloatingOverlay = async () => {
-  console.log('=== FLOATING OVERLAY DEBUG ===');
+  logger.debug('=== FLOATING OVERLAY DEBUG ===');
   
   if (Platform.OS !== 'android') {
-    console.error('Floating overlay only works on Android');
+    logger.error('Floating overlay only works on Android');
     return;
   }
 
   try {
     // Check permissions
     const permissions = await FloatingMicModule.checkPermissions();
-    console.log('Permissions:', permissions);
+    logger.debug('Permissions:', permissions);
     
     // Detailed permission checks
-    console.log('\n=== DETAILED PERMISSION ANALYSIS ===');
+    logger.debug('\n=== DETAILED PERMISSION ANALYSIS ===');
     
     // 1. Overlay Permission Check
     if (!permissions.overlay) {
-      console.error('❌ OVERLAY PERMISSION NOT GRANTED');
+      logger.error('❌ OVERLAY PERMISSION NOT GRANTED');
       showGlobalAlert(
         'Overlay Permission Required',
         'Please enable "Display over other apps" permission:\n\n1. Go to Settings\n2. Apps -> Your App\n3. Permissions -> Display over other apps\n4. Enable it',
@@ -35,12 +36,12 @@ export const debugFloatingOverlay = async () => {
       );
       return;
     } else {
-      console.log('✅ Overlay permission granted');
+      logger.debug('✅ Overlay permission granted');
     }
 
     // 2. Record Audio Permission Check
     if (!permissions.recordAudio) {
-      console.error('❌ RECORD AUDIO PERMISSION NOT GRANTED');
+      logger.error('❌ RECORD AUDIO PERMISSION NOT GRANTED');
       showGlobalAlert(
         'Microphone Permission Required',
         'Please enable microphone permission for voice recording.',
@@ -54,12 +55,12 @@ export const debugFloatingOverlay = async () => {
       );
       return;
     } else {
-      console.log('✅ Record audio permission granted');
+      logger.debug('✅ Record audio permission granted');
     }
 
     // 3. Accessibility Service Check
     if (!permissions.accessibility) {
-      console.error('❌ ACCESSIBILITY SERVICE NOT ENABLED');
+      logger.error('❌ ACCESSIBILITY SERVICE NOT ENABLED');
       showGlobalAlert(
         'Accessibility Service Required',
         'Please enable accessibility service:\n\n1. Go to Settings\n2. Accessibility\n3. Your App Service\n4. Enable it',
@@ -73,15 +74,15 @@ export const debugFloatingOverlay = async () => {
       );
       return;
     } else {
-      console.log('✅ Accessibility service enabled');
+      logger.debug('✅ Accessibility service enabled');
     }
 
-    console.log('\n=== STARTING SERVICE DEBUG ===');
+    logger.debug('\n=== STARTING SERVICE DEBUG ===');
     
     // Try to start the service
     try {
       const result = await FloatingMicModule.startFloatingMic();
-      console.log('✅ Service started successfully:', result);
+      logger.debug('✅ Service started successfully:', result);
       
       showGlobalAlert(
         'Service Started',
@@ -90,7 +91,7 @@ export const debugFloatingOverlay = async () => {
       );
       
     } catch (error) {
-      console.error('❌ Failed to start service:', error);
+      logger.error('❌ Failed to start service:', error);
       
       let errorMessage = error.message || 'Unknown error';
       let suggestions = [];
@@ -115,15 +116,15 @@ export const debugFloatingOverlay = async () => {
     }
     
   } catch (error) {
-    console.error('❌ Debug failed:', error);
+    logger.error('❌ Debug failed:', error);
     showGlobalAlert('Debug Error', error.message);
   }
   
-  console.log('=== END DEBUG ===');
+  logger.debug('=== END DEBUG ===');
 };
 
 export const checkBatteryOptimization = async () => {
-  console.log('=== BATTERY OPTIMIZATION CHECK ===');
+  logger.debug('=== BATTERY OPTIMIZATION CHECK ===');
   
   // This would need to be implemented in native module
   showGlobalAlert(
@@ -141,7 +142,7 @@ export const checkBatteryOptimization = async () => {
 
 export const checkAndroidVersionIssues = () => {
   const androidVersion = Platform.Version;
-  console.log('Android Version:', androidVersion);
+  logger.debug('Android Version:', androidVersion);
   
   let issues = [];
   let solutions = [];

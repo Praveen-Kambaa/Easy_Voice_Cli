@@ -22,6 +22,8 @@ object FloatingMicConfigStore {
     private const val KEY_INTERNAL_TRANSLATION = "internal_floating_translation"
     /** Show Ask Question (AI provider + ML Kit) in the floating overlay. */
     private const val KEY_OVERLAY_ASK = "overlay_ask_question_enabled"
+    /** Show voice command (transcribe → edit → execute) in the floating overlay. */
+    private const val KEY_OVERLAY_COMMAND = "overlay_voice_command_enabled"
     /** AI provider API key for Ask Question (synced from JS). */
     private const val KEY_AI_PROVIDER_API_KEY = "ai_provider_api_key"
     /** Tavily search API key for latest context (synced from JS). */
@@ -40,6 +42,7 @@ object FloatingMicConfigStore {
     private const val DEFAULT_OVERLAY_TRANSLATION = true
     private const val DEFAULT_INTERNAL_TRANSLATION = true
     private const val DEFAULT_OVERLAY_ASK = false
+    private const val DEFAULT_OVERLAY_COMMAND = true
 
     /**
      * Placeholder synced from JS until the user sets a real key in Settings.
@@ -111,6 +114,11 @@ object FloatingMicConfigStore {
             .getBoolean(KEY_OVERLAY_ASK, DEFAULT_OVERLAY_ASK)
     }
 
+    fun isOverlayVoiceCommandEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_OVERLAY_COMMAND, DEFAULT_OVERLAY_COMMAND)
+    }
+
     fun getAiProviderApiKey(context: Context): String {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         var v = prefs.getString(KEY_AI_PROVIDER_API_KEY, null)?.trim().orEmpty()
@@ -155,6 +163,7 @@ object FloatingMicConfigStore {
         overlayTranslationEnabled: Boolean,
         internalFloatingTranslation: Boolean,
         overlayAskQuestionEnabled: Boolean,
+        overlayVoiceCommandEnabled: Boolean,
         aiProviderApiKey: String,
         aiChatApiBaseUrl: String,
         aiChatModel: String,
@@ -163,10 +172,12 @@ object FloatingMicConfigStore {
         var mic = overlayMicEnabled
         var trans = overlayTranslationEnabled
         var ask = overlayAskQuestionEnabled
-        if (!mic && !trans && !ask) {
+        var command = overlayVoiceCommandEnabled
+        if (!mic && !trans && !ask && !command) {
             mic = true
             trans = false
             ask = false
+            command = false
         }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().apply {
             putBoolean(KEY_INTERNAL, internalTranscribe)
@@ -180,6 +191,7 @@ object FloatingMicConfigStore {
             putBoolean(KEY_OVERLAY_TRANSLATION, trans)
             putBoolean(KEY_INTERNAL_TRANSLATION, internalFloatingTranslation)
             putBoolean(KEY_OVERLAY_ASK, ask)
+            putBoolean(KEY_OVERLAY_COMMAND, command)
             putString(KEY_AI_PROVIDER_API_KEY, aiProviderApiKey.trim())
             putString(KEY_TAVILY_API_KEY, tavilyApiKey.trim())
             putString(
