@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DeviceEventEmitter } from 'react-native';
 import {
@@ -20,7 +21,7 @@ async function persistHistoryIfChanged(prev, pruned) {
   try {
     await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(pruned));
   } catch (e) {
-    console.warn('[translationTextStorage] persist prune', e);
+    logger.warn('[translationTextStorage] persist prune', e);
   }
 }
 
@@ -45,7 +46,7 @@ export async function deleteTranslationHistoryEntry(id) {
     DeviceEventEmitter.emit(TRANSLATION_HISTORY_UPDATED_EVENT);
     return { success: true };
   } catch (e) {
-    console.warn('[translationTextStorage] deleteTranslationHistoryEntry', e);
+    logger.warn('[translationTextStorage] deleteTranslationHistoryEntry', e);
     return { success: false, error: e?.message || 'Could not delete' };
   }
 }
@@ -68,7 +69,7 @@ export async function addTranslationHistory(entry) {
     await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(next));
     DeviceEventEmitter.emit(TRANSLATION_HISTORY_UPDATED_EVENT);
   } catch (e) {
-    console.warn('[translationTextStorage] addTranslationHistory', e);
+    logger.warn('[translationTextStorage] addTranslationHistory', e);
   }
 }
 

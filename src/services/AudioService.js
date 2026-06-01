@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { FileSystem, Dirs } from 'react-native-file-access';
 import VoiceRecorder from 'react-native-voice-recorder';
@@ -35,7 +36,7 @@ class AudioService {
       );
       return granted === PermissionsAndroid.RESULTS.GRANTED;
     } catch (error) {
-      console.error('[AudioService] Permission error:', error);
+      logger.error('[AudioService] Permission error:', error);
       return false;
     }
   }
@@ -58,7 +59,7 @@ class AudioService {
       const fileName = `recording_${timestamp}.mp4`;
       const filePath = `${Dirs.CacheDir}/${fileName}`;
 
-      console.log('[AudioService] startRecording → path:', filePath);
+      logger.debug('[AudioService] startRecording → path:', filePath);
 
       // Start recording with VoiceRecorder
       await VoiceRecorder.startRecording({
@@ -67,7 +68,7 @@ class AudioService {
         quality: 'high',
       });
 
-      console.log('[AudioService] VoiceRecorder started successfully');
+      logger.debug('[AudioService] VoiceRecorder started successfully');
 
       this.isRecording = true;
       this.recordingFilePath = filePath;
@@ -75,7 +76,7 @@ class AudioService {
 
       return { success: true, filePath };
     } catch (error) {
-      console.error('[AudioService] startRecording error:', error);
+      logger.error('[AudioService] startRecording error:', error);
       return { success: false, error: error.message };
     }
   }
@@ -87,11 +88,11 @@ class AudioService {
       }
 
       const duration = Date.now() - this.recordingStartTime;
-      console.log('[AudioService] stopRecording, duration:', duration, 'ms');
+      logger.debug('[AudioService] stopRecording, duration:', duration, 'ms');
 
       // Stop recording with VoiceRecorder
       const result = await VoiceRecorder.stopRecording();
-      console.log('[AudioService] VoiceRecorder stopped:', result);
+      logger.debug('[AudioService] VoiceRecorder stopped:', result);
 
       const savedPath = this.recordingFilePath;
 
@@ -101,7 +102,7 @@ class AudioService {
         throw new Error('Recording file not found after stop');
       }
       const stat = await FileSystem.stat(savedPath);
-      console.log('[AudioService] file saved at:', savedPath, '– size:', stat.size, 'bytes');
+      logger.debug('[AudioService] file saved at:', savedPath, '– size:', stat.size, 'bytes');
 
       this.isRecording = false;
       this.recordingStartTime = null;
@@ -128,7 +129,7 @@ class AudioService {
         recordingData,
       };
     } catch (error) {
-      console.error('[AudioService] stopRecording error:', error);
+      logger.error('[AudioService] stopRecording error:', error);
       this.isRecording = false;
       this.recordingStartTime = null;
       this.recordingFilePath = '';
@@ -144,7 +145,7 @@ class AudioService {
         await this.stopPlayback();
       }
 
-      console.log('[AudioService] playRecording:', filePath);
+      logger.debug('[AudioService] playRecording:', filePath);
 
       const exists = await FileSystem.exists(filePath);
       if (!exists) {
@@ -156,18 +157,18 @@ class AudioService {
       this.isPlaying = true;
       this.currentPlaybackFile = filePath;
 
-      console.log('[AudioService] playback started (simulated)');
+      logger.debug('[AudioService] playback started (simulated)');
       
       // Simulate playback ending after 3 seconds
       setTimeout(() => {
         this.isPlaying = false;
         this.currentPlaybackFile = '';
-        console.log('[AudioService] playback ended (simulated)');
+        logger.debug('[AudioService] playback ended (simulated)');
       }, 3000);
 
       return { success: true };
     } catch (error) {
-      console.error('[AudioService] playRecording error:', error);
+      logger.error('[AudioService] playRecording error:', error);
       this.isPlaying = false;
       this.currentPlaybackFile = '';
       return { success: false, error: error.message };
@@ -182,10 +183,10 @@ class AudioService {
       
       this.isPlaying = false;
       this.currentPlaybackFile = '';
-      console.log('[AudioService] playback stopped');
+      logger.debug('[AudioService] playback stopped');
       return { success: true };
     } catch (error) {
-      console.error('[AudioService] stopPlayback error:', error);
+      logger.error('[AudioService] stopPlayback error:', error);
       this.isPlaying = false;
       this.currentPlaybackFile = '';
       return { success: false, error: error.message };
@@ -197,7 +198,7 @@ class AudioService {
       // Not implemented for VoiceRecorder
       return { success: false, error: 'Pause not supported with current recorder' };
     } catch (error) {
-      console.error('[AudioService] pausePlayback error:', error);
+      logger.error('[AudioService] pausePlayback error:', error);
       return { success: false, error: error.message };
     }
   }
@@ -207,7 +208,7 @@ class AudioService {
       // Not implemented for VoiceRecorder
       return { success: false, error: 'Resume not supported with current recorder' };
     } catch (error) {
-      console.error('[AudioService] resumePlayback error:', error);
+      logger.error('[AudioService] resumePlayback error:', error);
       return { success: false, error: error.message };
     }
   }
@@ -219,7 +220,7 @@ class AudioService {
       recordings = [...recordings, recording];
       return { success: true };
     } catch (error) {
-      console.error('[AudioService] saveRecording error:', error);
+      logger.error('[AudioService] saveRecording error:', error);
       return { success: false, error: error.message };
     }
   }
@@ -267,7 +268,7 @@ class AudioService {
         await VoiceRecorder.stopRecording();
       }
     } catch (e) {
-      console.log('[AudioService] forceCleanup (expected):', e.message);
+      logger.debug('[AudioService] forceCleanup (expected):', e.message);
     } finally {
       this.isRecording = false;
       this.isPlaying = false;

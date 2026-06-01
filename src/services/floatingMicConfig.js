@@ -1,10 +1,11 @@
+import logger from '../utils/logger';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Appearance, NativeModules, Platform } from 'react-native';
 
 /** Keep in sync with ThemeContext THEME_STORAGE_KEY / THEME_MODES */
 const THEME_STORAGE_KEY = '@app_color_scheme';
 const THEME_MODES = { SYSTEM: 'system', LIGHT: 'light', DARK: 'dark' };
-import { buildEasyVoiceUrl } from '../config/api';
+import { buildEasyVoiceUrl, VOICE_ENDPOINTS } from '../config/api';
 import {
   AI_PROVIDER_API_KEY,
   AI_CHAT_API_BASE_URL,
@@ -22,16 +23,15 @@ export const INTERNAL_FLOATING_TRANSLATION_STORAGE = '@internal_floating_transla
 export const ELEVENLABS_API_KEY_STORAGE = '@elevenlabs_api_key';
 export const ELEVENLABS_API_KEY_PLACEHOLDER = 'sk_b421402b1344b82c0b9e392cb59fac86c44fa16848dac753';
 
+/** Floating overlay: voice command (transcribe → edit → execute). Default ON. */
+export const OVERLAY_VOICE_COMMAND_STORAGE = '@overlay_floating_voice_command_enabled';
 /** Floating overlay: Ask Question (speech → AI reply injected as returned). Default OFF. */
 export const OVERLAY_ASK_QUESTION_STORAGE = '@overlay_floating_ask_question_enabled';
 
 const { FloatingMicModule, KeyboardModule } = NativeModules;
 
-/**
- * Relative path on the Easy Voice server for speech → translate.
- * Update this (or pass from env) when your backend route is finalized.
- */
-export const SPEECH_TRANSLATE_PATH = '/voice/speech-translate';
+/** Floating overlay translator path — same as api/endpoints.js SPEECH_TRANSLATE */
+export const SPEECH_TRANSLATE_PATH = VOICE_ENDPOINTS.SPEECH_TRANSLATE;
 
 /** @returns {Promise<boolean>} true = on-device SpeechRecognizer; false = upload to voice API */
 export async function getInternalTranscribeEnabled() {
@@ -121,6 +121,21 @@ export async function getOverlayAskQuestionEnabled() {
   }
 }
 
+export async function getOverlayVoiceCommandEnabled() {
+  try {
+    const raw = await AsyncStorage.getItem(OVERLAY_VOICE_COMMAND_STORAGE);
+    if (raw === null) return true;
+    return raw === 'true';
+  } catch {
+    return true;
+  }
+}
+
+export async function setOverlayVoiceCommandEnabled(enabled) {
+  await AsyncStorage.setItem(OVERLAY_VOICE_COMMAND_STORAGE, enabled ? 'true' : 'false');
+  await syncFloatingMicSettingsToNative();
+}
+
 export async function setOverlayAskQuestionEnabled(enabled) {
   await AsyncStorage.setItem(OVERLAY_ASK_QUESTION_STORAGE, enabled ? 'true' : 'false');
   await syncFloatingMicSettingsToNative();
@@ -206,7 +221,7 @@ export async function syncKeyboardSettingsToNative(userIdOverride, isDarkOverrid
     }
     await KeyboardModule.syncKeyboardSettings(userId, fromLang, toLang, isDark, themeMode);
   } catch (e) {
-    console.warn('[floatingMicConfig] keyboard sync failed:', e?.message || e);
+    logger.warn('[floatingMicConfig] keyboard sync failed:', e?.message || e);
   }
 }
 
@@ -235,7 +250,7 @@ export async function syncTranslationLanguagesFromKeyboard() {
 
     return { fromLang, toLang, changed };
   } catch (e) {
-    console.warn('[floatingMicConfig] keyboard language pull failed:', e?.message || e);
+    logger.warn('[floatingMicConfig] keyboard language pull failed:', e?.message || e);
     const fromLang = (await AsyncStorage.getItem('@from_language')) || 'en';
     const toLang = (await AsyncStorage.getItem('@to_language')) || 'ta';
     return { fromLang, toLang, changed: false };
@@ -257,10 +272,11 @@ export async function syncFloatingMicSettingsToNative() {
     let overlayMic = await getOverlayMicEnabled();
     let overlayTranslation = await getOverlayTranslationEnabled();
     const overlayAskQuestion = await getOverlayAskQuestionEnabled();
+    const overlayVoiceCommand = await getOverlayVoiceCommandEnabled();
     const internalFloatingTranslation = await getInternalFloatingTranslationEnabled();
     const aiProviderApiKey = await getAiProviderApiKey();
     const tavilyApiKey = (TAVILY_API_KEY ?? '').trim();
-    if (!overlayMic && !overlayTranslation && !overlayAskQuestion) {
+    if (!overlayMic && !overlayTranslation && !overlayAskQuestion && !overlayVoiceCommand) {
       overlayMic = true;
       overlayTranslation = false;
       await AsyncStorage.setItem(OVERLAY_MIC_STORAGE, 'true');
@@ -278,6 +294,7 @@ export async function syncFloatingMicSettingsToNative() {
         overlayTranslation,
         internalFloatingTranslation,
         overlayAskQuestion,
+        overlayVoiceCommand,
         aiProviderApiKey,
         (AI_CHAT_API_BASE_URL ?? '').trim(),
         (AI_CHAT_MODEL ?? '').trim(),
@@ -285,7 +302,7 @@ export async function syncFloatingMicSettingsToNative() {
       );
     }
   } catch (e) {
-    console.warn('[floatingMicConfig] sync to native failed:', e?.message || e);
+    logger.warn('[floatingMicConfig] sync to native failed:', e?.message || e);
   } finally {
     await syncKeyboardSettingsToNative();
   }

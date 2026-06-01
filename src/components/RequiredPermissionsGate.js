@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
@@ -116,7 +117,7 @@ export default function RequiredPermissionsGate({ children }) {
         setAccessibility(true);
         setRuntimeComplete(true);
       } catch (e) {
-        console.error('RequiredPermissionsGate iOS check:', e);
+        logger.error('RequiredPermissionsGate iOS check:', e);
         setAllGranted(false);
       } finally {
         if (showLoading) {
@@ -163,7 +164,7 @@ export default function RequiredPermissionsGate({ children }) {
       }
       setRuntimeComplete(runtimeOk);
     } catch (e) {
-      console.error('RequiredPermissionsGate runtime check:', e);
+      logger.error('RequiredPermissionsGate runtime check:', e);
       setRuntimeComplete(false);
       setRuntimeHasBlocked(false);
       setRuntimeMissingLabels([]);
@@ -196,7 +197,7 @@ export default function RequiredPermissionsGate({ children }) {
       setAccessibility(!!perms.accessibility);
       setAllGranted(!!perms.allGranted);
     } catch (e) {
-      console.error('RequiredPermissionsGate Android check:', e);
+      logger.error('RequiredPermissionsGate Android check:', e);
       setAllGranted(false);
     } finally {
       if (showLoading) {

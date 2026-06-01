@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 import { useEffect } from 'react';
 import { DeviceEventEmitter, Platform } from 'react-native';
 import { FloatingSpeechHistoryService } from '../services/FloatingSpeechHistoryService';
@@ -13,7 +14,7 @@ export const FloatingSpeechHistorySync = () => {
     const sub = DeviceEventEmitter.addListener(
       'FloatingMicService_onTranscriptionComplete',
       (text) => {
-        console.log('🎯 FloatingSpeechHistorySync: Received transcription:', text);
+        logger.debug('🎯 FloatingSpeechHistorySync: Received transcription:', text);
         FloatingSpeechHistoryService.appendFromFloatingMic(text);
       },
     );

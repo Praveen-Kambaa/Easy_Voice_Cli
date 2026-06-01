@@ -1,3 +1,4 @@
+import logger from '../../utils/logger';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
@@ -26,7 +27,7 @@ import { useAlert } from '../../context/AlertContext';
 import { useTheme } from '../../context/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildEasyVoiceUrl } from '../../config/api';
-import { offlineWhisperService } from '../../services/offlineWhisperService';
+import { transcribeBySettings } from '../../services/transcribeService';
 import {
   getInternalTranscribeEnabled,
   setInternalTranscribeEnabled,
@@ -43,6 +44,8 @@ import {
   setInternalFloatingTranslationEnabled,
   getOverlayAskQuestionEnabled,
   setOverlayAskQuestionEnabled,
+  getOverlayVoiceCommandEnabled,
+  setOverlayVoiceCommandEnabled,
 } from '../../services/floatingMicConfig';
 import { ChevronDown, Copy, Keyboard } from 'lucide-react-native';
 import { ThemeModeSelector } from '../../components/settings/ThemeModeSelector';
@@ -65,6 +68,7 @@ const SettingsScreen = () => {
   const [elevenLabsKeyDraft, setElevenLabsKeyDraft] = useState('');
   const [elevenLabsKeySaving, setElevenLabsKeySaving] = useState(false);
   const [overlayAskQuestionEnabled, setOverlayAskQuestionEnabledState] = useState(false);
+  const [overlayVoiceCommandEnabled, setOverlayVoiceCommandEnabledState] = useState(true);
   const [aiProviderKeyDraft, setAiProviderKeyDraft] = useState('');
   const [aiProviderKeySaving, setAiProviderKeySaving] = useState(false);
   /** null | 'from' | 'to' — which translation language picker is open */
@@ -101,6 +105,7 @@ const SettingsScreen = () => {
       setOverlayTranslationEnabledState(await getOverlayTranslationEnabled());
       setInternalFloatingTranslationState(await getInternalFloatingTranslationEnabled());
       setOverlayAskQuestionEnabledState(await getOverlayAskQuestionEnabled());
+      setOverlayVoiceCommandEnabledState(await getOverlayVoiceCommandEnabled());
     })();
   }, []);
 
@@ -128,8 +133,19 @@ const SettingsScreen = () => {
     }
   };
 
+  const overlayOthersEnabled = (exclude) => {
+    const flags = {
+      mic: overlayMicEnabled,
+      translation: overlayTranslationEnabled,
+      ask: overlayAskQuestionEnabled,
+      command: overlayVoiceCommandEnabled,
+    };
+    if (exclude) delete flags[exclude];
+    return Object.values(flags).some(Boolean);
+  };
+
   const onOverlayMicToggle = async (value) => {
-    if (!value && !overlayTranslationEnabled && !overlayAskQuestionEnabled) {
+    if (!value && !overlayOthersEnabled('mic')) {
       showAlert(
         'Overlay',
         'Keep at least one action enabled. Turn on Translation or Ask Question, or leave Microphone on.',
@@ -149,7 +165,7 @@ const SettingsScreen = () => {
   };
 
   const onOverlayTranslationToggle = async (value) => {
-    if (!value && !overlayMicEnabled && !overlayAskQuestionEnabled) {
+    if (!value && !overlayOthersEnabled('translation')) {
       showAlert(
         'Overlay',
         'Keep at least one action enabled. Turn on Microphone or Ask Question, or leave Translation on.',
@@ -169,7 +185,7 @@ const SettingsScreen = () => {
   };
 
   const onOverlayAskQuestionToggle = async (value) => {
-    if (!value && !overlayMicEnabled && !overlayTranslationEnabled) {
+    if (!value && !overlayOthersEnabled('ask')) {
       showAlert(
         'Overlay',
         'Keep at least one action enabled. Turn on Microphone or Translation, or leave Ask Question on.',
@@ -184,6 +200,26 @@ const SettingsScreen = () => {
       });
     } catch (e) {
       setOverlayAskQuestionEnabledState(!value);
+      showAlert('Error', e?.message || 'Could not save overlay setting');
+    }
+  };
+
+  const onOverlayVoiceCommandToggle = async (value) => {
+    if (!value && !overlayOthersEnabled('command')) {
+      showAlert(
+        'Overlay',
+        'Keep at least one action enabled. Turn on another overlay action, or leave Voice Command on.',
+      );
+      return;
+    }
+    setOverlayVoiceCommandEnabledState(value);
+    try {
+      await setOverlayVoiceCommandEnabled(value);
+      await logActivity(ActivityCategory.SETTINGS, 'overlay_voice_command_toggled', {
+        label: value ? 'Overlay voice command on' : 'Overlay voice command off',
+      });
+    } catch (e) {
+      setOverlayVoiceCommandEnabledState(!value);
       showAlert('Error', e?.message || 'Could not save overlay setting');
     }
   };
@@ -231,7 +267,7 @@ const SettingsScreen = () => {
       if (savedFrom) setFromLanguage(normalizeStoredLanguageCode(savedFrom, 'en'));
       if (savedTo) setToLanguage(normalizeStoredLanguageCode(savedTo, 'ta'));
     } catch (error) {
-      console.error('Failed to load translation preference:', error);
+      logger.error('Failed to load translation preference:', error);
     }
   }, []);
 
@@ -262,7 +298,7 @@ const SettingsScreen = () => {
         `Translation from ${fromName} to ${toName}`
       );
     } catch (error) {
-      console.error('Failed to save translation preference:', error);
+      logger.error('Failed to save translation preference:', error);
       showAlert('Error', 'Failed to save translation preference');
     } finally {
       setIsLoading(false);
@@ -316,6 +352,7 @@ const SettingsScreen = () => {
           setOverlayTranslationEnabledState(await getOverlayTranslationEnabled());
           setInternalFloatingTranslationState(await getInternalFloatingTranslationEnabled());
           setOverlayAskQuestionEnabledState(await getOverlayAskQuestionEnabled());
+          setOverlayVoiceCommandEnabledState(await getOverlayVoiceCommandEnabled());
           const raw = await AsyncStorage.getItem(ELEVENLABS_API_KEY_STORAGE);
           setElevenLabsKeyDraft(raw ?? '');
         } catch {
@@ -419,32 +456,32 @@ const SettingsScreen = () => {
       setModelDownloadPct(null);
       setPickedTranscriptCopied(false);
 
-      if (Platform.OS !== 'android') {
-        throw new Error('Internal file transcription is currently supported only on Android.');
-      }
+      const internal = await getInternalTranscribeEnabled();
+      const tx = await transcribeBySettings(pickedUri, {
+        language: (fromLanguage || 'auto').toLowerCase(),
+        onModelDownloadProgress: internal
+          ? (bytesRead, contentLength, done) => {
+              if (!contentLength || contentLength <= 0) {
+                setModelDownloadPct(done ? 100 : null);
+                return;
+              }
+              const pct = Math.max(
+                0,
+                Math.min(100, Math.round((bytesRead / contentLength) * 100)),
+              );
+              setModelDownloadPct(done ? 100 : pct);
+            }
+          : undefined,
+      });
 
-      let audioForWhisper = pickedUri;
-      if (typeof NativeModules.AudioTranscodeModule?.convertToWav16kMono === 'function') {
-        const wavUri = await NativeModules.AudioTranscodeModule.convertToWav16kMono(pickedUri);
-        if (wavUri) {
-          audioForWhisper = wavUri;
-          setPickedAudioUri(wavUri);
-        }
+      if (!tx.success) {
+        setPickedTranscript('');
+        setPickedTranscriptError(tx.error || 'Could not transcribe this audio.');
+        return;
       }
 
       const text = String(
-        (await offlineWhisperService.transcribeFile(audioForWhisper, {
-          // Use the app’s default source language when available, else auto-detect.
-          language: (fromLanguage || 'auto').toLowerCase(),
-          onModelDownloadProgress: (bytesRead, contentLength, done) => {
-            if (!contentLength || contentLength <= 0) {
-              setModelDownloadPct(done ? 100 : null);
-              return;
-            }
-            const pct = Math.max(0, Math.min(100, Math.round((bytesRead / contentLength) * 100)));
-            setModelDownloadPct(done ? 100 : pct);
-          },
-        })) ?? '',
+        tx.data?.refinedTranscript || tx.data?.rawTranscript || '',
       ).trim();
 
       if (!text) {
@@ -465,7 +502,7 @@ const SettingsScreen = () => {
     } finally {
       setPickedTranscribing(false);
     }
-  }, [pickedTranscribing, showAlert]);
+  }, [pickedTranscribing, showAlert, fromLanguage]);
 
   const clearPickedTranscript = useCallback(() => {
     setPickedAudioUri('');
@@ -672,7 +709,7 @@ const SettingsScreen = () => {
                   thumbColor={overlayTranslationEnabled ? colors.primary : colors.text.light}
                 />
               </View>
-              <View style={[styles.toggleRow, styles.overlayActionRowLast]}>
+              <View style={[styles.toggleRow, styles.overlayActionRow]}>
                 <View style={styles.toggleTextCol}>
                   <Text style={styles.toggleLabel}>Ask Question</Text>
                   <Text style={styles.toggleSubLabel}>
@@ -684,6 +721,20 @@ const SettingsScreen = () => {
                   onValueChange={onOverlayAskQuestionToggle}
                   trackColor={{ false: colors.border, true: colors.primary + '88' }}
                   thumbColor={overlayAskQuestionEnabled ? colors.primary : colors.text.light}
+                />
+              </View>
+              <View style={[styles.toggleRow, styles.overlayActionRowLast]}>
+                <View style={styles.toggleTextCol}>
+                  <Text style={styles.toggleLabel}>Voice Command</Text>
+                  <Text style={styles.toggleSubLabel}>
+                    Record → transcribe → edit → execute
+                  </Text>
+                </View>
+                <Switch
+                  value={overlayVoiceCommandEnabled}
+                  onValueChange={onOverlayVoiceCommandToggle}
+                  trackColor={{ false: colors.border, true: colors.primary + '88' }}
+                  thumbColor={overlayVoiceCommandEnabled ? colors.primary : colors.text.light}
                 />
               </View>
 
@@ -996,510 +1047,512 @@ const SettingsScreen = () => {
 
 function createSettingsStyles(colors) {
   return StyleSheet.create({
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 40,
-  },
+    scroll: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: 40,
+    },
 
-  platformWarning: {
-    backgroundColor: colors.warning.bg,
-    marginHorizontal: 20,
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.warning.border,
-  },
-  platformWarningText: {
-    fontSize: 13,
-    color: colors.warning.text,
-    lineHeight: 18,
-  },
+    platformWarning: {
+      backgroundColor: colors.warning.bg,
+      marginHorizontal: 20,
+      marginTop: 12,
+      padding: 12,
+      borderRadius: 8,
+      borderLeftWidth: 3,
+      borderLeftColor: colors.warning.border,
+    },
+    platformWarningText: {
+      fontSize: 13,
+      color: colors.warning.text,
+      lineHeight: 18,
+    },
 
-  refreshRow: {
-    alignItems: 'flex-end',
-    marginBottom: 16,
-  },
-  refreshBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    minHeight: 36,
-  },
+    refreshRow: {
+      alignItems: 'flex-end',
+      marginBottom: 16,
+    },
+    refreshBtn: {
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      minHeight: 36,
+    },
 
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.text.secondary,
-    marginBottom: 10,
-  },
+    sectionLabel: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.text.secondary,
+      marginBottom: 10,
+    },
 
-  permCard: {
-    marginBottom: 12,
-  },
-  permHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 14,
-    gap: 10,
-  },
-  permInfo: {
-    flex: 1,
-  },
-  permTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginBottom: 4,
-  },
-  permDescription: {
-    fontSize: 13,
-    color: colors.text.secondary,
-    lineHeight: 18,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    flexShrink: 0,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
+    permCard: {
+      marginBottom: 12,
+    },
+    permHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: 14,
+      gap: 10,
+    },
+    permInfo: {
+      flex: 1,
+    },
+    permTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text.primary,
+      marginBottom: 4,
+    },
+    permDescription: {
+      fontSize: 13,
+      color: colors.text.secondary,
+      lineHeight: 18,
+    },
+    statusBadge: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 20,
+      flexShrink: 0,
+    },
+    statusText: {
+      fontSize: 12,
+      fontWeight: '600',
+    },
 
-  permActions: {
-    flexDirection: 'row',
-  },
-  permBtn: {
-    minHeight: 40,
-    paddingVertical: 0,
-  },
+    permActions: {
+      flexDirection: 'row',
+    },
+    permBtn: {
+      minHeight: 40,
+      paddingVertical: 0,
+    },
 
-  sysPermActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  checkBtn: {
-    backgroundColor: colors.backgroundAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 64,
-  },
-  checkBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.text.primary,
-  },
+    sysPermActions: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    checkBtn: {
+      backgroundColor: colors.backgroundAlt,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minWidth: 64,
+    },
+    checkBtnText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.text.primary,
+    },
 
-  errorBox: {
-    backgroundColor: colors.status.blockedBg,
-    padding: 10,
-    borderRadius: 6,
-    marginBottom: 12,
-  },
-  errorMsg: {
-    fontSize: 13,
-    color: colors.status.blocked,
-    lineHeight: 18,
-  },
-  unsupportedBox: {
-    backgroundColor: colors.backgroundAlt,
-    padding: 10,
-    borderRadius: 6,
-    marginBottom: 12,
-    alignItems: 'center',
-  },
-  unsupportedText: {
-    fontSize: 13,
-    color: colors.text.secondary,
-    fontStyle: 'italic',
-  },
+    errorBox: {
+      backgroundColor: colors.status.blockedBg,
+      padding: 10,
+      borderRadius: 6,
+      marginBottom: 12,
+    },
+    errorMsg: {
+      fontSize: 13,
+      color: colors.status.blocked,
+      lineHeight: 18,
+    },
+    unsupportedBox: {
+      backgroundColor: colors.backgroundAlt,
+      padding: 10,
+      borderRadius: 6,
+      marginBottom: 12,
+      alignItems: 'center',
+    },
+    unsupportedText: {
+      fontSize: 13,
+      color: colors.text.secondary,
+      fontStyle: 'italic',
+    },
 
-  settingsLinkCard: {
-    marginTop: 8,
-  },
-  settingsLinkTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginBottom: 6,
-  },
-  settingsLinkDesc: {
-    fontSize: 13,
-    color: colors.text.secondary,
-    lineHeight: 18,
-    marginBottom: 14,
-  },
-  openSettingsBtn: {
-    alignSelf: 'flex-start',
-    minHeight: 40,
-    paddingVertical: 0,
-    paddingHorizontal: 16,
-  },
+    settingsLinkCard: {
+      marginTop: 8,
+    },
+    settingsLinkTitle: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.text.primary,
+      marginBottom: 6,
+    },
+    settingsLinkDesc: {
+      fontSize: 13,
+      color: colors.text.secondary,
+      lineHeight: 18,
+      marginBottom: 14,
+    },
+    openSettingsBtn: {
+      alignSelf: 'flex-start',
+      minHeight: 40,
+      paddingVertical: 0,
+      paddingHorizontal: 16,
+    },
 
-  footer: {
-    marginTop: 12,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  footerText: {
-    fontSize: 13,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
+    footer: {
+      marginTop: 12,
+      paddingTop: 10,
+      paddingBottom: 30,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    footerText: {
+      fontSize: 13,
+      color: colors.text.secondary,
+      textAlign: 'center',
+      lineHeight: 18,
+      // marginBottom: 10,
+    },
 
-  // Translation styles
-  groupCard: {
-    marginBottom: 16,
-  },
-  groupHeader: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 10,
-  },
-  groupTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text.primary,
-    letterSpacing: -0.2,
-  },
-  groupSub: {
-    marginTop: 4,
-    fontSize: 13,
-    color: colors.text.secondary,
-    lineHeight: 18,
-  },
-  groupFooter: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderLight,
-  },
-  groupPrimaryBtn: {
-    minHeight: 48,
-  },
-  settingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderLight,
-  },
-  settingRowLast: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderLight,
-  },
-  settingTextCol: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  settingTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.text.primary,
-  },
-  settingSub: {
-    marginTop: 2,
-    fontSize: 13,
-    color: colors.text.secondary,
-  },
-  translationTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginBottom: 6,
-  },
-  translationDesc: {
-    fontSize: 13,
-    color: colors.text.secondary,
-    lineHeight: 18,
-    marginBottom: 20,
-  },
-  // Legacy translation styles (kept for other blocks)
-  internalTranscribeCard: {
-    marginBottom: 16,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  toggleTextCol: {
-    flex: 1,
-    paddingRight: 8,
-  },
-  overlayActionRow: {
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    alignItems: 'center',
-  },
-  overlayActionRowLast: {
-    paddingTop: 14,
-    paddingBottom: 2,
-    alignItems: 'center',
-  },
-  /** Divider between Internal Transcribe and Internal translation */
-  internalMicDividerRow: {
-    marginBottom: 14,
-    paddingBottom: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    alignItems: 'flex-start',
-  },
-  internalTranslateRow: {
-    marginTop: 4,
-    alignItems: 'flex-start',
-  },
-  internalTranslationTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginBottom: 6,
-  },
-  overlayHint: {
-    fontSize: 12,
-    color: colors.text.secondary,
-    lineHeight: 17,
-    marginBottom: 4,
-    fontWeight: '400',
-  },
-  toggleLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.text.primary,
-  },
-  toggleSubLabel: {
-    fontSize: 12,
-    color: colors.text.secondary,
-    marginTop: 2,
-  },
-  apiKeyInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: colors.text.primary,
-    backgroundColor: colors.backgroundAlt,
-    marginBottom: 12,
-  },
+    // Translation styles
+    groupCard: {
+      marginBottom: 16,
+    },
+    groupHeader: {
+      paddingHorizontal: 16,
+      paddingTop: 14,
+      paddingBottom: 10,
+    },
+    groupTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text.primary,
+      letterSpacing: -0.2,
+    },
+    groupSub: {
+      marginTop: 4,
+      fontSize: 13,
+      color: colors.text.secondary,
+      lineHeight: 18,
+    },
+    groupFooter: {
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 14,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderLight,
+    },
+    groupPrimaryBtn: {
+      minHeight: 48,
+    },
+    settingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderLight,
+    },
+    settingRowLast: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderLight,
+    },
+    settingTextCol: {
+      flex: 1,
+      paddingRight: 12,
+    },
+    settingTitle: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.text.primary,
+    },
+    settingSub: {
+      marginTop: 2,
+      fontSize: 13,
+      color: colors.text.secondary,
+    },
+    translationTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text.primary,
+      marginBottom: 6,
+    },
+    translationDesc: {
+      fontSize: 13,
+      color: colors.text.secondary,
+      lineHeight: 18,
+      marginBottom: 20,
+    },
+    // Legacy translation styles (kept for other blocks)
+    internalTranscribeCard: {
+      marginBottom: 16,
+    },
+    toggleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    toggleTextCol: {
+      flex: 1,
+      paddingRight: 8,
+    },
+    overlayActionRow: {
+      paddingVertical: 14,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      alignItems: 'center',
+    },
+    overlayActionRowLast: {
+      paddingTop: 14,
+      paddingBottom: 2,
+      alignItems: 'center',
+    },
+    /** Divider between Internal Transcribe and Internal translation */
+    internalMicDividerRow: {
+      marginBottom: 14,
+      paddingBottom: 14,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      alignItems: 'flex-start',
+    },
+    internalTranslateRow: {
+      marginTop: 4,
+      alignItems: 'flex-start',
+    },
+    internalTranslationTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text.primary,
+      marginBottom: 6,
+    },
+    overlayHint: {
+      fontSize: 12,
+      color: colors.text.secondary,
+      lineHeight: 17,
+      marginBottom: 4,
+      fontWeight: '400',
+    },
+    toggleLabel: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.text.primary,
+    },
+    toggleSubLabel: {
+      fontSize: 12,
+      color: colors.text.secondary,
+      marginTop: 2,
+    },
+    apiKeyInput: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontSize: 14,
+      color: colors.text.primary,
+      backgroundColor: colors.backgroundAlt,
+      marginBottom: 12,
+    },
 
-  // Audio transcription card
-  transcribeCard: {
-    marginBottom: 16,
-  },
-  transcribeTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text.primary,
-    marginBottom: 6,
-    letterSpacing: -0.2,
-  },
-  transcribeDesc: {
-    fontSize: 13,
-    color: colors.text.secondary,
-    lineHeight: 18,
-    marginBottom: 14,
-  },
-  transcribeActionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  transcribeBtn: {
-    flex: 1,
-    minHeight: 44,
-    paddingVertical: 0,
-  },
-  transcribeFileHint: {
-    marginTop: 12,
-    fontSize: 12,
-    color: colors.text.secondary,
-    lineHeight: 16,
-  },
-  transcribeLoadingRow: {
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  transcribeLoadingText: {
-    fontSize: 13,
-    color: colors.text.secondary,
-    fontWeight: '600',
-  },
-  transcribeErrorBox: {
-    marginTop: 12,
-    backgroundColor: colors.status.blockedBg,
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.status.blocked + '22',
-  },
-  transcribeErrorText: {
-    fontSize: 13,
-    color: colors.status.blocked,
-    lineHeight: 18,
-  },
-  transcribeResultBox: {
-    marginTop: 12,
-    backgroundColor: colors.backgroundAlt,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  transcribeResultHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-    gap: 10,
-  },
-  transcribeResultLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.text.secondary,
-    letterSpacing: 0.2,
-  },
-  transcribeResultText: {
-    fontSize: 14,
-    color: colors.text.primary,
-    lineHeight: 20,
-  },
-  transcribeHeaderActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  transcribeCopyIconBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  transcribeCopiedText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.status.granted,
-  },
+    // Audio transcription card
+    transcribeCard: {
+      marginBottom: 16,
+    },
+    transcribeTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text.primary,
+      marginBottom: 6,
+      letterSpacing: -0.2,
+    },
+    transcribeDesc: {
+      fontSize: 13,
+      color: colors.text.secondary,
+      lineHeight: 18,
+      marginBottom: 14,
+    },
+    transcribeActionsRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    transcribeBtn: {
+      flex: 1,
+      minHeight: 44,
+      paddingVertical: 0,
+    },
+    transcribeFileHint: {
+      marginTop: 12,
+      fontSize: 12,
+      color: colors.text.secondary,
+      lineHeight: 16,
+    },
+    transcribeLoadingRow: {
+      marginTop: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    transcribeLoadingText: {
+      fontSize: 13,
+      color: colors.text.secondary,
+      fontWeight: '600',
+    },
+    transcribeErrorBox: {
+      marginTop: 12,
+      backgroundColor: colors.status.blockedBg,
+      padding: 10,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.status.blocked + '22',
+    },
+    transcribeErrorText: {
+      fontSize: 13,
+      color: colors.status.blocked,
+      lineHeight: 18,
+    },
+    transcribeResultBox: {
+      marginTop: 12,
+      backgroundColor: colors.backgroundAlt,
+      padding: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    transcribeResultHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+      gap: 10,
+    },
+    transcribeResultLabel: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: colors.text.secondary,
+      letterSpacing: 0.2,
+    },
+    transcribeResultText: {
+      fontSize: 14,
+      color: colors.text.primary,
+      lineHeight: 20,
+    },
+    transcribeHeaderActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    transcribeCopyIconBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    transcribeCopiedText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.status.granted,
+    },
 
-  // Keyboard section
-  keyboardCard: {
-    marginBottom: 16,
-  },
-  keyboardCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 14,
-  },
-  keyboardIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(30, 136, 255, 0.10)',
-    borderWidth: 1,
-    borderColor: 'rgba(30, 136, 255, 0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  keyboardCardText: {
-    flex: 1,
-  },
-  keyboardCardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text.primary,
-    letterSpacing: -0.2,
-  },
-  keyboardCardSub: {
-    marginTop: 3,
-    fontSize: 13,
-    color: colors.text.secondary,
-    lineHeight: 18,
-  },
-  keyboardFeatureList: {
-    backgroundColor: colors.backgroundAlt,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 6,
-    marginBottom: 14,
-  },
-  keyboardFeatureItem: {
-    fontSize: 13,
-    color: colors.text.secondary,
-    lineHeight: 20,
-  },
-  keyboardBtnRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 10,
-  },
-  keyboardBtn: {
-    flex: 1,
-    minHeight: 44,
-    paddingVertical: 0,
-  },
-  keyboardHint: {
-    fontSize: 12,
-    color: colors.text.secondary,
-    lineHeight: 17,
-    textAlign: 'center',
-  },
-  keyboardToggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderLight,
-  },
-  keyboardToggleRowLast: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderLight,
-  },
+    // Keyboard section
+    keyboardCard: {
+      marginBottom: 16,
+    },
+    keyboardCardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginBottom: 14,
+    },
+    keyboardIconWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      backgroundColor: 'rgba(30, 136, 255, 0.10)',
+      borderWidth: 1,
+      borderColor: 'rgba(30, 136, 255, 0.18)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    },
+    keyboardCardText: {
+      flex: 1,
+    },
+    keyboardCardTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text.primary,
+      letterSpacing: -0.2,
+    },
+    keyboardCardSub: {
+      marginTop: 3,
+      fontSize: 13,
+      color: colors.text.secondary,
+      lineHeight: 18,
+    },
+    keyboardFeatureList: {
+      backgroundColor: colors.backgroundAlt,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      gap: 6,
+      marginBottom: 14,
+    },
+    keyboardFeatureItem: {
+      fontSize: 13,
+      color: colors.text.secondary,
+      lineHeight: 20,
+    },
+    keyboardBtnRow: {
+      flexDirection: 'row',
+      gap: 10,
+      marginBottom: 10,
+    },
+    keyboardBtn: {
+      flex: 1,
+      minHeight: 44,
+      paddingVertical: 0,
+    },
+    keyboardHint: {
+      fontSize: 12,
+      color: colors.text.secondary,
+      lineHeight: 17,
+      textAlign: 'center',
+    },
+    keyboardToggleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 14,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderLight,
+    },
+    keyboardToggleRowLast: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderLight,
+    },
 
-  appearanceCard: {
-    marginBottom: 16,
-  },
-  appearanceTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text.primary,
-    letterSpacing: -0.2,
-    marginBottom: 4,
-  },
-  appearanceSub: {
-    fontSize: 13,
-    color: colors.text.secondary,
-    lineHeight: 18,
-    marginBottom: 8,
-  },
+    appearanceCard: {
+      marginBottom: 16,
+    },
+    appearanceTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text.primary,
+      letterSpacing: -0.2,
+      marginBottom: 4,
+    },
+    appearanceSub: {
+      fontSize: 13,
+      color: colors.text.secondary,
+      lineHeight: 18,
+      marginBottom: 8,
+    },
   });
 }
 

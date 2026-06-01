@@ -29,6 +29,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import androidx.core.app.NotificationCompat
 import androidx.core.view.ViewCompat
@@ -56,6 +57,8 @@ class FloatingMicService : Service() {
         TRANSLATOR,
         /** Voice (English) → AI provider → inject assistant reply (no ML Kit on answer) */
         ASK,
+        /** Record → /transcribe → edit → /execute */
+        VOICE_COMMAND,
     }
 
     private var recordingState = RecordingState.IDLE
@@ -87,7 +90,12 @@ class FloatingMicService : Service() {
     private var actionMenuDivider: View? = null
     private var actionMenuDividerAsk: View? = null
     private var btnActionAsk: ImageView? = null
+    private var actionMenuDividerCommand: View? = null
+    private var btnActionCommand: ImageView? = null
     private var actionMenuVisible = false
+    private var voiceCommandUi: FloatingVoiceCommandUi? = null
+    private var commandAnchorContainer: LinearLayout? = null
+    private var fabContainer: View? = null
     private var lastImeInsetBottom = 0
 
     /** Cloud mode: raw mic capture + OkHttp upload to /voice/transcribe */
@@ -149,13 +157,15 @@ class FloatingMicService : Service() {
         startForeground(NOTIFICATION_ID, createNotification())
         registerMicControlReceiver()
         
-        // CRITICAL: Initialize and show floating view immediately
+        // Overlay starts hidden; accessibility service shows it only when a text field has focus.
         initializeFloatingView()
-        showFloatingOverlay()
+        sendAppScopedBroadcast(
+            Intent(com.typeeasy.services.MyAccessibilityService.ACTION_EVALUATE_MIC_VISIBILITY)
+        )
         
         isServiceReady = true
         isInstanceRunning = true
-        Log.d(TAG, "✅ FloatingMicService created and ready with mic overlay visible")
+        Log.d(TAG, "✅ FloatingMicService created and ready (overlay hidden until text focus)")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -228,6 +238,12 @@ class FloatingMicService : Service() {
             actionMenuDivider = floatingView?.findViewById(R.id.action_menu_divider)
             actionMenuDividerAsk = floatingView?.findViewById(R.id.action_menu_divider_ask)
             btnActionAsk = floatingView?.findViewById(R.id.btn_action_ask)
+            actionMenuDividerCommand = floatingView?.findViewById(R.id.action_menu_divider_command)
+            btnActionCommand = floatingView?.findViewById(R.id.btn_action_command)
+            commandAnchorContainer = floatingView?.findViewById(R.id.command_anchor_container)
+            fabContainer = floatingView?.findViewById(R.id.fab_container)
+            
+            ensureVoiceCommandUi()
             
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -301,6 +317,60 @@ class FloatingMicService : Service() {
         btnActionAsk?.setOnClickListener {
             beginAskQuestionCapture()
         }
+        btnActionCommand?.setOnClickListener {
+            beginVoiceCommandCapture()
+        }
+    }
+
+    private fun ensureVoiceCommandUi(): FloatingVoiceCommandUi {
+        if (voiceCommandUi == null) {
+            val root = floatingView ?: throw IllegalStateException("floatingView not ready")
+            val anchor = commandAnchorContainer ?: throw IllegalStateException("anchor not ready")
+            val fab = fabContainer ?: throw IllegalStateException("fab not ready")
+            voiceCommandUi = FloatingVoiceCommandUi(
+                this,
+                root,
+                anchor,
+                fab,
+                windowManager,
+                object : FloatingVoiceCommandUi.Callbacks {
+                    override fun onRecordingCancel() = cancelVoiceCommandFlow()
+                    override fun onRecordingConfirm() = confirmVoiceCommandRecording()
+                    override fun onRecordingPauseToggle() = toggleVoiceCommandPause()
+                    override fun onReviewClose() = finishVoiceCommandFlow()
+                    override fun onReviewSend(
+                        editedText: String,
+                        voiceAssetId: String?,
+                        originalTranscript: String,
+                    ) = executeVoiceCommandFromReview(editedText, voiceAssetId, originalTranscript)
+                    override fun onOverlayFocusChanged(focusable: Boolean) =
+                        setFloatingOverlayFocusable(focusable)
+                    override fun onReviewLayoutChanged() = clampFloatingOverlayPosition()
+                },
+            )
+        }
+        return voiceCommandUi!!
+    }
+
+    private fun setFloatingOverlayFocusable(focusable: Boolean) {
+        val root = floatingView ?: return
+        val params = root.layoutParams as? WindowManager.LayoutParams ?: return
+        if (focusable) {
+            params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+            params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+            @Suppress("DEPRECATION")
+            params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+        } else {
+            params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        }
+        windowManager.updateViewLayout(root, params)
+    }
+
+    private fun clampFloatingOverlayPosition() {
+        val root = floatingView ?: return
+        val params = root.layoutParams as? WindowManager.LayoutParams ?: return
+        clampOverlayPosition(root, params)
+        windowManager.updateViewLayout(root, params)
     }
 
     private fun useInternalTranscription(): Boolean =
@@ -325,11 +395,15 @@ class FloatingMicService : Service() {
     private fun overlayAskOn(): Boolean =
         FloatingMicConfigStore.isOverlayAskQuestionEnabled(this)
 
+    private fun overlayVoiceCommandOn(): Boolean =
+        FloatingMicConfigStore.isOverlayVoiceCommandEnabled(this)
+
     private fun overlayEnabledActionCount(): Int {
         var n = 0
         if (overlayMicOn()) n++
         if (overlayTranslationOn()) n++
         if (overlayAskOn()) n++
+        if (overlayVoiceCommandOn()) n++
         return n
     }
 
@@ -341,18 +415,22 @@ class FloatingMicService : Service() {
         val micOn = overlayMicOn()
         val transOn = overlayTranslationOn()
         val askOn = overlayAskOn()
+        val commandOn = overlayVoiceCommandOn()
         btnActionMicrophone?.visibility = if (micOn) View.VISIBLE else View.GONE
         btnActionTranslator?.visibility = if (transOn) View.VISIBLE else View.GONE
         btnActionAsk?.visibility = if (askOn) View.VISIBLE else View.GONE
-        // Dividers between consecutive visible rows
+        btnActionCommand?.visibility = if (commandOn) View.VISIBLE else View.GONE
         actionMenuDivider?.visibility = if (micOn && transOn) View.VISIBLE else View.GONE
         val showDividerBeforeAsk = askOn && (micOn || transOn)
         actionMenuDividerAsk?.visibility = if (showDividerBeforeAsk) View.VISIBLE else View.GONE
+        val showDividerBeforeCommand = commandOn && (micOn || transOn || askOn)
+        actionMenuDividerCommand?.visibility = if (showDividerBeforeCommand) View.VISIBLE else View.GONE
         when {
             overlayEnabledActionCount() >= 2 -> btnMic?.setImageResource(R.drawable.floating_main_icon)
             micOn -> btnMic?.setImageResource(R.drawable.ic_floating_menu_mic)
             transOn -> btnMic?.setImageResource(R.drawable.ic_floating_menu_translate)
             askOn -> btnMic?.setImageResource(R.drawable.ic_floating_menu_ask)
+            commandOn -> btnMic?.setImageResource(R.drawable.ic_floating_menu_command)
             else -> btnMic?.setImageResource(R.drawable.ic_floating_menu_mic)
         }
     }
@@ -400,6 +478,138 @@ class FloatingMicService : Service() {
         sessionMode = SessionMode.ASK
         sessionUsesInternalTranscription = true
         startSpeechRecognitionForAsk()
+    }
+
+    /** Voice command: record → /transcribe → edit → /execute */
+    private fun beginVoiceCommandCapture() {
+        hideActionMenu()
+        val baseUrl = FloatingMicConfigStore.getVoiceTranscribeBaseUrl(this)
+        if (baseUrl.isBlank()) {
+            sendEventToReactNative("onError", "Voice API URL not configured. Open the app → Settings.")
+            return
+        }
+        ensureVoiceCommandUi().showRecordingBar()
+        startMediaRecording(SessionMode.VOICE_COMMAND, "floating_cmd_")
+        voiceCommandUi?.repositionIfNeeded()
+    }
+
+    private fun confirmVoiceCommandRecording() {
+        if (sessionMode != SessionMode.VOICE_COMMAND || recordingState != RecordingState.RECORDING) return
+        stopMediaAndUpload()
+    }
+
+    private fun toggleVoiceCommandPause() {
+        if (sessionMode != SessionMode.VOICE_COMMAND || mediaRecorder == null) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                if (recordingState == RecordingState.RECORDING) {
+                    mediaRecorder?.pause()
+                } else {
+                    mediaRecorder?.resume()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Voice command pause/resume not supported", e)
+            }
+        }
+    }
+
+    private fun cancelVoiceCommandFlow() {
+        voiceCommandUi?.dismissAll()
+        if (sessionMode == SessionMode.VOICE_COMMAND && recordingState == RecordingState.RECORDING) {
+            abortMediaRecordingWithoutUpload()
+        }
+        resetToIdleState()
+    }
+
+    private fun finishVoiceCommandFlow() {
+        voiceCommandUi?.dismissAll()
+        resetToIdleState()
+    }
+
+    private fun abortMediaRecordingWithoutUpload() {
+        stopAliveCheck()
+        try {
+            mediaRecorder?.stop()
+        } catch (_: Exception) {
+        }
+        try {
+            mediaRecorder?.reset()
+            mediaRecorder?.release()
+        } catch (_: Exception) {
+        }
+        mediaRecorder = null
+        runCatching { externalAudioFile?.delete() }
+        externalAudioFile = null
+        isExternalUploading = false
+    }
+
+    private fun executeVoiceCommandFromReview(
+        editedText: String,
+        voiceAssetId: String?,
+        originalTranscript: String,
+    ) {
+        val baseUrl = FloatingMicConfigStore.getVoiceTranscribeBaseUrl(this)
+        voiceCommandUi?.setReviewLoading(true, "Sending command…")
+        Thread {
+            var assetId = voiceAssetId
+            if (assetId.isNullOrBlank()) {
+                mainHandler.post {
+                    voiceCommandUi?.showReviewError("Missing voice asset ID — re-record and try again.")
+                }
+                return@Thread
+            }
+            if (editedText != originalTranscript) {
+                val updateResult = VoiceCommandClient.updateTranscript(baseUrl, assetId, editedText)
+                updateResult.onSuccess { assetId = it }
+                if (updateResult.isFailure) {
+                    mainHandler.post {
+                        voiceCommandUi?.showReviewError(
+                            updateResult.exceptionOrNull()?.message ?: "Failed to update transcript",
+                        )
+                    }
+                    return@Thread
+                }
+            }
+            val execResult = VoiceCommandClient.executeVoiceCommand(baseUrl, assetId!!)
+            mainHandler.post {
+                if (execResult.isSuccess) {
+                    val payload = execResult.getOrNull()
+                    voiceCommandUi?.showExecuteSuccess()
+                    sendEventToReactNative("onVoiceCommandExecuted", payload?.status ?: "Done")
+                    sendEventToReactNative("onTranscriptionComplete", editedText)
+                } else {
+                    voiceCommandUi?.showReviewError(
+                        execResult.exceptionOrNull()?.message ?: "Execution failed",
+                    )
+                    sendEventToReactNative("onError", execResult.exceptionOrNull()?.message ?: "Execution failed")
+                }
+            }
+        }.start()
+    }
+
+    private fun handleVoiceCommandTranscribe(file: File, baseUrl: String) {
+        voiceCommandUi?.dismissRecordingBar()
+        voiceCommandUi?.showReviewPanel("", null)
+        voiceCommandUi?.setReviewLoading(true, "Transcribing your recording…")
+        Thread {
+            val result = VoiceTranscribeClient.transcribeFileFull(baseUrl, file)
+            mainHandler.post {
+                isExternalUploading = false
+                recordingState = RecordingState.IDLE
+                updateUIState()
+                runCatching { file.delete() }
+                externalAudioFile = null
+                if (result.isSuccess) {
+                    val tr = result.getOrNull()!!
+                    voiceCommandUi?.showReviewPanel(tr.transcript, tr.voiceAssetId)
+                    sendEventToReactNative("onTranscriptionComplete", tr.transcript)
+                } else {
+                    val msg = result.exceptionOrNull()?.message ?: "Transcription failed"
+                    voiceCommandUi?.showReviewError(msg)
+                    sendEventToReactNative("onTranscriptionError", msg)
+                }
+            }
+        }.start()
     }
 
     private fun stopVoiceCapture() {
@@ -463,6 +673,7 @@ class FloatingMicService : Service() {
                             params.y = initialY + deltaY.roundToInt()
                             clampOverlayPosition(overlayRoot, params)
                             windowManager.updateViewLayout(overlayRoot, params)
+                            voiceCommandUi?.repositionIfNeeded()
                         }
                         return true
                     }
@@ -498,10 +709,17 @@ class FloatingMicService : Service() {
                     overlayMicOn() -> beginMicrophoneCapture()
                     overlayTranslationOn() -> beginTranslatorCapture()
                     overlayAskOn() -> beginAskQuestionCapture()
+                    overlayVoiceCommandOn() -> beginVoiceCommandCapture()
                     else -> beginMicrophoneCapture()
                 }
             }
-            RecordingState.RECORDING -> stopVoiceCapture()
+            RecordingState.RECORDING -> {
+                if (sessionMode == SessionMode.VOICE_COMMAND) {
+                    confirmVoiceCommandRecording()
+                } else {
+                    stopVoiceCapture()
+                }
+            }
             else -> { }
         }
     }
@@ -512,6 +730,7 @@ class FloatingMicService : Service() {
         params.x = if (params.x + vw / 2 < screenWidth / 2) 0 else screenWidth - vw
         clampOverlayPosition(view, params)
         windowManager.updateViewLayout(view, params)
+        voiceCommandUi?.repositionIfNeeded()
     }
     private fun clampOverlayPosition(overlay: View, params: WindowManager.LayoutParams) {
         val dm = resources.displayMetrics
@@ -689,11 +908,12 @@ class FloatingMicService : Service() {
     ) {
         if (recordingState != RecordingState.IDLE) {
             Log.w(TAG, "⚠️ Cannot start media recording: not IDLE")
+            if (mode == SessionMode.VOICE_COMMAND) voiceCommandUi?.dismissAll()
             return
         }
         if (!hasRecordAudioPermission()) {
             sendEventToReactNative("onError", "Microphone permission not granted")
-            // showToast("Microphone permission required")
+            if (mode == SessionMode.VOICE_COMMAND) voiceCommandUi?.dismissAll()
             return
         }
         val baseUrl = FloatingMicConfigStore.getVoiceTranscribeBaseUrl(this)
@@ -712,7 +932,11 @@ class FloatingMicService : Service() {
             !FloatingMicConfigStore.isInternalFloatingTranslationEnabled(this)
         ) {
             sendEventToReactNative("onError", "Voice API URL not configured. Open the app → Settings.")
-            // showToast("Configure voice server in Settings")
+            return
+        }
+        if (mode == SessionMode.VOICE_COMMAND && baseUrl.isBlank()) {
+            sendEventToReactNative("onError", "Voice API URL not configured. Open the app → Settings.")
+            voiceCommandUi?.dismissAll()
             return
         }
 
@@ -753,8 +977,8 @@ class FloatingMicService : Service() {
             mediaRecorder = null
             externalAudioFile?.delete()
             externalAudioFile = null
+            if (mode == SessionMode.VOICE_COMMAND) voiceCommandUi?.dismissAll()
             sendEventToReactNative("onError", e.message ?: "Recording failed")
-            // showToast("Recording failed")
             resetToIdleState()
         }
     }
@@ -797,6 +1021,10 @@ class FloatingMicService : Service() {
         }
 
         val baseUrl = FloatingMicConfigStore.getVoiceTranscribeBaseUrl(this)
+        if (mode == SessionMode.VOICE_COMMAND) {
+            handleVoiceCommandTranscribe(file, baseUrl)
+            return
+        }
         Thread {
             val result = when (mode) {
                 SessionMode.TRANSLATOR -> VoiceTranscribeClient.translateSpeechFile(
@@ -1153,15 +1381,31 @@ $spokenText
                 applyIdleOverlayAppearance()
             }
             RecordingState.RECORDING -> {
-                btnMic?.visibility = View.GONE
-                btnStop?.visibility = View.VISIBLE
-                statusIndicatorContainer?.visibility = View.VISIBLE
-                soundWaveView?.visibility = View.VISIBLE
-                uploadProgress?.visibility = View.GONE
-                soundWaveView?.startWave()
+                if (sessionMode == SessionMode.VOICE_COMMAND) {
+                    btnMic?.visibility = View.VISIBLE
+                    btnStop?.visibility = View.GONE
+                    statusIndicatorContainer?.visibility = View.GONE
+                    soundWaveView?.stopWave()
+                    soundWaveView?.visibility = View.GONE
+                    uploadProgress?.visibility = View.GONE
+                } else {
+                    btnMic?.visibility = View.GONE
+                    btnStop?.visibility = View.VISIBLE
+                    statusIndicatorContainer?.visibility = View.VISIBLE
+                    soundWaveView?.visibility = View.VISIBLE
+                    uploadProgress?.visibility = View.GONE
+                    soundWaveView?.startWave()
+                }
             }
             RecordingState.STOPPED -> {
-                if (isExternalUploading || isAskProcessing) {
+                if (sessionMode == SessionMode.VOICE_COMMAND && voiceCommandUi?.isActive == true) {
+                    btnMic?.visibility = View.VISIBLE
+                    btnStop?.visibility = View.GONE
+                    statusIndicatorContainer?.visibility = View.GONE
+                    soundWaveView?.stopWave()
+                    soundWaveView?.visibility = View.GONE
+                    uploadProgress?.visibility = View.GONE
+                } else if (isExternalUploading || isAskProcessing) {
                     btnMic?.visibility = View.GONE
                     btnStop?.visibility = View.GONE
                     statusIndicatorContainer?.visibility = View.VISIBLE
@@ -1307,6 +1551,15 @@ $spokenText
      * Hide the floating overlay
      */
     private fun hideFloatingOverlay() {
+        if (recordingState != RecordingState.IDLE || isExternalUploading || isAskProcessing) {
+            Log.d(TAG, "Skip hide — recording or upload in progress")
+            return
+        }
+        if (voiceCommandUi?.isActive == true) {
+            Log.d(TAG, "Skip hide — voice command flow active")
+            return
+        }
+        hideActionMenu()
         floatingView?.let { view ->
             if (view.visibility == View.VISIBLE) {
                 view.visibility = View.GONE
@@ -1318,6 +1571,7 @@ $spokenText
     
     override fun onDestroy() {
         isInstanceRunning = false
+        sendEventToReactNative("onServiceStopped", null)
         super.onDestroy()
         isServiceReady = false
         
@@ -1363,6 +1617,8 @@ $spokenText
             }
         }
         floatingView = null
+        voiceCommandUi?.dismissAll()
+        voiceCommandUi = null
         Log.d(TAG, "FloatingMicService destroyed")
     }
 

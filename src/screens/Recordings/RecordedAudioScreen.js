@@ -1,3 +1,4 @@
+import logger from '../../utils/logger';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -47,7 +48,7 @@ const RecordedAudioScreen = ({ navigation }) => {
       setRecordings(stored.reverse());
       setRecentActivities(acts);
     } catch (error) {
-      console.error('Error loading recordings:', error);
+      logger.error('Error loading recordings:', error);
     }
   }, []);
 

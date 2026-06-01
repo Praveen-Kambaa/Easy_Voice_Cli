@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 import { useState, useEffect, useCallback } from 'react';
 import { AppState, Platform } from 'react-native';
 import {
@@ -69,7 +70,7 @@ export const useAndroidPermissions = () => {
       setPermissionStates(prev => ({ ...prev, [permissionType]: hasPermission }));
       return hasPermission;
     } catch (error) {
-      console.error(`Error checking ${permissionType} permission:`, error);
+      logger.error(`Error checking ${permissionType} permission:`, error);
       setErrors(prev => ({ ...prev, [permissionType]: error.message }));
       return false;
     } finally {
@@ -109,7 +110,7 @@ export const useAndroidPermissions = () => {
       setModalVisible(prev => ({ ...prev, [permissionType]: true }));
       return false;
     } catch (error) {
-      console.error(`Error requesting ${permissionType} permission:`, error);
+      logger.error(`Error requesting ${permissionType} permission:`, error);
       setErrors(prev => ({ ...prev, [permissionType]: error.message }));
       return false;
     }
@@ -134,7 +135,7 @@ export const useAndroidPermissions = () => {
           throw new Error(`Unknown permission type: ${permissionType}`);
       }
     } catch (error) {
-      console.error(`Error opening settings for ${permissionType}:`, error);
+      logger.error(`Error opening settings for ${permissionType}:`, error);
       setErrors(prev => ({ ...prev, [permissionType]: error.message }));
     } finally {
       setLoading(prev => ({ ...prev, [permissionType]: false }));

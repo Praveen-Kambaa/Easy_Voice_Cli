@@ -16,6 +16,12 @@ import java.util.concurrent.TimeUnit
 object VoiceTranscribeClient {
     private const val TAG = "VoiceTranscribeClient"
 
+    data class TranscribeResult(
+        val transcript: String,
+        val rawTranscript: String,
+        val voiceAssetId: String?,
+    )
+
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(180, TimeUnit.SECONDS)
@@ -26,7 +32,14 @@ object VoiceTranscribeClient {
         baseUrl: String,
         audioFile: File,
         language: String = "en-US",
-    ): Result<String> {
+    ): Result<String> =
+        transcribeFileFull(baseUrl, audioFile, language).map { it.transcript }
+
+    fun transcribeFileFull(
+        baseUrl: String,
+        audioFile: File,
+        language: String = "en-US",
+    ): Result<TranscribeResult> {
         val trimmedBase = baseUrl.trimEnd('/')
         if (trimmedBase.isEmpty()) {
             return Result.failure(IllegalStateException("Voice API base URL is not configured"))
@@ -71,14 +84,54 @@ object VoiceTranscribeClient {
             }
 
             val text = extractTranscript(bodyString)
+            val voiceAssetId = extractVoiceAssetId(bodyString)
+            val raw = extractRawTranscript(bodyString).ifBlank { text }
             return if (text.isBlank()) {
                 Result.failure(IllegalStateException("Empty transcript from server"))
             } else {
-                Result.success(text.trim())
+                Result.success(
+                    TranscribeResult(
+                        transcript = text.trim(),
+                        rawTranscript = raw.trim(),
+                        voiceAssetId = voiceAssetId,
+                    ),
+                )
             }
         } catch (e: Exception) {
             Log.e(TAG, "transcribeFile failed", e)
             return Result.failure(e)
+        }
+    }
+
+    private fun extractVoiceAssetId(json: String): String? {
+        if (json.isBlank()) return null
+        return try {
+            val root = JSONObject(json)
+            val data = if (root.has("data")) root.optJSONObject("data") else null
+            val obj = data ?: root
+            firstNonBlank(
+                obj.optString("voiceAssetId"),
+                obj.optString("easyVoiceAssetId"),
+                obj.optString("id"),
+            ).ifBlank { null }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun extractRawTranscript(json: String): String {
+        if (json.isBlank()) return ""
+        return try {
+            val root = JSONObject(json)
+            val data = if (root.has("data")) root.optJSONObject("data") else null
+            val obj = data ?: root
+            firstNonBlank(
+                obj.optString("rawTranscript"),
+                obj.optString("transcript"),
+                obj.optString("text"),
+            )
+        } catch (_: Exception) {
+            ""
         }
     }
 

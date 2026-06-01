@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 import { NativeModules, DeviceEventEmitter, Platform, Alert, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FileSystem, Dirs } from 'react-native-file-access';
@@ -21,7 +22,7 @@ async function migrateLegacyRecordingsIfNeeded() {
     await FileSystem.unlink(LEGACY_RECORDINGS_PATH).catch(() => {});
     return arr;
   } catch (e) {
-    console.warn('[NativeAudioService] legacy recordings migrate:', e);
+    logger.warn('[NativeAudioService] legacy recordings migrate:', e);
     return [];
   }
 }
@@ -81,7 +82,7 @@ class NativeAudioService {
       }
       return false;
     } catch (e) {
-      console.warn('[NativeAudioService] isAccessibilityEnabled:', e?.message || e);
+      logger.warn('[NativeAudioService] isAccessibilityEnabled:', e?.message || e);
       return false;
     }
   }
@@ -98,7 +99,7 @@ class NativeAudioService {
       await AndroidPermissionsModule.openAccessibilitySettings();
       return true;
     } catch (e) {
-      console.warn('[NativeAudioService] openAccessibilitySettings:', e?.message || e);
+      logger.warn('[NativeAudioService] openAccessibilitySettings:', e?.message || e);
       return false;
     }
   }
@@ -146,7 +147,7 @@ class NativeAudioService {
       const timestamp = Date.now();
       const fileName = `recording_${timestamp}.m4a`;
 
-      console.log('[NativeAudioService] startRecording → fileName:', fileName);
+      logger.debug('[NativeAudioService] startRecording → fileName:', fileName);
 
       // Call native method with Promise
       const filePath = await AudioRecorderModule.startRecording(fileName);
@@ -155,11 +156,11 @@ class NativeAudioService {
       this.recordingFilePath = filePath;
       this.recordingStartTime = Date.now();
 
-      console.log('[NativeAudioService] Recording started:', filePath);
+      logger.debug('[NativeAudioService] Recording started:', filePath);
 
       return { success: true, filePath };
     } catch (error) {
-      console.error('[NativeAudioService] startRecording error:', error);
+      logger.error('[NativeAudioService] startRecording error:', error);
       return { success: false, error: error.message };
     }
   }
@@ -175,7 +176,7 @@ class NativeAudioService {
       }
 
       const duration = Date.now() - this.recordingStartTime;
-      console.log('[NativeAudioService] stopRecording, duration:', duration, 'ms');
+      logger.debug('[NativeAudioService] stopRecording, duration:', duration, 'ms');
 
       // Call native method with Promise
       const filePath = await AudioRecorderModule.stopRecording();
@@ -206,7 +207,7 @@ class NativeAudioService {
         recordingData,
       };
     } catch (error) {
-      console.error('[NativeAudioService] stopRecording error:', error);
+      logger.error('[NativeAudioService] stopRecording error:', error);
       this.isRecording = false;
       this.recordingStartTime = null;
       this.recordingFilePath = '';
@@ -220,7 +221,7 @@ class NativeAudioService {
         await this.stopPlayback();
       }
 
-      console.log('[NativeAudioService] playRecording:', filePath);
+      logger.debug('[NativeAudioService] playRecording:', filePath);
 
       this._playbackCompleteCallback = onComplete || null;
 
@@ -236,11 +237,11 @@ class NativeAudioService {
       this.isPlaying = true;
       this.currentPlaybackFile = filePath;
 
-      console.log('[NativeAudioService] Playback started');
+      logger.debug('[NativeAudioService] Playback started');
 
       return { success: true };
     } catch (error) {
-      console.error('[NativeAudioService] playRecording error:', error);
+      logger.error('[NativeAudioService] playRecording error:', error);
       this.isPlaying = false;
       this.currentPlaybackFile = '';
       this._playbackCompleteCallback = null;
@@ -260,7 +261,7 @@ class NativeAudioService {
       this.isPlaying = false;
       this.currentPlaybackFile = '';
 
-      console.log('[NativeAudioService] Playback stopped');
+      logger.debug('[NativeAudioService] Playback stopped');
 
       return { success: true };
     } catch (error) {
@@ -273,7 +274,7 @@ class NativeAudioService {
         return { success: true };
       }
 
-      console.error('[NativeAudioService] stopPlayback error:', error);
+      logger.error('[NativeAudioService] stopPlayback error:', error);
       return { success: false, error: error.message };
     }
   }
@@ -283,7 +284,7 @@ class NativeAudioService {
       // Not implemented in native module
       return { success: false, error: 'Pause not supported' };
     } catch (error) {
-      console.error('[NativeAudioService] pausePlayback error:', error);
+      logger.error('[NativeAudioService] pausePlayback error:', error);
       return { success: false, error: error.message };
     }
   }
@@ -293,7 +294,7 @@ class NativeAudioService {
       // Not implemented in native module
       return { success: false, error: 'Resume not supported' };
     } catch (error) {
-      console.error('[NativeAudioService] resumePlayback error:', error);
+      logger.error('[NativeAudioService] resumePlayback error:', error);
       return { success: false, error: error.message };
     }
   }
@@ -305,7 +306,7 @@ class NativeAudioService {
       await writeAllRecordings(recordings);
       return { success: true };
     } catch (error) {
-      console.error('[NativeAudioService] saveRecording error:', error);
+      logger.error('[NativeAudioService] saveRecording error:', error);
       return { success: false, error: error.message };
     }
   }
@@ -314,7 +315,7 @@ class NativeAudioService {
     try {
       return await readAllRecordingsFromStorage();
     } catch (error) {
-      console.error('[NativeAudioService] getAllRecordings error:', error);
+      logger.error('[NativeAudioService] getAllRecordings error:', error);
       return [];
     }
   }
@@ -326,7 +327,7 @@ class NativeAudioService {
       await writeAllRecordings(filteredRecordings);
       return { success: true };
     } catch (error) {
-      console.error('[NativeAudioService] deleteRecording error:', error);
+      logger.error('[NativeAudioService] deleteRecording error:', error);
       return { success: false, error: error.message };
     }
   }
@@ -342,7 +343,7 @@ class NativeAudioService {
       await writeAllRecordings(recordings);
       return { success: true };
     } catch (error) {
-      console.error('[NativeAudioService] updateRecordingTranscript error:', error);
+      logger.error('[NativeAudioService] updateRecordingTranscript error:', error);
       return { success: false, error: error.message };
     }
   }
@@ -377,7 +378,7 @@ class NativeAudioService {
         await this.stopPlayback();
       }
     } catch (e) {
-      console.log('[NativeAudioService] forceCleanup (expected):', e.message);
+      logger.debug('[NativeAudioService] forceCleanup (expected):', e.message);
     } finally {
       this.isRecording = false;
       this.isPlaying = false;

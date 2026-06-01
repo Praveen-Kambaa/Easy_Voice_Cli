@@ -1,3 +1,4 @@
+import logger from '../../utils/logger';
 import { API_CONFIG } from './config';
 
 export const uploadAudio = async (filePath) => {
@@ -25,7 +26,7 @@ export const uploadAudio = async (filePath) => {
     const result = await response.json();
     return { success: true, data: result };
   } catch (error) {
-    console.error('Audio upload error:', error);
+    logger.error('Audio upload error:', error);
     return { success: false, error: error.message };
   }
 };

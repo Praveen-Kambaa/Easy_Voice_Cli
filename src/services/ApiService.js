@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 const API_CONFIG = {
   BASE_URL: 'https://your-api-server.com/api',
   ENDPOINTS: {
@@ -32,7 +33,7 @@ class ApiService {
       const result = await response.json();
       return { success: true, data: result };
     } catch (error) {
-      console.error('Audio upload error:', error);
+      logger.error('Audio upload error:', error);
       return { success: false, error: error.message };
     }
   }

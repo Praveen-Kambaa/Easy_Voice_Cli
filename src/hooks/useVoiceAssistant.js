@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 import { useState, useEffect, useCallback } from 'react';
 import { Platform, NativeModules, PermissionsAndroid } from 'react-native';
 import { useAlert } from '../context/AlertContext';
@@ -37,7 +38,7 @@ export const useVoiceAssistant = () => {
       const result = await VoiceAssistantModule.checkAllPermissions();
       setPermissions(result);
     } catch (error) {
-      console.error('Error checking permissions:', error);
+      logger.error('Error checking permissions:', error);
       showAlert('Error', 'Failed to check permissions');
     } finally {
       setLoading(prev => ({ ...prev, permissions: false }));
@@ -59,7 +60,7 @@ export const useVoiceAssistant = () => {
         showAlert('Permission Denied', 'Microphone permission is required for voice input');
       }
     } catch (error) {
-      console.error('Error requesting audio permission:', error);
+      logger.error('Error requesting audio permission:', error);
       showAlert('Error', 'Failed to request microphone permission');
     }
   }, [checkPermissions, showAlert]);
@@ -79,7 +80,7 @@ export const useVoiceAssistant = () => {
       await VoiceAssistantModule.startFloatingOverlay();
       setIsOverlayActive(true);
     } catch (error) {
-      console.error('Error starting overlay:', error);
+      logger.error('Error starting overlay:', error);
 
       if (error.message.includes('OVERLAY_PERMISSION_DENIED')) {
         showAlert(
@@ -127,7 +128,7 @@ export const useVoiceAssistant = () => {
       await VoiceAssistantModule.stopFloatingOverlay();
       setIsOverlayActive(false);
     } catch (error) {
-      console.error('Error stopping overlay:', error);
+      logger.error('Error stopping overlay:', error);
       showAlert('Error', 'Failed to stop voice assistant');
     } finally {
       setLoading(prev => ({ ...prev, overlay: false }));
@@ -164,7 +165,7 @@ export const useVoiceAssistant = () => {
       const missing = await VoiceAssistantModule.getMissingPermissions();
       return missing;
     } catch (error) {
-      console.error('Error getting missing permissions:', error);
+      logger.error('Error getting missing permissions:', error);
       return [];
     }
   }, []);

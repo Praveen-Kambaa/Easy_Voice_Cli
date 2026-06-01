@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { NativeModules } from 'react-native';
 
@@ -30,7 +31,7 @@ class AudioRecorderService {
       }
       return true; // iOS handles permissions differently
     } catch (error) {
-      console.error('Permission error:', error);
+      logger.error('Permission error:', error);
       return false;
     }
   }
@@ -65,7 +66,7 @@ class AudioRecorderService {
           }
         }, 100);
 
-        console.log('Recording started:', result);
+        logger.debug('Recording started:', result);
 
         return {
           success: true,
@@ -75,7 +76,7 @@ class AudioRecorderService {
         throw new Error('AudioRecorderModule not available');
       }
     } catch (error) {
-      console.error('Error starting recording:', error);
+      logger.error('Error starting recording:', error);
       return {
         success: false,
         error: error.message,
@@ -94,14 +95,14 @@ class AudioRecorderService {
       }
       
       this.isPaused = true;
-      console.log('Recording paused');
+      logger.debug('Recording paused');
 
       return {
         success: true,
         message: 'Recording paused',
       };
     } catch (error) {
-      console.error('Error pausing recording:', error);
+      logger.error('Error pausing recording:', error);
       return {
         success: false,
         error: error.message,
@@ -120,14 +121,14 @@ class AudioRecorderService {
       }
       
       this.isPaused = false;
-      console.log('Recording resumed');
+      logger.debug('Recording resumed');
 
       return {
         success: true,
         message: 'Recording resumed',
       };
     } catch (error) {
-      console.error('Error resuming recording:', error);
+      logger.error('Error resuming recording:', error);
       return {
         success: false,
         error: error.message,
@@ -151,7 +152,7 @@ class AudioRecorderService {
             result = nativeResult;
           }
         } catch (nativeError) {
-          console.log('Native stop failed:', nativeError);
+          logger.debug('Native stop failed:', nativeError);
           // Try force stop
           await AudioRecorderModule.forceStopRecording();
         }
@@ -171,7 +172,7 @@ class AudioRecorderService {
       this.recordingDuration = 0;
       this.recordingStartTime = null;
 
-      console.log('Recording stopped:', result);
+      logger.debug('Recording stopped:', result);
 
       return {
         success: true,
@@ -179,7 +180,7 @@ class AudioRecorderService {
         duration: finalDuration,
       };
     } catch (error) {
-      console.error('Error stopping recording:', error);
+      logger.error('Error stopping recording:', error);
       
       // Force cleanup on error to ensure microphone is OFF
       this.isRecording = false;
@@ -197,7 +198,7 @@ class AudioRecorderService {
         try {
           await AudioRecorderModule.forceStopRecording();
         } catch (forceError) {
-          console.error('Force stop failed:', forceError);
+          logger.error('Force stop failed:', forceError);
         }
       }
       
@@ -219,7 +220,7 @@ class AudioRecorderService {
         message: 'Playback started',
       };
     } catch (error) {
-      console.error('Error starting playback:', error);
+      logger.error('Error starting playback:', error);
       return {
         success: false,
         error: error.message,
@@ -238,7 +239,7 @@ class AudioRecorderService {
         message: 'Playback paused',
       };
     } catch (error) {
-      console.error('Error pausing playback:', error);
+      logger.error('Error pausing playback:', error);
       return {
         success: false,
         error: error.message,
@@ -257,7 +258,7 @@ class AudioRecorderService {
         message: 'Playback stopped',
       };
     } catch (error) {
-      console.error('Error stopping playback:', error);
+      logger.error('Error stopping playback:', error);
       return {
         success: false,
         error: error.message,
@@ -299,11 +300,11 @@ class AudioRecorderService {
       try {
         AudioRecorderModule.forceStopRecording();
       } catch (error) {
-        console.error('Error force stopping native recording:', error);
+        logger.error('Error force stopping native recording:', error);
       }
     }
     
-    console.log('Forced cleanup completed');
+    logger.debug('Forced cleanup completed');
   }
 }
 

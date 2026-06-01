@@ -1,3 +1,4 @@
+import logger from './logger';
 // Simple in-memory storage for demo purposes
 // In production, this would use AsyncStorage or proper database
 
@@ -9,7 +10,7 @@ export const StorageUtils = {
       memoryStorage[key] = JSON.stringify(value);
       return { success: true };
     } catch (error) {
-      console.error('Storage setItem error:', error);
+      logger.error('Storage setItem error:', error);
       return { success: false, error: error.message };
     }
   },
@@ -19,7 +20,7 @@ export const StorageUtils = {
       const value = memoryStorage[key];
       return value ? JSON.parse(value) : null;
     } catch (error) {
-      console.error('Storage getItem error:', error);
+      logger.error('Storage getItem error:', error);
       return null;
     }
   },
@@ -29,7 +30,7 @@ export const StorageUtils = {
       delete memoryStorage[key];
       return { success: true };
     } catch (error) {
-      console.error('Storage removeItem error:', error);
+      logger.error('Storage removeItem error:', error);
       return { success: false, error: error.message };
     }
   },
@@ -39,7 +40,7 @@ export const StorageUtils = {
       memoryStorage = {};
       return { success: true };
     } catch (error) {
-      console.error('Storage clear error:', error);
+      logger.error('Storage clear error:', error);
       return { success: false, error: error.message };
     }
   },

@@ -1,8 +1,7 @@
 /**
- * API Endpoint Constants
- * Centralized endpoint definitions for maintainability
+ * API Endpoint Constants — single source of truth for Easy Voice paths.
+ * Server base URLs live in config/api.js (API_SERVERS).
  */
-
 export const VOICE_ENDPOINTS = {
   // Voice transcription endpoints
   TRANSCRIBE: '/voice/transcribe',

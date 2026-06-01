@@ -25,8 +25,7 @@ import NativeAudioService from '../../services/NativeAudioService';
 import { useAlert } from '../../context/AlertContext';
 import { formatDateTime, formatCompactDateTime } from '../../utils/dateTimeFormat';
 import { parseReminderFromTranscript } from '../../utils/parseSpokenDateTime';
-import { voiceApi } from '../../api/voiceApi';
-import { offlineWhisperService } from '../../services/offlineWhisperService';
+import { transcribeBySettings } from '../../services/transcribeService';
 import {
   addVoiceReminder,
   loadReminders,
@@ -66,18 +65,18 @@ function mergeTimePart(base, picked) {
 }
 
 async function transcribeForReminder(filePath) {
-  const api = await voiceApi.transcribeAudio(filePath, {
+  const result = await transcribeBySettings(filePath, {
     language: 'en-US',
     enablePunctuation: true,
     enableTimestamps: false,
   });
-  if (api.success) {
-    const t = api.data?.refinedTranscript || api.data?.rawTranscript;
+  if (result.success) {
+    const t = result.data?.refinedTranscript || result.data?.rawTranscript;
     if (t && String(t).trim()) {
       return String(t).trim();
     }
   }
-  return offlineWhisperService.transcribeFile(filePath, { language: 'en' });
+  throw new Error(result.error || 'Transcription failed');
 }
 
 function VoiceRemindersScreen() {

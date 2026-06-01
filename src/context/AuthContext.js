@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildTypeEasyUrl, API_ENDPOINTS } from '../config/api';
@@ -66,7 +67,7 @@ export const AuthProvider = ({ children }) => {
         setUser(patched);
       }
     } catch (error) {
-      console.error('Failed to restore session:', error);
+      logger.error('Failed to restore session:', error);
     } finally {
       setIsLoading(false);
     }
@@ -89,7 +90,7 @@ export const AuthProvider = ({ children }) => {
 
       try {
         if (__DEV__) {
-          console.log('[Auth] login', {
+          logger.debug('[Auth] login', {
             url,
             ok: response.ok,
             status,
@@ -147,7 +148,7 @@ export const AuthProvider = ({ children }) => {
       };
     } catch (error) {
       if (__DEV__) {
-        console.warn('[Auth] login network error', error?.message || error);
+        logger.warn('[Auth] login network error', error?.message || error);
       }
       return { success: false, error: 'Network error. Please check your connection and try again.' };
     }
@@ -187,7 +188,7 @@ export const AuthProvider = ({ children }) => {
       }
       return result;
     } catch (error) {
-      if (__DEV__) console.warn('[Auth] sendRegistrationOtp', error?.message || error);
+      if (__DEV__) logger.warn('[Auth] sendRegistrationOtp', error?.message || error);
       return { success: false, error: 'Network error. Please try again.' };
     }
   };
@@ -206,7 +207,7 @@ export const AuthProvider = ({ children }) => {
       }
       return result;
     } catch (error) {
-      if (__DEV__) console.warn('[Auth] verifyRegistrationOtp', error?.message || error);
+      if (__DEV__) logger.warn('[Auth] verifyRegistrationOtp', error?.message || error);
       return { success: false, error: 'Network error. Please try again.' };
     }
   };
@@ -241,7 +242,7 @@ export const AuthProvider = ({ children }) => {
       }
       return result;
     } catch (error) {
-      if (__DEV__) console.warn('[Auth] completeRegistration', error?.message || error);
+      if (__DEV__) logger.warn('[Auth] completeRegistration', error?.message || error);
       return { success: false, error: 'Network error. Please try again.' };
     }
   };
@@ -272,7 +273,7 @@ export const AuthProvider = ({ children }) => {
       }
       return result;
     } catch (error) {
-      if (__DEV__) console.warn('[Auth] requestPasswordReset', error?.message || error);
+      if (__DEV__) logger.warn('[Auth] requestPasswordReset', error?.message || error);
       return { success: false, error: 'Network error. Please try again.' };
     }
   };
@@ -344,7 +345,7 @@ export const AuthProvider = ({ children }) => {
       } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
         return { success: false, error: 'Google Play Services not available' };
       } else {
-        console.error('Google Sign-In error:', error);
+        logger.error('Google Sign-In error:', error);
         return { success: false, error: 'Google sign-in failed' };
       }
     }
@@ -358,7 +359,7 @@ export const AuthProvider = ({ children }) => {
       }
       await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
     } catch (error) {
-      console.error('Failed to clear session:', error);
+      logger.error('Failed to clear session:', error);
     } finally {
       setUser(null);
     }

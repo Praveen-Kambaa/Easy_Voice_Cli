@@ -10,6 +10,11 @@ import notifee, { EventType } from '@notifee/react-native';
 import App from './App';
 import { name as appName } from './app.json';
 import { VOICE_REMINDER_DISMISS_ACTION_ID } from './src/services/voiceReminderService';
+import { initAppLogging } from './src/utils/logger';
+import { initHttpClient } from './src/api/httpClient';
+
+initAppLogging();
+initHttpClient();
 
 notifee.onBackgroundEvent(async ({ type, detail }) => {
   if (type === EventType.ACTION_PRESS) {

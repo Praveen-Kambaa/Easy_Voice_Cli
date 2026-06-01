@@ -46,8 +46,10 @@ import com.typeeasy.sendAppScopedBroadcast
 class MyAccessibilityService : AccessibilityService() {
 
     private var voiceResultReceiver: BroadcastReceiver? = null
+    private var micVisibilityReceiver: BroadcastReceiver? = null
     private val handler = Handler(Looper.getMainLooper())
     private var isServiceReady = false
+    private val evaluateMicRunnable = Runnable { evaluateMicVisibilityNow() }
 
     // On Android 14/15+, rootInActiveWindow / window focus queries can be flaky during transitions.
     // Cache the last focused editable node so we can still inject into the exact field the user tapped.
@@ -68,6 +70,8 @@ class MyAccessibilityService : AccessibilityService() {
         // Smart floating mic actions
         const val ACTION_SHOW_MIC = "com.typeeasy.SHOW_MIC"
         const val ACTION_HIDE_MIC = "com.typeeasy.HIDE_MIC"
+        /** Re-scan whether an editable text field is focused (e.g. after floating mic service starts). */
+        const val ACTION_EVALUATE_MIC_VISIBILITY = "com.typeeasy.EVALUATE_MIC_VISIBILITY"
 
         private const val ARG_SELECTION_START =
             "android.view.accessibility.action.ARGUMENT_SELECTION_START"
@@ -100,14 +104,18 @@ class MyAccessibilityService : AccessibilityService() {
         Log.d(TAG, "✅ Central Injection Controller connected")
         configureService()
         registerVoiceResultReceiver()
+        registerMicVisibilityReceiver()
         isServiceReady = true
+        scheduleEvaluateMicVisibility(400)
         // showToast("Voice text injection ready")
     }
 
     private fun configureService() {
         val info = AccessibilityServiceInfo().apply {
             eventTypes = AccessibilityEvent.TYPE_VIEW_FOCUSED or
-                    AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED
+                    AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED or
+                    AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
+                    AccessibilityEvent.TYPE_WINDOWS_CHANGED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             flags = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
                     AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
@@ -189,51 +197,104 @@ class MyAccessibilityService : AccessibilityService() {
         Log.d(TAG, "✅ Broadcast receiver registered")
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (!isServiceReady) return
-        
-        // Only handle focus-related events
-        if (event?.eventType != AccessibilityEvent.TYPE_VIEW_FOCUSED &&
-            event?.eventType != AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED) return
-
-        // Cache last focused editable field from the event source (best signal).
-        // This dramatically improves injection reliability on Android 14/15 where findFocus() can return null.
-        runCatching {
-            val src = event.source
-            if (src != null) {
-                try {
-                    if (src.isEditable && src.isEnabled && src.isVisibleToUser) {
-                        // Replace previous cached node
-                        lastFocusedEditable?.recycle()
-                        lastFocusedEditable = AccessibilityNodeInfo.obtain(src)
-                        lastFocusedAtMs = System.currentTimeMillis()
-                    }
-                } finally {
-                    src.recycle()
+    private fun registerMicVisibilityReceiver() {
+        micVisibilityReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == ACTION_EVALUATE_MIC_VISIBILITY) {
+                    scheduleEvaluateMicVisibility(0)
                 }
             }
         }
-        
+        val filter = IntentFilter(ACTION_EVALUATE_MIC_VISIBILITY)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(micVisibilityReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(micVisibilityReceiver, filter)
+        }
+        Log.d(TAG, "✅ Mic visibility receiver registered")
+    }
+
+    private fun scheduleEvaluateMicVisibility(delayMs: Long = 0) {
+        handler.removeCallbacks(evaluateMicRunnable)
+        if (delayMs > 0) {
+            handler.postDelayed(evaluateMicRunnable, delayMs)
+        } else {
+            handler.post(evaluateMicRunnable)
+        }
+    }
+
+    private fun evaluateMicVisibilityNow() {
         val root = rootInActiveWindow
         if (root == null) {
-            // Transient during IME/app redraws; do not hide overlay (would kill mic/translate UX).
+            // Brief retry — IME redraws can transiently clear the active window.
+            handler.postDelayed({
+                val retryRoot = rootInActiveWindow
+                if (retryRoot == null) {
+                    hideFloatingMic()
+                    return@postDelayed
+                }
+                try {
+                    applyMicVisibilityForRoot(retryRoot)
+                } finally {
+                    retryRoot.recycle()
+                }
+            }, 250)
             return
         }
-        
-        val focusedNode = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-        
         try {
-            if (focusedNode != null && 
-                focusedNode.isEditable && 
-                focusedNode.isFocused) {
-                Log.d(TAG, "Showing floating mic - editable field focused")
+            applyMicVisibilityForRoot(root)
+        } finally {
+            root.recycle()
+        }
+    }
+
+    private fun applyMicVisibilityForRoot(root: AccessibilityNodeInfo) {
+        val focusedNode = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+        try {
+            val shouldShow = focusedNode != null &&
+                focusedNode.isEditable &&
+                focusedNode.isFocused &&
+                focusedNode.isEnabled &&
+                focusedNode.isVisibleToUser
+            if (shouldShow) {
+                Log.d(TAG, "Showing floating mic — editable field focused")
                 showFloatingMic()
             } else {
-                Log.d(TAG, "Hiding floating mic - no editable focused field")
+                Log.d(TAG, "Hiding floating mic — no editable focused field")
                 hideFloatingMic()
             }
         } finally {
             focusedNode?.recycle()
+        }
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (!isServiceReady || event == null) return
+
+        when (event.eventType) {
+            AccessibilityEvent.TYPE_VIEW_FOCUSED,
+            AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED -> {
+                runCatching {
+                    val src = event.source
+                    if (src != null) {
+                        try {
+                            if (src.isEditable && src.isEnabled && src.isVisibleToUser) {
+                                lastFocusedEditable?.recycle()
+                                lastFocusedEditable = AccessibilityNodeInfo.obtain(src)
+                                lastFocusedAtMs = System.currentTimeMillis()
+                            }
+                        } finally {
+                            src.recycle()
+                        }
+                    }
+                }
+                scheduleEvaluateMicVisibility(0)
+            }
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
+                scheduleEvaluateMicVisibility(150)
+            }
         }
     }
 
@@ -250,6 +311,10 @@ class MyAccessibilityService : AccessibilityService() {
             runCatching { unregisterReceiver(r) }
         }
         voiceResultReceiver = null
+        micVisibilityReceiver?.let { r ->
+            runCatching { unregisterReceiver(r) }
+        }
+        micVisibilityReceiver = null
         Log.d(TAG, "Service destroyed")
     }
 

@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 // Simple in-memory storage for demo purposes
 // In production, this would use proper persistent storage
 
@@ -21,7 +22,7 @@ export const AudioStorageService = {
       
       return { success: true, recording: newRecording };
     } catch (error) {
-      console.error('Error saving recording:', error);
+      logger.error('Error saving recording:', error);
       return { success: false, error: error.message };
     }
   },
@@ -30,7 +31,7 @@ export const AudioStorageService = {
     try {
       return recordings;
     } catch (error) {
-      console.error('Error getting recordings:', error);
+      logger.error('Error getting recordings:', error);
       return [];
     }
   },
@@ -40,7 +41,7 @@ export const AudioStorageService = {
       recordings = recordings.filter(r => r.id !== recordingId);
       return { success: true };
     } catch (error) {
-      console.error('Error deleting recording:', error);
+      logger.error('Error deleting recording:', error);
       return { success: false, error: error.message };
     }
   },

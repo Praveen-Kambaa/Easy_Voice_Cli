@@ -1,3 +1,4 @@
+import logger from './logger';
 import { Platform, Linking, NativeModules } from 'react-native';
 import { showGlobalAlert } from './alertPresenter';
 
@@ -34,10 +35,10 @@ export const checkOverlayPermission = async () => {
       return await AndroidPermissionsModule.checkOverlayPermission();
     }
     // Fallback for when native module is not available
-    console.warn('AndroidPermissionsModule not available, returning false');
+    logger.warn('AndroidPermissionsModule not available, returning false');
     return false;
   } catch (error) {
-    console.error('Error checking overlay permission:', error);
+    logger.error('Error checking overlay permission:', error);
     return false;
   }
 };
@@ -55,10 +56,10 @@ export const checkAccessibilityPermission = async () => {
       return await AndroidPermissionsModule.checkAccessibilityPermission();
     }
     // Fallback for when native module is not available
-    console.warn('AndroidPermissionsModule not available, returning false');
+    logger.warn('AndroidPermissionsModule not available, returning false');
     return false;
   } catch (error) {
-    console.error('Error checking accessibility permission:', error);
+    logger.error('Error checking accessibility permission:', error);
     return false;
   }
 };
@@ -80,7 +81,7 @@ export const openOverlaySettings = async () => {
   try {
     await AndroidPermissionsModule.openOverlaySettings();
   } catch (error) {
-    console.error('Error opening overlay settings:', error);
+    logger.error('Error opening overlay settings:', error);
     throw new Error(`Failed to open overlay settings: ${error.message}`);
   }
 };
@@ -102,7 +103,7 @@ export const openAccessibilitySettings = async () => {
   try {
     await AndroidPermissionsModule.openAccessibilitySettings();
   } catch (error) {
-    console.error('Error opening accessibility settings:', error);
+    logger.error('Error opening accessibility settings:', error);
     throw new Error(`Failed to open accessibility settings: ${error.message}`);
   }
 };

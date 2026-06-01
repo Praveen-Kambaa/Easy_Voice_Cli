@@ -1,12 +1,13 @@
+import logger from '../utils/logger';
 import NativeAudioService from './NativeAudioService';
-import { transcribeAudio } from '../api/voiceApi';
+import { transcribeBySettings } from './transcribeService';
 
 /**
  * Translator mic: start native recording (same stack as Voice Command).
  * @returns {Promise<{ success: boolean, filePath?: string, error?: string }>}
  */
 export async function startTranslatorRecording() {
-  console.log('[speechService] startTranslatorRecording');
+  logger.debug('[speechService] startTranslatorRecording');
   try {
     if (NativeAudioService.isRecording) {
       return { success: false, error: 'Already recording' };
@@ -17,7 +18,7 @@ export async function startTranslatorRecording() {
     }
     return { success: true, filePath: result.filePath };
   } catch (e) {
-    console.warn('[speechService] start failed', e);
+    logger.warn('[speechService] start failed', e);
     return { success: false, error: e?.message || 'Recording failed to start' };
   }
 }
@@ -31,7 +32,7 @@ export async function startTranslatorRecording() {
  */
 export async function stopTranslatorRecordingAndTranscribe(opts = {}) {
   const language = opts.language ?? 'en-US';
-  console.log('[speechService] stop + transcribe, language=', language);
+  logger.debug('[speechService] stop + transcribe, language=', language);
 
   try {
     if (!NativeAudioService.isRecording) {
@@ -44,9 +45,9 @@ export async function stopTranslatorRecordingAndTranscribe(opts = {}) {
     }
 
     const filePath = stop.filePath;
-    console.log('[speechService] transcribe file', filePath);
+    logger.debug('[speechService] transcribe file', filePath);
 
-    const tx = await transcribeAudio(filePath, {
+    const tx = await transcribeBySettings(filePath, {
       language,
       enablePunctuation: true,
       enableTimestamps: false,
@@ -62,10 +63,10 @@ export async function stopTranslatorRecordingAndTranscribe(opts = {}) {
       return { success: false, error: 'No speech detected. Try again.' };
     }
 
-    console.log('[speechService] transcript length=', transcript.length);
+    logger.debug('[speechService] transcript length=', transcript.length);
     return { success: true, transcript };
   } catch (e) {
-    console.warn('[speechService] stop/transcribe error', e);
+    logger.warn('[speechService] stop/transcribe error', e);
     return { success: false, error: e?.message || 'Transcription failed' };
   }
 }

@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FileSystem, Dirs } from 'react-native-file-access';
 import { DeviceEventEmitter } from 'react-native';
@@ -31,7 +32,7 @@ async function migrateLegacyFileIfNeeded() {
     await FileSystem.unlink(LEGACY_HISTORY_PATH).catch(() => undefined);
     return pruned;
   } catch (e) {
-    console.warn('[FloatingSpeechHistory] legacy migrate:', e);
+    logger.warn('[FloatingSpeechHistory] legacy migrate:', e);
     return [];
   }
 }
@@ -47,13 +48,13 @@ export const FloatingSpeechHistoryService = {
         if (pruned.length !== arr.length) {
           await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(pruned));
         }
-        console.log('📚 FloatingSpeechHistoryService: Retrieved entries from storage:', pruned.length);
+        logger.debug('📚 FloatingSpeechHistoryService: Retrieved entries from storage:', pruned.length);
         return pruned;
       }
-      console.log('📚 FloatingSpeechHistoryService: No entries in storage, checking legacy...');
+      logger.debug('📚 FloatingSpeechHistoryService: No entries in storage, checking legacy...');
       return await migrateLegacyFileIfNeeded();
     } catch (e) {
-      console.error('[FloatingSpeechHistory] getAll:', e);
+      logger.error('[FloatingSpeechHistory] getAll:', e);
       return [];
     }
   },
@@ -63,7 +64,7 @@ export const FloatingSpeechHistoryService = {
     if (!text) return { success: false };
 
     try {
-      console.log('📝 FloatingSpeechHistoryService: Saving transcription:', text);
+      logger.debug('📝 FloatingSpeechHistoryService: Saving transcription:', text);
       const entries = await this.getAll();
       entries.push({
         id: `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
@@ -74,11 +75,11 @@ export const FloatingSpeechHistoryService = {
       const fresh = filterEntriesWithinRetention(entries, LOCAL_HISTORY_RETENTION_MS);
       const trimmed = fresh.slice(-MAX_ENTRIES);
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
-      console.log('💾 FloatingSpeechHistoryService: Saved successfully. Total entries:', trimmed.length);
+      logger.debug('💾 FloatingSpeechHistoryService: Saved successfully. Total entries:', trimmed.length);
       DeviceEventEmitter.emit(FLOATING_SPEECH_UPDATED_EVENT);
       return { success: true };
     } catch (e) {
-      console.error('[FloatingSpeechHistory] append:', e);
+      logger.error('[FloatingSpeechHistory] append:', e);
       return { success: false, error: e.message };
     }
   },

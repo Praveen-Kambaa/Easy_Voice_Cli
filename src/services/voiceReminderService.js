@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import notifee, {
@@ -162,7 +163,7 @@ export async function initVoiceReminderNotifications() {
       try {
         await scheduleTrigger(r);
       } catch (e) {
-        console.warn('[voiceReminder] reschedule', r.id, e?.message || e);
+        logger.warn('[voiceReminder] reschedule', r.id, e?.message || e);
       }
     }
   }
@@ -177,7 +178,7 @@ export async function loadReminders() {
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch (e) {
-    console.warn('[voiceReminder] loadReminders', e);
+    logger.warn('[voiceReminder] loadReminders', e);
     return [];
   }
 }
@@ -211,7 +212,7 @@ export async function addVoiceReminder(sourcePath, scheduledAt, options = {}) {
     const src = absPath(sourcePath);
     await FileSystem.cp(src, targetPath);
   } catch (e) {
-    console.warn('[voiceReminder] copy', e);
+    logger.warn('[voiceReminder] copy', e);
     return { success: false, error: e?.message || 'Could not save the recording.' };
   }
 
@@ -231,7 +232,7 @@ export async function addVoiceReminder(sourcePath, scheduledAt, options = {}) {
   try {
     await scheduleTrigger(reminder);
   } catch (e) {
-    console.warn('[voiceReminder] schedule', e);
+    logger.warn('[voiceReminder] schedule', e);
     return { success: false, error: e?.message || 'Could not schedule the notification. Check notification permission.' };
   }
 

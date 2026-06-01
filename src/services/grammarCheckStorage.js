@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DeviceEventEmitter } from 'react-native';
 import {
@@ -20,7 +21,7 @@ async function persistHistoryIfChanged(prev, pruned) {
   try {
     await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(pruned));
   } catch (e) {
-    console.warn('[grammarCheckStorage] persist prune', e);
+    logger.warn('[grammarCheckStorage] persist prune', e);
   }
 }
 
@@ -45,7 +46,7 @@ export async function deleteGrammarHistoryEntry(id) {
     DeviceEventEmitter.emit(GRAMMAR_HISTORY_UPDATED_EVENT);
     return { success: true };
   } catch (e) {
-    console.warn('[grammarCheckStorage] deleteGrammarHistoryEntry', e);
+    logger.warn('[grammarCheckStorage] deleteGrammarHistoryEntry', e);
     return { success: false, error: e?.message || 'Could not delete' };
   }
 }
@@ -69,7 +70,7 @@ export async function addGrammarHistory({ inputText, correctedText }) {
     await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(next));
     DeviceEventEmitter.emit(GRAMMAR_HISTORY_UPDATED_EVENT);
   } catch (e) {
-    console.warn('[grammarCheckStorage] addGrammarHistory', e);
+    logger.warn('[grammarCheckStorage] addGrammarHistory', e);
   }
 }
 

@@ -20,6 +20,8 @@ import {
 
   TextInput,
 
+  Keyboard,
+
 } from 'react-native';
 
 import {
@@ -55,6 +57,7 @@ import { FileSystem } from 'react-native-file-access';
 import NativeAudioService from '../../services/NativeAudioService';
 
 import { voiceApi } from '../../api/voiceApi';
+import { transcribeForVoiceCommand, executeEditedVoiceCommand } from '../../services/voiceCommandWorkflow';
 
 import { AppHeader } from '../../components/Header/AppHeader';
 
@@ -110,6 +113,8 @@ const VoiceCommandScreen = ({ navigation }) => {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const pulseRef = useRef(null);
+
+  const transcriptInputRef = useRef(null);
 
 
 
@@ -403,21 +408,19 @@ const VoiceCommandScreen = ({ navigation }) => {
 
 
 
-      const result = await voiceApi.transcribeAudio(audioFilePath, {
-
+      const result = await transcribeForVoiceCommand(audioFilePath, {
         language: 'en-US',
-
         enablePunctuation: true,
-
         enableTimestamps: false,
-
       });
 
 
 
       if (result.success) {
 
-        const { rawTranscript, refinedTranscript, voiceAssetId: assetId } = result.data;
+        const { transcript, voiceAssetId: assetId } = result;
+        const rawTranscript = transcript;
+        const refinedTranscript = transcript;
 
         if (recordingData) {
 
@@ -573,9 +576,25 @@ const VoiceCommandScreen = ({ navigation }) => {
 
   const handleExecuteVoiceCommand = async () => {
 
-    if (!voiceAssetId) {
+    transcriptInputRef.current?.blur();
 
-      showAlert('Error', 'No voice asset ID available for execution');
+    Keyboard.dismiss();
+
+    const currentTranscript = isEditingTranscript ? editableTranscript.trim() : transcript;
+
+    if (!currentTranscript?.trim()) {
+
+      showAlert('Error', 'Enter a command before sending');
+
+      return;
+
+    }
+
+    const audioPath = lastRecording?.filePath || filePath;
+
+    if (!voiceAssetId && !audioPath) {
+
+      showAlert('Error', 'No recording available for command execution');
 
       return;
 
@@ -585,73 +604,37 @@ const VoiceCommandScreen = ({ navigation }) => {
 
       setIsExecuting(true);
 
-      const currentTranscript = isEditingTranscript ? editableTranscript.trim() : transcript;
+      const exec = await executeEditedVoiceCommand(
 
-      const hasChanged = currentTranscript !== transcript;
+        voiceAssetId,
 
-      let finalVoiceAssetId = voiceAssetId;
+        currentTranscript,
 
+        transcript,
 
+        audioPath,
 
-      if (hasChanged && isEditingTranscript) {
+      );
 
-        const updateResult = await voiceApi.updateTranscript(voiceAssetId, currentTranscript);
+      if (!exec.success) {
 
-        if (updateResult.success) {
-
-          finalVoiceAssetId = updateResult.data.voiceAssetId;
-
-          setVoiceAssetId(finalVoiceAssetId);
-
-          setTranscript(currentTranscript);
-
-          if (lastRecording) {
-
-            const updated = { ...lastRecording, refinedTranscript: currentTranscript };
-
-            await NativeAudioService.updateRecordingTranscript(lastRecording.id, updated);
-
-            setLastRecording(updated);
-
-          }
-
-        } else {
-
-          throw new Error(`Failed to update transcript: ${updateResult.error}`);
-
-        }
+        throw new Error(exec.error || 'Failed to execute voice command');
 
       }
 
+      setTranscript(currentTranscript);
 
+      setIsEditingTranscript(false);
 
-      const executeResult = await voiceApi.executeVoiceCommand(finalVoiceAssetId, {
+      showAlert(
 
-        timestamp: new Date().toISOString(),
+        'Command Executed!',
 
-      });
+        `Voice command processed successfully.\n\n${exec.result}`,
 
+        [{ text: 'OK' }],
 
-
-      if (executeResult.success) {
-
-        setIsEditingTranscript(false);
-
-        showAlert(
-
-          'Command Executed!',
-
-          `Voice command processed successfully.\n\n${hasChanged ? '(Transcript was updated before execution)' : '(Original transcript used)'}`,
-
-          [{ text: 'OK' }]
-
-        );
-
-      } else {
-
-        throw new Error(executeResult.error);
-
-      }
+      );
 
     } catch (error) {
 
@@ -722,6 +705,10 @@ const VoiceCommandScreen = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent}
 
         showsVerticalScrollIndicator={false}
+
+        keyboardShouldPersistTaps="handled"
+
+        keyboardDismissMode="on-drag"
 
       >
 
@@ -893,6 +880,8 @@ const VoiceCommandScreen = ({ navigation }) => {
 
                 <TextInput
 
+                  ref={transcriptInputRef}
+
                   style={styles.transcriptInput}
 
                   multiline
@@ -905,6 +894,10 @@ const VoiceCommandScreen = ({ navigation }) => {
 
                   autoFocus
 
+                  blurOnSubmit
+
+                  returnKeyType="done"
+
                 />
 
                 <View style={styles.editActionsRow}>
@@ -916,6 +909,8 @@ const VoiceCommandScreen = ({ navigation }) => {
                     onPress={handleSaveTranscript}
 
                     variant="ghost"
+
+                    dismissKeyboardOnPress
 
                     style={styles.editActionBtn}
 
@@ -931,6 +926,8 @@ const VoiceCommandScreen = ({ navigation }) => {
 
                     loading={isExecuting}
 
+                    dismissKeyboardOnPress
+
                     style={[styles.editActionBtn, { backgroundColor: colors.primary }]}
 
                   />
@@ -942,6 +939,8 @@ const VoiceCommandScreen = ({ navigation }) => {
                     onPress={handleCancelEdit}
 
                     variant="danger"
+
+                    dismissKeyboardOnPress
 
                     style={styles.editActionBtn}
 

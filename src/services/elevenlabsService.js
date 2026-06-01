@@ -1,5 +1,6 @@
 import { FileSystem } from 'react-native-file-access';
 import { createResponse } from '../utils/apiResponse';
+import { apiFetch } from '../api/httpClient';
 import {
   ELEVENLABS_API_KEY_PLACEHOLDER,
   getElevenLabsApiKey,
@@ -91,34 +92,18 @@ export async function transcribeWithElevenLabs(fileUri, options = {}) {
   }
 
   try {
-    const response = await fetch(ELEVENLABS_STT_URL, {
-      method: 'POST',
-      headers: {
-        'xi-api-key': apiKey,
-        Accept: 'application/json',
+    const data = await apiFetch(
+      ELEVENLABS_STT_URL,
+      {
+        method: 'POST',
+        headers: {
+          'xi-api-key': apiKey,
+          Accept: 'application/json',
+        },
+        body: formData,
       },
-      body: formData,
-    });
-
-    const textBody = await response.text();
-    let data;
-    try {
-      data = textBody ? JSON.parse(textBody) : {};
-    } catch {
-      data = {};
-    }
-
-    if (!response.ok) {
-      const detailMsg = Array.isArray(data?.detail)
-        ? data.detail.map((d) => d?.msg).filter(Boolean).join('; ')
-        : '';
-      const msg =
-        data?.message ||
-        data?.error ||
-        detailMsg ||
-        `ElevenLabs error ${response.status}`;
-      return createResponse(false, null, msg);
-    }
+      120000,
+    );
 
     const transcript = extractTranscriptText(data);
     if (!transcript.trim()) {

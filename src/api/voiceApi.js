@@ -1,90 +1,32 @@
 /**
- * voiceApi.js
- *
- * Audio upload to backend via multipart/form-data with binary file.
- * Works on Android physical device with React Native Community CLI.
- *
- * Key points:
- *  - Read file as binary data using FileSystem.readFile
- *  - Send as raw binary in FormData
- *  - Use proper headers for binary upload
- *  - Handle network connectivity issues
+ * voiceApi.js — Easy Voice server: transcribe, transcript update, execute, history.
  */
-
-import { Platform } from 'react-native';
 import { FileSystem } from 'react-native-file-access';
 import { apiUtils } from './apiClient';
-import apiClient from './apiClient';
 import { VOICE_ENDPOINTS } from './endpoints';
 import { buildEasyVoiceUrl } from '../config/api';
+import { apiFetch } from './httpClient';
+import logger from '../utils/logger';
 
-// Helper function for fetch with timeout
-const fetchWithTimeout = async (url, options = {}, timeout = 120000) => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
+const createResponse = (success = false, data = null, error = null) => ({ success, data, error });
 
-  try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-    return response;
-  } catch (error) {
-    clearTimeout(timeoutId);
-    throw error;
-  }
+const toLocalFsPath = (filePath) => {
+  if (!filePath || typeof filePath !== 'string') return filePath;
+  return filePath.startsWith('file://') ? filePath.replace(/^file:\/\//, '') : filePath;
 };
 
-// Helper function to handle fetch responses
-const handleFetchResponse = async (response) => {
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw {
-      response: {
-        status: response.status,
-        data: errorData,
-      },
-      message: errorData.message || errorData.error || `HTTP ${response.status}`,
-    };
-  }
-  return await response.json();
-};
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Build a proper file:// URI that Android FormData can read.
- * Paths returned by react-native-audio-recorder-player on Android are absolute
- * (e.g. /data/user/0/com.app/cache/recording_xxx.mp4).
- * Adding "file://" prefix is required for the native HTTP layer.
- */
 const toFileUri = (filePath) => {
-  console.log('[voiceApi] toFileUri – input filePath:', filePath);
-  if (!filePath) {
-    console.log('[voiceApi] toFileUri – no filePath provided, returning as-is');
-    return filePath;
-  }
-  if (filePath.startsWith('file://') || filePath.startsWith('content://')) {
-    console.log('[voiceApi] toFileUri – filePath already has proper prefix, returning:', filePath);
-    return filePath;
-  }
-  const result = `file://${filePath}`;
-  console.log('[voiceApi] toFileUri – added file:// prefix, result:', result);
-  return result;
+  if (!filePath) return filePath;
+  if (filePath.startsWith('file://') || filePath.startsWith('content://')) return filePath;
+  return `file://${filePath}`;
 };
 
-/**
- * Guess MIME type from file extension.
- */
 const getMimeType = (filePath) => {
-  if (!filePath) {
-    return 'audio/mp4';
-  }
+  if (!filePath) return 'audio/mp4';
   const ext = filePath.split('.').pop()?.toLowerCase();
   const map = {
     mp4: 'audio/mp4',
-    m4a: 'audio/m4a',
+    m4a: 'audio/mp4',
     aac: 'audio/aac',
     mp3: 'audio/mpeg',
     wav: 'audio/wav',
@@ -93,34 +35,15 @@ const getMimeType = (filePath) => {
   return map[ext] || 'audio/mp4';
 };
 
-// ─── Standardised response factory ────────────────────────────────────────────
-const createResponse = (success = false, data = null, error = null) => {
-  return { success, data, error };
-};
-
-/** Paths from native may be `/sdcard/...` or `file:///...` — FileSystem helpers need no scheme. */
-const toLocalFsPath = (filePath) => {
-  if (!filePath || typeof filePath !== 'string') return filePath;
-  return filePath.startsWith('file://') ? filePath.replace(/^file:\/\//, '') : filePath;
-};
-
-// ─── Core upload function ─────────────────────────────────────────────────────
-
 /**
- * Upload an audio file to the backend as multipart/form-data.
- *
- * @param {string} filePath  – absolute path OR file:// URI to the audio file
- * @param {Object} options   – { language, enablePunctuation, enableTimestamps }
+ * Upload audio as multipart/form-data using a native file URI (required on React Native).
  */
 const uploadAudio = async (filePath, options = {}) => {
-  // 1. Validate input
   if (!filePath) {
     return createResponse(false, null, 'Audio file path is required');
   }
 
   const fsPath = toLocalFsPath(filePath);
-
-  // 2. Verify file exists and get file info
   const exists = await FileSystem.exists(fsPath);
   if (!exists) {
     return createResponse(false, null, `Audio file not found: ${fsPath}`);
@@ -131,98 +54,57 @@ const uploadAudio = async (filePath, options = {}) => {
     return createResponse(false, null, 'Audio file is empty (0 bytes). Recording may have failed.');
   }
 
-  // 3. Read file as binary data
   try {
-    const fileData = await FileSystem.readFile(fsPath, 'base64');
-
-    // 4. Build FormData with binary data
     const mimeType = getMimeType(fsPath);
-    const fileName = fsPath.split('/').pop() || `recording_${Date.now()}.m4a`;
+    const fileName = fsPath.split(/[/\\]/).pop() || `recording_${Date.now()}.m4a`;
+    const uploadUri = toFileUri(fsPath);
 
     const formData = new FormData();
-
-    // Convert base64 to blob for proper binary upload
-    const blob = `data:${mimeType};base64,${fileData}`;
     formData.append('file', {
-      uri: blob,
+      uri: uploadUri,
       type: mimeType,
       name: fileName,
     });
+    formData.append('language', options.language || 'en-US');
+    formData.append('enablePunctuation', String(options.enablePunctuation !== false));
+    formData.append('enableTimestamps', String(options.enableTimestamps === true));
 
-    // Optional fields your backend might use
-    const language = options.language || 'en-US';
-    const enablePunctuation = String(options.enablePunctuation !== false);
-    const enableTimestamps = String(options.enableTimestamps === true);
-
-    formData.append('language', language);
-    formData.append('enablePunctuation', enablePunctuation);
-    formData.append('enableTimestamps', enableTimestamps);
-
-    // 5. POST file with proper headers
-    const response = await fetchWithTimeout(
-      buildEasyVoiceUrl('/voice/transcribe'),
+    const url = buildEasyVoiceUrl(VOICE_ENDPOINTS.TRANSCRIBE);
+    const responseData = await apiFetch(
+      url,
       {
         method: 'POST',
         body: formData,
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'multipart/form-data',
-          // Note: Don't set Content-Type for FormData - browser sets it with boundary
-        },
+        headers: { Accept: 'application/json' },
       },
-      180000 // 3 minutes
+      180000,
     );
 
-    const responseData = await handleFetchResponse(response);
     return createResponse(true, responseData);
   } catch (error) {
-    if (error.response) {
-      // Server replied with an error status
-      const msg = error.response.data?.message
-        || error.response.data?.error
-        || `Server error: ${error.response.status}`;
-      return createResponse(false, null, msg);
-    }
-
     if (error.name === 'AbortError') {
       return createResponse(false, null, 'Request timed out. Please try again.');
     }
-
-    // Network issue or other error
-    return createResponse(
-      false,
-      null,
-      `Network error – cannot reach backend.\n\nError details: ${error.message}\n\nCheck:\n1. Backend is running on st0x556n-4000.inc1.devtunnels.ms\n2. Device has internet connection\n3. SSL certificate is valid\n4. CORS is properly configured\n5. DNS resolution works`,
-    );
+    const msg =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      'Network error – cannot reach voice server.';
+    return createResponse(false, null, msg);
   }
 };
 
-// ─── Public transcribeAudio (called by VoiceRecorderScreen) ───────────────────
-
-/**
- * Transcribe an audio file.
- * Returns a standardised { success, data: { rawTranscript, refinedTranscript, voiceAssetId } }
- */
 export const transcribeAudio = async (fileUri, options = {}) => {
   if (!fileUri) {
     return createResponse(false, null, 'Audio file path is required');
   }
-
   const result = await uploadAudio(fileUri, options);
-
   if (!result.success) {
     return createResponse(false, null, result.error);
   }
-
-  const normalizedData = normalizeTranscribeServerPayload(result.data);
-
-  return createResponse(true, normalizedData);
+  return createResponse(true, normalizeTranscribeServerPayload(result.data));
 };
 
-/**
- * Map /voice/transcribe JSON into { rawTranscript, refinedTranscript, voiceAssetId }.
- * Handles plain string bodies, nested `data`, and common key names.
- */
 function normalizeTranscribeServerPayload(raw) {
   const ts = new Date().toISOString();
   if (raw == null) {
@@ -240,8 +122,7 @@ function normalizeTranscribeServerPayload(raw) {
   const inner = d.data && typeof d.data === 'object' ? d.data : null;
   const pickFirst = (...candidates) => {
     for (const c of candidates) {
-      if (c == null) continue;
-      if (typeof c === 'object') continue;
+      if (c == null || typeof c === 'object') continue;
       const s = String(c).trim();
       if (s) return s;
     }
@@ -260,8 +141,23 @@ function normalizeTranscribeServerPayload(raw) {
     inner?.text,
   );
 
-  const refined = pickFirst(d.refinedTranscript, d.rawTranscript, d.transcript, d.text, coarse, inner?.transcript, inner?.text);
-  const rawT = pickFirst(d.rawTranscript, d.transcript, d.text, coarse, inner?.rawTranscript, inner?.transcript);
+  const refined = pickFirst(
+    d.refinedTranscript,
+    d.rawTranscript,
+    d.transcript,
+    d.text,
+    coarse,
+    inner?.transcript,
+    inner?.text,
+  );
+  const rawT = pickFirst(
+    d.rawTranscript,
+    d.transcript,
+    d.text,
+    coarse,
+    inner?.rawTranscript,
+    inner?.transcript,
+  );
 
   const voiceAssetId =
     d.voiceAssetId ?? d.easyVoiceAssetId ?? d.id ?? inner?.voiceAssetId ?? inner?.id ?? null;
@@ -274,7 +170,21 @@ function normalizeTranscribeServerPayload(raw) {
   };
 }
 
-// ─── Other voice API endpoints ────────────────────────────────────────────────
+function extractExecuteResultText(data) {
+  if (!data || typeof data !== 'object') return '';
+  const direct = data.result?.trim?.() || data.message?.trim?.();
+  if (direct) return direct;
+  const inner = data.data;
+  if (inner && typeof inner === 'object') {
+    return (
+      inner.result?.trim?.() ||
+      inner.message?.trim?.() ||
+      inner.text?.trim?.() ||
+      ''
+    );
+  }
+  return '';
+}
 
 export const updateTranscript = async (voiceAssetId, finalTranscript) => {
   try {
@@ -285,23 +195,23 @@ export const updateTranscript = async (voiceAssetId, finalTranscript) => {
       return createResponse(false, null, 'Transcript text cannot be empty');
     }
 
-    const response = await fetchWithTimeout(
-      buildEasyVoiceUrl(VOICE_ENDPOINTS.TRANSCRIPT),
+    const url = buildEasyVoiceUrl(VOICE_ENDPOINTS.TRANSCRIPT);
+    const data = await apiFetch(
+      url,
       {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
+          Accept: 'application/json',
         },
         body: JSON.stringify({
           finalTranscript: finalTranscript.trim(),
-          voiceAssetId: voiceAssetId
+          voiceAssetId,
         }),
       },
-      30000
+      30000,
     );
 
-    const data = await handleFetchResponse(response);
     if (!data?.voiceAssetId) {
       return createResponse(false, null, 'Invalid response from server');
     }
@@ -325,38 +235,40 @@ export const executeVoiceCommand = async (voiceAssetId, options = {}) => {
       return createResponse(false, null, 'Voice asset ID is required');
     }
 
-    const response = await fetchWithTimeout(
-      buildEasyVoiceUrl(VOICE_ENDPOINTS.EXECUTE),
+    const url = buildEasyVoiceUrl(VOICE_ENDPOINTS.EXECUTE);
+    const data = await apiFetch(
+      url,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
+          Accept: 'application/json',
         },
         body: JSON.stringify({
           easyVoiceAssetId: voiceAssetId,
-          executeAt: new Date().toISOString(),
-          ...options
+          executeAt: options.executeAt || new Date().toISOString(),
         }),
       },
-      45000
+      45000,
     );
 
-    const data = await handleFetchResponse(response);
     if (!data || typeof data !== 'object') {
       return createResponse(false, null, 'Invalid response from server');
     }
 
+    const resultText = extractExecuteResultText(data);
+
     return createResponse(true, {
       executionId: data.executionId,
       status: data.status,
-      result: data.result,
+      result: resultText || data.result,
       executedAt: data.executedAt || new Date().toISOString(),
     });
   } catch (error) {
     if (apiUtils.isCancel(error)) {
       return createResponse(false, null, 'Execution was cancelled');
     }
+    logger.error('executeVoiceCommand failed', error.message);
     return createResponse(false, null, error.message || 'Failed to execute voice command');
   }
 };
@@ -370,16 +282,9 @@ export const getVoiceHistory = async (filters = {}) => {
       endDate: filters.endDate || '',
     });
 
-    const response = await fetchWithTimeout(
-      `${buildEasyVoiceUrl(VOICE_ENDPOINTS.HISTORY)}?${params.toString()}`,
-      {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      },
-      30000
-    );
+    const url = `${buildEasyVoiceUrl(VOICE_ENDPOINTS.HISTORY)}?${params.toString()}`;
+    const data = await apiFetch(url, { method: 'GET', headers: { Accept: 'application/json' } }, 30000);
 
-    const data = await handleFetchResponse(response);
     if (!Array.isArray(data?.records)) {
       return createResponse(false, null, 'Invalid response from server');
     }
@@ -403,16 +308,8 @@ export const deleteVoiceRecording = async (voiceAssetId) => {
       return createResponse(false, null, 'Voice asset ID is required');
     }
 
-    const response = await fetchWithTimeout(
-      `${buildEasyVoiceUrl(VOICE_ENDPOINTS.DELETE)}/${voiceAssetId}`,
-      {
-        method: 'DELETE',
-        headers: { Accept: 'application/json' },
-      },
-      30000
-    );
-
-    await handleFetchResponse(response);
+    const url = `${buildEasyVoiceUrl(VOICE_ENDPOINTS.DELETE)}/${voiceAssetId}`;
+    await apiFetch(url, { method: 'DELETE', headers: { Accept: 'application/json' } }, 30000);
     return createResponse(true, { deleted: true, deletedAt: new Date().toISOString() });
   } catch (error) {
     if (apiUtils.isCancel(error)) {
@@ -422,29 +319,13 @@ export const deleteVoiceRecording = async (voiceAssetId) => {
   }
 };
 
-const testAPI = async () => {
-  try {
-    const response = await fetch('https://slender-loris.kambaaincorporation.in/api/home-screen');
-    const data = await response.json();
-
-    return createResponse(true, data);
-  } catch (error) {
-    return createResponse(false, null, error.message || 'Failed to test API');
-  }
-};
-// Test connectivity to the backend
 export const testBackendConnectivity = async () => {
   try {
-    const response = await fetchWithTimeout(
+    const data = await apiFetch(
       buildEasyVoiceUrl('/health'),
-      {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      },
-      10000
+      { method: 'GET', headers: { Accept: 'application/json' } },
+      10000,
     );
-
-    const data = await handleFetchResponse(response);
     return createResponse(true, data);
   } catch (error) {
     let errorMessage = 'Backend connectivity test failed';
@@ -455,15 +336,11 @@ export const testBackendConnectivity = async () => {
     } else {
       errorMessage = `Cannot reach backend: ${error.message}`;
     }
-
     return createResponse(false, null, errorMessage);
   }
 };
 
-// Named export grouping (matches existing import pattern in screens)
-
 export const voiceApi = {
-  testAPI,
   testBackendConnectivity,
   transcribeAudio,
   updateTranscript,
