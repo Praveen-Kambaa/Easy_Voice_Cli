@@ -17,6 +17,14 @@ final class KeyboardDictationService {
   private init() {}
 
   func start(requestId: String) {
+    let snap = store.snapshot()
+    if activeRequestId == requestId,
+       snap.state == .listening || snap.state == .pending {
+      return
+    }
+    if activeRequestId != nil {
+      teardownRecognition(markCancelled: true)
+    }
     activeRequestId = requestId
     store.begin(requestId: requestId)
     requestPermissionsAndBegin()
@@ -61,7 +69,11 @@ final class KeyboardDictationService {
 
     do {
       let session = AVAudioSession.sharedInstance()
-      try session.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker, .allowBluetooth])
+      try session.setCategory(
+        .playAndRecord,
+        mode: .measurement,
+        options: [.duckOthers, .defaultToSpeaker, .allowBluetoothHFP, .mixWithOthers]
+      )
       try session.setActive(true, options: .notifyOthersOnDeactivation)
 
       recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
@@ -111,7 +123,7 @@ final class KeyboardDictationService {
 
   private func startStopPolling() {
     stopPollTimer?.invalidate()
-    stopPollTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+    let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
       guard let self, self.store.isStopRequested() else { return }
       let snap = self.store.snapshot()
       if !snap.partialText.isEmpty {
@@ -121,6 +133,8 @@ final class KeyboardDictationService {
       }
       self.teardownRecognition(markCancelled: false)
     }
+    RunLoop.main.add(timer, forMode: .common)
+    stopPollTimer = timer
   }
 
   private func teardownEngineOnly() {

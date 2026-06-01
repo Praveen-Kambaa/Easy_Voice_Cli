@@ -12,11 +12,30 @@ enum KeyboardHostLink {
     openFirstMatchingURL(extensionContext: extensionContext, completion: completion)
   }
 
+  static func openVoiceCommand(requestId: String, extensionContext: NSExtensionContext?, completion: @escaping (Bool) -> Void) {
+    let action = "\(KeyboardSharedConfig.deepLinkVoiceCommand)?requestId=\(requestId)"
+    KeyboardSharedConfig.setPendingDeepLink(action)
+    let encoded = requestId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? requestId
+    let candidates = [
+      "typeeasy://keyboard-voice-command?requestId=\(encoded)",
+      "typeeasy://\(action)",
+      "typeeasy://",
+    ]
+    guard let extensionContext else {
+      completion(false)
+      return
+    }
+    let urls = candidates.compactMap { URL(string: $0) }
+    tryOpen(urls: urls, index: 0, extensionContext: extensionContext, completion: completion)
+  }
+
   static func openVoice(requestId: String, extensionContext: NSExtensionContext?, completion: @escaping (Bool) -> Void) {
     KeyboardSharedConfig.setPendingDeepLink("\(KeyboardSharedConfig.deepLinkVoice)?requestId=\(requestId)")
     let encoded = requestId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? requestId
+    let action = "\(KeyboardSharedConfig.deepLinkVoice)?requestId=\(requestId)"
     let voiceCandidates = [
       "typeeasy://keyboard-voice?requestId=\(encoded)",
+      "typeeasy://\(action)",
       "typeeasy://",
     ]
     guard let extensionContext else {

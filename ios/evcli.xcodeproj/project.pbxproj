@@ -31,6 +31,19 @@
 		KB01004A1A68108700A75B9A /* KeyboardSuggestionLexicon.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB01004B1A68108700A75B9A /* KeyboardSuggestionLexicon.swift */; };
 		KB01004C1A68108700A75B9A /* KeyboardRecentWordsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB01004D1A68108700A75B9A /* KeyboardRecentWordsStore.swift */; };
 		KB01004E1A68108700A75B9A /* KeyboardSuggestionMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB01004F1A68108700A75B9A /* KeyboardSuggestionMatcher.swift */; };
+		KB0100501A68108700A75B9A /* KeyboardVoiceApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100511A68108700A75B9A /* KeyboardVoiceApiClient.swift */; };
+		KB0100521A68108700A75B9A /* KeyboardVoiceCommandPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100531A68108700A75B9A /* KeyboardVoiceCommandPanel.swift */; };
+		KB0100541A68108700A75B9A /* KeyboardVoiceCommandStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100551A68108700A75B9A /* KeyboardVoiceCommandStore.swift */; };
+		KB0100561A68108700A75B9A /* KeyboardVoiceCommandStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100551A68108700A75B9A /* KeyboardVoiceCommandStore.swift */; };
+		KB0100571A68108700A75B9A /* KeyboardVoiceCommandService.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100581A68108700A75B9A /* KeyboardVoiceCommandService.swift */; };
+		KB0100591A68108700A75B9A /* KeyboardVoiceApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100511A68108700A75B9A /* KeyboardVoiceApiClient.swift */; };
+		KB01005A1A68108700A75B9A /* KeyboardSharedNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB01005B1A68108700A75B9A /* KeyboardSharedNotifications.swift */; };
+		KB01005C1A68108700A75B9A /* KeyboardSharedNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB01005B1A68108700A75B9A /* KeyboardSharedNotifications.swift */; };
+		KB01005E1A68108700A75B9A /* KeyboardHostVoiceCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB01005D1A68108700A75B9A /* KeyboardHostVoiceCoordinator.swift */; };
+		KB0100601A68108700A75B9A /* KeyboardInlineSpeechDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100611A68108700A75B9A /* KeyboardInlineSpeechDictation.swift */; };
+		KB0100621A68108700A75B9A /* KeyboardInlineVoiceCommandRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100631A68108700A75B9A /* KeyboardInlineVoiceCommandRecorder.swift */; };
+		KB0100641A68108700A75B9A /* KeyboardKeyAlternatives.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100651A68108700A75B9A /* KeyboardKeyAlternatives.swift */; };
+		KB0100661A68108700A75B9A /* KeyboardExtensionCloudDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100671A68108700A75B9A /* KeyboardExtensionCloudDictation.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -89,6 +102,16 @@
 		KB01004B1A68108700A75B9A /* KeyboardSuggestionLexicon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardSuggestionLexicon.swift; path = Shared/KeyboardSuggestionLexicon.swift; sourceTree = "<group>"; };
 		KB01004D1A68108700A75B9A /* KeyboardRecentWordsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardRecentWordsStore.swift; path = Shared/KeyboardRecentWordsStore.swift; sourceTree = "<group>"; };
 		KB01004F1A68108700A75B9A /* KeyboardSuggestionMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardSuggestionMatcher.swift; path = Shared/KeyboardSuggestionMatcher.swift; sourceTree = "<group>"; };
+		KB0100511A68108700A75B9A /* KeyboardVoiceApiClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardVoiceApiClient.swift; path = Shared/KeyboardVoiceApiClient.swift; sourceTree = "<group>"; };
+		KB0100531A68108700A75B9A /* KeyboardVoiceCommandPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardVoiceCommandPanel.swift; path = Shared/KeyboardVoiceCommandPanel.swift; sourceTree = "<group>"; };
+		KB0100551A68108700A75B9A /* KeyboardVoiceCommandStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardVoiceCommandStore.swift; path = Shared/KeyboardVoiceCommandStore.swift; sourceTree = "<group>"; };
+		KB0100581A68108700A75B9A /* KeyboardVoiceCommandService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardVoiceCommandService.swift; path = evcli/KeyboardVoiceCommandService.swift; sourceTree = "<group>"; };
+		KB01005B1A68108700A75B9A /* KeyboardSharedNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardSharedNotifications.swift; path = Shared/KeyboardSharedNotifications.swift; sourceTree = "<group>"; };
+		KB01005D1A68108700A75B9A /* KeyboardHostVoiceCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardHostVoiceCoordinator.swift; path = evcli/KeyboardHostVoiceCoordinator.swift; sourceTree = "<group>"; };
+		KB0100611A68108700A75B9A /* KeyboardInlineSpeechDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardInlineSpeechDictation.swift; path = Shared/KeyboardInlineSpeechDictation.swift; sourceTree = "<group>"; };
+		KB0100631A68108700A75B9A /* KeyboardInlineVoiceCommandRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardInlineVoiceCommandRecorder.swift; path = Shared/KeyboardInlineVoiceCommandRecorder.swift; sourceTree = "<group>"; };
+		KB0100651A68108700A75B9A /* KeyboardKeyAlternatives.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardKeyAlternatives.swift; path = Shared/KeyboardKeyAlternatives.swift; sourceTree = "<group>"; };
+		KB0100671A68108700A75B9A /* KeyboardExtensionCloudDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardExtensionCloudDictation.swift; path = Shared/KeyboardExtensionCloudDictation.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -120,6 +143,8 @@
 				AR0100111A68108700A75B9A /* AudioRecorderModule.swift */,
 				AR0100121A68108700A75B9A /* AudioRecorderModuleBridge.m */,
 				KB0100331A68108700A75B9A /* KeyboardDictationService.swift */,
+				KB0100581A68108700A75B9A /* KeyboardVoiceCommandService.swift */,
+				KB01005D1A68108700A75B9A /* KeyboardHostVoiceCoordinator.swift */,
 				KB0100341A68108700A75B9A /* evcli.entitlements */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
@@ -192,6 +217,14 @@
 				KB01004B1A68108700A75B9A /* KeyboardSuggestionLexicon.swift */,
 				KB01004D1A68108700A75B9A /* KeyboardRecentWordsStore.swift */,
 				KB01004F1A68108700A75B9A /* KeyboardSuggestionMatcher.swift */,
+				KB0100511A68108700A75B9A /* KeyboardVoiceApiClient.swift */,
+				KB0100531A68108700A75B9A /* KeyboardVoiceCommandPanel.swift */,
+				KB0100551A68108700A75B9A /* KeyboardVoiceCommandStore.swift */,
+				KB0100611A68108700A75B9A /* KeyboardInlineSpeechDictation.swift */,
+				KB0100631A68108700A75B9A /* KeyboardInlineVoiceCommandRecorder.swift */,
+				KB0100651A68108700A75B9A /* KeyboardKeyAlternatives.swift */,
+				KB0100671A68108700A75B9A /* KeyboardExtensionCloudDictation.swift */,
+				KB01005B1A68108700A75B9A /* KeyboardSharedNotifications.swift */,
 			);
 			name = Shared;
 			sourceTree = "<group>";
@@ -395,6 +428,11 @@
 				KB0100041A68108700A75B9A /* KeyboardTheme.swift in Sources */,
 				KB0100361A68108700A75B9A /* KeyboardDictationStore.swift in Sources */,
 				KB0100381A68108700A75B9A /* KeyboardDictationService.swift in Sources */,
+				KB0100571A68108700A75B9A /* KeyboardVoiceCommandService.swift in Sources */,
+				KB0100591A68108700A75B9A /* KeyboardVoiceApiClient.swift in Sources */,
+				KB0100561A68108700A75B9A /* KeyboardVoiceCommandStore.swift in Sources */,
+				KB01005C1A68108700A75B9A /* KeyboardSharedNotifications.swift in Sources */,
+				KB01005E1A68108700A75B9A /* KeyboardHostVoiceCoordinator.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -414,6 +452,14 @@
 				KB01004A1A68108700A75B9A /* KeyboardSuggestionLexicon.swift in Sources */,
 				KB01004C1A68108700A75B9A /* KeyboardRecentWordsStore.swift in Sources */,
 				KB01004E1A68108700A75B9A /* KeyboardSuggestionMatcher.swift in Sources */,
+				KB0100501A68108700A75B9A /* KeyboardVoiceApiClient.swift in Sources */,
+				KB0100521A68108700A75B9A /* KeyboardVoiceCommandPanel.swift in Sources */,
+				KB0100541A68108700A75B9A /* KeyboardVoiceCommandStore.swift in Sources */,
+				KB01005A1A68108700A75B9A /* KeyboardSharedNotifications.swift in Sources */,
+				KB0100601A68108700A75B9A /* KeyboardInlineSpeechDictation.swift in Sources */,
+				KB0100621A68108700A75B9A /* KeyboardInlineVoiceCommandRecorder.swift in Sources */,
+				KB0100641A68108700A75B9A /* KeyboardKeyAlternatives.swift in Sources */,
+				KB0100661A68108700A75B9A /* KeyboardExtensionCloudDictation.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -673,6 +719,13 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					AVFoundation,
+					"-framework",
+					Speech,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.type.easy.keyboard;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -699,6 +752,13 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					AVFoundation,
+					"-framework",
+					Speech,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.type.easy.keyboard;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;

@@ -49,11 +49,31 @@ class KeyboardModule: NSObject {
   }
 
   @objc
+  func peekPendingDeepLink(
+    _ resolve: RCTPromiseResolveBlock,
+    rejecter reject: RCTPromiseRejectBlock
+  ) {
+    resolve(KeyboardSharedConfig.peekPendingDeepLink() as Any? ?? NSNull())
+  }
+
+  @objc
   func consumePendingDeepLink(
     _ resolve: RCTPromiseResolveBlock,
     rejecter reject: RCTPromiseRejectBlock
   ) {
     resolve(KeyboardSharedConfig.consumePendingDeepLink() as Any? ?? NSNull())
+  }
+
+  @objc
+  func forwardPendingKeyboardLink(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    DispatchQueue.main.async {
+      KeyboardHostLinkForwarder.forwardPendingDeepLinkIfNeeded()
+      KeyboardHostVoiceCoordinator.resumePendingSessions()
+      resolve(true)
+    }
   }
 
   @objc

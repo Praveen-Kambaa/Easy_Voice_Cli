@@ -3,6 +3,8 @@ import Foundation
 /// API URLs for the keyboard extension (mirrors `src/config/api.js`).
 enum KeyboardApiConfig {
   static let typeEasyBase = "https://easyvoice.kambaaincorporation.in/apiv2"
+  /// Easy Voice API — voice transcribe / execute (mirrors `buildEasyVoiceUrl` in JS).
+  static let easyVoiceBase = "https://easy-voice-api.kambaaincorporation.in/api"
   static let translate = "/translate"
   static let grammarCheck = "/grammar-check"
 }

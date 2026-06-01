@@ -82,8 +82,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
       launchOptions: launchOptions
     )
 
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+    KeyboardHostVoiceCoordinator.registerDarwinObservers()
+
+    DispatchQueue.main.async {
       KeyboardHostLinkForwarder.forwardPendingDeepLinkIfNeeded()
+      KeyboardHostVoiceCoordinator.resumePendingSessions()
     }
 
     return true
@@ -91,6 +94,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
   func applicationDidBecomeActive(_ application: UIApplication) {
     KeyboardHostLinkForwarder.forwardPendingDeepLinkIfNeeded()
+    KeyboardHostVoiceCoordinator.resumePendingSessions()
+  }
+
+  func applicationWillEnterForeground(_ application: UIApplication) {
+    KeyboardHostLinkForwarder.forwardPendingDeepLinkIfNeeded()
+    KeyboardHostVoiceCoordinator.resumePendingSessions()
   }
 
   func application(
@@ -99,13 +108,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     options: [UIApplication.OpenURLOptionsKey: Any] = [:]
   ) -> Bool {
     guard url.scheme == "typeeasy" else { return false }
-    if url.host == "keyboard-voice" {
+    let host = url.host ?? ""
+    if host == "keyboard-voice" {
       let requestId = URLComponents(url: url, resolvingAgainstBaseURL: false)?
         .queryItems?
         .first(where: { $0.name == "requestId" })?
         .value ?? UUID().uuidString
       KeyboardDictationService.shared.start(requestId: requestId)
       _ = KeyboardSharedConfig.consumePendingDeepLink()
+      KeyboardHostVoiceCoordinator.resumePendingSessions()
+      return true
+    }
+    if host == "keyboard-voice-command" {
+      let requestId = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+        .queryItems?
+        .first(where: { $0.name == "requestId" })?
+        .value ?? UUID().uuidString
+      KeyboardVoiceCommandService.shared.start(requestId: requestId)
+      _ = KeyboardSharedConfig.consumePendingDeepLink()
+      KeyboardHostVoiceCoordinator.resumePendingSessions()
       return true
     }
     KeyboardHostLinkForwarder.forwardPendingDeepLinkIfNeeded()
@@ -116,13 +137,23 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 /// Forwards app-group pending links when the keyboard could not use `extensionContext.open`.
 enum KeyboardHostLinkForwarder {
   static func forwardPendingDeepLinkIfNeeded() {
-    guard let action = KeyboardSharedConfig.consumePendingDeepLink() else { return }
-    if action.hasPrefix(KeyboardSharedConfig.deepLinkVoice) {
+    guard let action = KeyboardSharedConfig.peekPendingDeepLink() else { return }
+    if action.hasPrefix(KeyboardSharedConfig.deepLinkVoiceCommand) {
       let requestId = voiceRequestId(from: action) ?? UUID().uuidString
-      KeyboardDictationService.shared.start(requestId: requestId)
+      _ = KeyboardSharedConfig.consumePendingDeepLink()
+      KeyboardVoiceCommandService.shared.start(requestId: requestId)
+      KeyboardHostVoiceCoordinator.resumePendingSessions()
       return
     }
-    guard let url = URL(string: "typeeasy://\(action)") else { return }
+    if action.hasPrefix(KeyboardSharedConfig.deepLinkVoice) {
+      let requestId = voiceRequestId(from: action) ?? UUID().uuidString
+      _ = KeyboardSharedConfig.consumePendingDeepLink()
+      KeyboardDictationService.shared.start(requestId: requestId)
+      KeyboardHostVoiceCoordinator.resumePendingSessions()
+      return
+    }
+    guard let consumed = KeyboardSharedConfig.consumePendingDeepLink() else { return }
+    guard let url = URL(string: "typeeasy://\(consumed)") else { return }
     _ = RCTLinkingManager.application(
       UIApplication.shared,
       open: url,

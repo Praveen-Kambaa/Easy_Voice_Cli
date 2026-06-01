@@ -1,9 +1,27 @@
+import AVFoundation
 import UIKit
 
 /// Type Easy custom keyboard extension — toolbar + QWERTY layout (mirrors Android `MyKeyboardService`).
 class KeyboardViewController: UIInputViewController {
 
   private let toolbar = UIStackView()
+  private enum ToolbarHighlight {
+    case translate
+    case grammar
+    case voice
+    case voiceCommand
+    case settings
+  }
+  private var toolbarTranslateButton: UIButton!
+  private var toolbarGrammarButton: UIButton!
+  private var toolbarMicButton: UIButton!
+  private var toolbarVoiceCommandButton: UIButton!
+  private var toolbarSettingsButton: UIButton!
+  private var toolbarIsReady = false
+  /// Which feature produced the current result bar (translate / grammar / voice).
+  private var resultToolbarSource: ToolbarHighlight?
+  /// Set while translate/grammar API is in flight.
+  private var loadingToolbarHighlight: ToolbarHighlight?
   private let keysStack = UIStackView()
   private let voiceBar = UIStackView()
   private let voiceStatusLabel = UILabel()
@@ -11,14 +29,31 @@ class KeyboardViewController: UIInputViewController {
   private let resultBar = UIStackView()
   private let resultLabel = UILabel()
   private let resultInsertButton = UIButton(type: .system)
-  private var isShifted = false
+  private let resultDismissButton = UIButton(type: .system)
+  private enum KeyboardLayer { case alpha, shift, caps, symbols }
+  private var keyboardLayer: KeyboardLayer = .alpha
   private var isWaitingForDictation = false
   private var activeDictationRequestId: String?
   private var dictationPollTimer: Timer?
   private var pendingReplaceSelected = false
   private var pendingReplaceBeforeChars = 0
   private var lastResultIsError = false
+  /// When true, `insertResult()` appends a trailing space (voice dictation).
+  private var lastResultAppendTrailingSpace = false
   private var activeApiTask: Task<Void, Never>?
+  private let voiceCommandPanel = KeyboardVoiceCommandPanel()
+  private var activeVoiceCommandRequestId: String?
+  private var voiceCommandPollTimer: Timer?
+  private var commandVoiceAssetId: String?
+  private var commandOriginalTranscript = ""
+  /// True while opening the host app for mic / voice command (avoids tearing down sessions in `viewWillDisappear`).
+  private var hostAppHandoffActive = false
+  private var dictationUsesHostApp = false
+  private var voiceCommandUsesHostApp = false
+  /// Ignore host `selectionWillChange` briefly after focusing the voice-command transcript.
+  private var transcriptEditingGraceUntil: CFAbsoluteTime = 0
+  /// Cloud mic recording in the extension (Android `isCloudDictationRecording`).
+  private var isCloudDictationRecording = false
 
   private let panelsStack = UIStackView()
   private let settingsPanel = UIStackView()
@@ -43,6 +78,14 @@ class KeyboardViewController: UIInputViewController {
   private var suggestionDebounceTimer: Timer?
   private var suggestionsRequestSeq: UInt64 = 0
   private var currentPartialWord = ""
+  private var keyPreviewView: UILabel?
+  private var alternativesPopup: UIView?
+  private let snackbarLabel = UILabel()
+  private var snackbarHideTimer: Timer?
+  private var contextPollTimer: Timer?
+  private var lastDocumentContextSignature = ""
+  private var longPressWorkItem: DispatchWorkItem?
+  private var suppressNextKeyUp = false
 
   private let alphaRows: [[String]] = [
     ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
@@ -51,31 +94,76 @@ class KeyboardViewController: UIInputViewController {
     ["?123", "/", "😊", "space", ".", "↵"],
   ]
 
+  private let symbolRows: [[String]] = [
+    ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+    ["@", "#", "$", "%", "&", "-", "+", "(", ")", "/"],
+    ["=", "*", "\"", "'", ":", ";", "!", "?", "⌫"],
+    ["ABC", ",", "😊", "space", ".", "↵"],
+  ]
+
+  private let topRowHints: [String: String] = [
+    "q": "1", "w": "2", "e": "3", "r": "4", "t": "5",
+    "y": "6", "u": "7", "i": "8", "o": "9", "p": "0",
+  ]
+
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = KeyboardTheme.keyboardBackground
     setupSuggestionRow()
     setupToolbar()
     setupPanelsStack()
     setupSettingsPanel()
     setupVoiceBar()
     setupResultBar()
+    setupVoiceCommandPanel()
     setupEmojiPanel()
     setupKeys()
+    setupSnackbar()
+    applyTheme()
     reloadLanguagesFromSharedConfig()
+  }
+
+  override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+    super.traitCollectionDidChange(previousTraitCollection)
+    if traitCollection.userInterfaceStyle != previousTraitCollection?.userInterfaceStyle {
+      applyTheme()
+    }
   }
 
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
+    hostAppHandoffActive = false
+    applyTheme()
+    applyAutoCapIfNewField()
     reloadLanguagesFromSharedConfig()
     updateSuggestions()
+    resumeHostAppVoiceSessionsIfNeeded()
+    resumeVoiceCommandSessionIfNeeded()
+    startContextPolling()
   }
 
   override func viewWillDisappear(_ animated: Bool) {
     super.viewWillDisappear(animated)
-    stopVoice()
+    dismissKeyPreview()
+    dismissAlternativesPopup()
+    let preserveSession = hostAppHandoffActive || isWaitingForDictation || isCloudDictationRecording
+      || isVoiceCommandSessionActive() || KeyboardExtensionCloudDictation.shared.isRecording
+      || KeyboardInlineVoiceCommandRecorder.shared.isActive
+      || KeyboardInlineSpeechDictation.shared.isActive
+    if preserveSession {
+      return
+    }
+    stopContextPolling()
     suggestionDebounceTimer?.invalidate()
     suggestionDebounceTimer = nil
+    dictationPollTimer?.invalidate()
+    dictationPollTimer = nil
+    voiceCommandPollTimer?.invalidate()
+    voiceCommandPollTimer = nil
+    KeyboardInlineSpeechDictation.shared.teardown(markCancelled: true)
+    KeyboardInlineVoiceCommandRecorder.shared.cancel()
+    KeyboardExtensionCloudDictation.shared.cancel()
+    stopVoice()
+    cancelVoiceCommandFlow()
   }
 
   deinit {
@@ -129,20 +217,24 @@ class KeyboardViewController: UIInputViewController {
     toolbar.isLayoutMarginsRelativeArrangement = true
     toolbar.translatesAutoresizingMaskIntoConstraints = false
 
-    let translateBtn = KeyboardTheme.toolbarTextButton(title: KeyboardTheme.translateIcon)
-    translateBtn.addTarget(self, action: #selector(onTranslate), for: .touchUpInside)
+    toolbarTranslateButton = KeyboardTheme.toolbarTextButton(title: KeyboardTheme.translateIcon)
+    toolbarTranslateButton.addTarget(self, action: #selector(onTranslate), for: .touchUpInside)
 
-    let grammarBtn = KeyboardTheme.toolbarTextButton(title: KeyboardTheme.grammarIcon)
-    grammarBtn.addTarget(self, action: #selector(onGrammar), for: .touchUpInside)
+    toolbarGrammarButton = KeyboardTheme.toolbarTextButton(title: KeyboardTheme.grammarIcon)
+    toolbarGrammarButton.addTarget(self, action: #selector(onGrammar), for: .touchUpInside)
 
-    let micBtn = KeyboardTheme.toolbarMicButton()
-    micBtn.addTarget(self, action: #selector(onVoice), for: .touchUpInside)
+    toolbarMicButton = KeyboardTheme.toolbarMicButton()
+    toolbarMicButton.addTarget(self, action: #selector(onVoice), for: .touchUpInside)
 
-    let settingsBtn = KeyboardTheme.toolbarSettingsButton()
-    settingsBtn.addTarget(self, action: #selector(toggleSettings), for: .touchUpInside)
-    settingsBtn.setContentCompressionResistancePriority(.required, for: .horizontal)
+    toolbarVoiceCommandButton = KeyboardTheme.toolbarVoiceCommandButton()
+    toolbarVoiceCommandButton.addTarget(self, action: #selector(onVoiceCommand), for: .touchUpInside)
 
-    [translateBtn, grammarBtn, micBtn, UIView(), settingsBtn].forEach { item in
+    toolbarSettingsButton = KeyboardTheme.toolbarSettingsButton()
+    toolbarSettingsButton.addTarget(self, action: #selector(toggleSettings), for: .touchUpInside)
+    toolbarSettingsButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+    [toolbarTranslateButton, toolbarGrammarButton, toolbarMicButton, toolbarVoiceCommandButton, UIView(), toolbarSettingsButton]
+      .forEach { item in
       if let button = item as? UIButton {
         button.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -160,6 +252,37 @@ class KeyboardViewController: UIInputViewController {
       toolbar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
       toolbar.heightAnchor.constraint(equalToConstant: 46),
     ])
+    toolbarIsReady = true
+    refreshToolbarHighlight()
+  }
+
+  private func currentToolbarHighlight() -> ToolbarHighlight? {
+    if isSettingsVisible { return .settings }
+    if voiceCommandPanel.isActive || isVoiceCommandSessionActive() { return .voiceCommand }
+    if isWaitingForDictation || isCloudDictationRecording { return .voice }
+    if let loading = loadingToolbarHighlight { return loading }
+    if !resultBar.isHidden, let source = resultToolbarSource { return source }
+    return nil
+  }
+
+  private func refreshToolbarHighlight() {
+    guard toolbarIsReady else { return }
+    let active = currentToolbarHighlight()
+    KeyboardTheme.styleToolbarButton(
+      toolbarTranslateButton, selected: active == .translate, kind: .text
+    )
+    KeyboardTheme.styleToolbarButton(
+      toolbarGrammarButton, selected: active == .grammar, kind: .text
+    )
+    KeyboardTheme.styleToolbarButton(
+      toolbarMicButton, selected: active == .voice, kind: .mic
+    )
+    KeyboardTheme.styleToolbarButton(
+      toolbarVoiceCommandButton, selected: active == .voiceCommand, kind: .voiceCommand
+    )
+    KeyboardTheme.styleToolbarButton(
+      toolbarSettingsButton, selected: active == .settings, kind: .settings
+    )
   }
 
   private func setupPanelsStack() {
@@ -266,8 +389,8 @@ class KeyboardViewController: UIInputViewController {
   private func setupVoiceBar() {
     voiceBar.axis = .horizontal
     voiceBar.alignment = .center
-    voiceBar.spacing = 8
-    voiceBar.backgroundColor = KeyboardTheme.keyboardBackground
+    voiceBar.spacing = 6
+    voiceBar.backgroundColor = KeyboardTheme.voiceBarBackground
     voiceBar.isHidden = true
     voiceBar.translatesAutoresizingMaskIntoConstraints = false
     voiceBar.layoutMargins = UIEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
@@ -281,10 +404,12 @@ class KeyboardViewController: UIInputViewController {
     ])
 
     voiceStatusLabel.text = "Listening…"
-    voiceStatusLabel.font = .boldSystemFont(ofSize: 14)
+    voiceStatusLabel.font = .systemFont(ofSize: 13, weight: .semibold)
     voiceStatusLabel.textColor = KeyboardTheme.primary
-    voiceStatusLabel.numberOfLines = 1
-    voiceStatusLabel.lineBreakMode = .byTruncatingTail
+    voiceStatusLabel.numberOfLines = 3
+    voiceStatusLabel.lineBreakMode = .byWordWrapping
+    voiceStatusLabel.adjustsFontSizeToFitWidth = true
+    voiceStatusLabel.minimumScaleFactor = 0.85
     voiceStatusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
     voiceStatusLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
@@ -305,8 +430,21 @@ class KeyboardViewController: UIInputViewController {
     voiceBar.addArrangedSubview(voiceStatusLabel)
     voiceBar.addArrangedSubview(voiceStopButton)
 
-    NSLayoutConstraint.activate([voiceBar.heightAnchor.constraint(equalToConstant: 52)])
+    let voiceBarHeight = voiceBar.heightAnchor.constraint(greaterThanOrEqualToConstant: 56)
+    voiceBarHeight.priority = .defaultHigh
+    NSLayoutConstraint.activate([
+      voiceBarHeight,
+      voiceBar.heightAnchor.constraint(lessThanOrEqualToConstant: 80),
+    ])
     panelsStack.addArrangedSubview(voiceBar)
+  }
+
+  private func setupVoiceCommandPanel() {
+    voiceCommandPanel.delegate = self
+    panelsStack.addArrangedSubview(voiceCommandPanel)
+    NSLayoutConstraint.activate([
+      voiceCommandPanel.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
+    ])
   }
 
   private func setupResultBar() {
@@ -322,8 +460,11 @@ class KeyboardViewController: UIInputViewController {
     resultLabel.font = .systemFont(ofSize: 14)
     resultLabel.textColor = KeyboardTheme.keyText
     resultLabel.numberOfLines = 2
+    resultLabel.lineBreakMode = .byTruncatingTail
+    resultLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    resultLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-    resultInsertButton.setTitle("Insert", for: .normal)
+    resultInsertButton.setTitle("↙ Insert", for: .normal)
     resultInsertButton.setTitleColor(.white, for: .normal)
     resultInsertButton.titleLabel?.font = .boldSystemFont(ofSize: 13)
     resultInsertButton.backgroundColor = KeyboardTheme.primary
@@ -331,18 +472,24 @@ class KeyboardViewController: UIInputViewController {
     resultInsertButton.contentEdgeInsets = UIEdgeInsets(top: 6, left: 10, bottom: 6, right: 10)
     resultInsertButton.addTarget(self, action: #selector(insertResult), for: .touchUpInside)
     resultInsertButton.isHidden = true
+    resultInsertButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+    resultInsertButton.setContentHuggingPriority(.required, for: .horizontal)
 
-    let dismissBtn = UIButton(type: .system)
-    dismissBtn.setTitle("✕", for: .normal)
-    dismissBtn.setTitleColor(KeyboardTheme.keyText, for: .normal)
-    dismissBtn.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
-    dismissBtn.addTarget(self, action: #selector(hideResult), for: .touchUpInside)
+    resultDismissButton.setTitle("✕", for: .normal)
+    resultDismissButton.setTitleColor(KeyboardTheme.keyText, for: .normal)
+    resultDismissButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
+    resultDismissButton.addTarget(self, action: #selector(hideResult), for: .touchUpInside)
+    resultDismissButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+    resultDismissButton.setContentHuggingPriority(.required, for: .horizontal)
 
     resultBar.addArrangedSubview(resultLabel)
     resultBar.addArrangedSubview(resultInsertButton)
-    resultBar.addArrangedSubview(dismissBtn)
+    resultBar.addArrangedSubview(resultDismissButton)
 
-    NSLayoutConstraint.activate([resultBar.heightAnchor.constraint(equalToConstant: 46)])
+    NSLayoutConstraint.activate([
+      resultBar.heightAnchor.constraint(greaterThanOrEqualToConstant: 46),
+      resultInsertButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 76),
+    ])
     panelsStack.addArrangedSubview(resultBar)
   }
 
@@ -467,77 +614,447 @@ class KeyboardViewController: UIInputViewController {
     renderKeys()
   }
 
+  private var currentKeyRows: [[String]] {
+    keyboardLayer == .symbols ? symbolRows : alphaRows
+  }
+
+  private var isUppercaseLayer: Bool {
+    keyboardLayer == .shift || keyboardLayer == .caps
+  }
+
   private func renderKeys() {
     keysStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-    alphaRows.forEach { row in
+    currentKeyRows.enumerated().forEach { rowIndex, row in
       let rowStack = UIStackView()
       rowStack.axis = .horizontal
       rowStack.spacing = 4
       rowStack.distribution = .fillEqually
-      row.forEach { key in
-        rowStack.addArrangedSubview(makeKeyButton(title: key))
+      if rowIndex == 1 {
+        rowStack.layoutMargins = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
+        rowStack.isLayoutMarginsRelativeArrangement = true
+      }
+      row.forEach { logical in
+        rowStack.addArrangedSubview(makeKeyView(logical: logical, rowIndex: rowIndex))
       }
       keysStack.addArrangedSubview(rowStack)
     }
   }
 
-  private func makeKeyButton(title: String) -> UIButton {
-    let button = UIButton(type: .system)
-    let display: String
-    switch title {
-    case "space":
-      display = "space"
-    default:
-      display = (isShifted && title.count == 1 && title.first?.isLetter == true)
-        ? title.uppercased()
-        : title
+  private func isActionKey(_ logical: String) -> Bool {
+    if keyboardLayer == .symbols {
+      return ["ABC", "⌫", "😊", "space", ".", "↵", ","].contains(logical)
     }
-
-    button.setTitle(display, for: .normal)
-    button.setTitleColor(KeyboardTheme.keyText, for: .normal)
-    button.titleLabel?.font = .systemFont(ofSize: title == "space" ? 13 : 18)
-    button.backgroundColor = actionKeys.contains(title) ? KeyboardTheme.keyActionBackground : KeyboardTheme.keyLetterBackground
-    button.layer.cornerRadius = 8
-    button.heightAnchor.constraint(equalToConstant: 44).isActive = true
-    button.addAction(UIAction { [weak self] _ in
-      self?.handleKey(title)
-    }, for: .touchUpInside)
-    return button
+    return ["⇧", "⌫", "?123", "/", "😊", ".", "↵"].contains(logical)
   }
 
-  private let actionKeys: Set<String> = ["⇧", "⌫", "?123", "/", "😊", ".", "↵"]
+  private func keyDisplay(for logical: String) -> String {
+    switch logical {
+    case "space":
+      return "space"
+    case "⇧":
+      switch keyboardLayer {
+      case .caps: return "⬆"
+      case .shift: return "↑"
+      default: return "⇧"
+      }
+    case "↵":
+      return "⏎"
+    default:
+      if isUppercaseLayer, logical.count == 1, logical.first?.isLetter == true {
+        return logical.uppercased()
+      }
+      return logical
+    }
+  }
+
+  private func keyFontSize(for logical: String) -> CGFloat {
+    switch logical {
+    case "space", "?123", "ABC":
+      return 13
+    case "😊":
+      return 20
+    case "⇧", "↵":
+      return 24
+    case "⌫":
+      return 18
+    default:
+      return 18
+    }
+  }
+
+  private func makeKeyView(logical: String, rowIndex: Int) -> UIView {
+    let display = keyDisplay(for: logical)
+    let showHint = rowIndex == 0
+      && keyboardLayer != .symbols
+      && logical.count == 1
+      && logical.first?.isLetter == true
+      && topRowHints[logical] != nil
+    if showHint, let hint = topRowHints[logical] {
+      return makeTopRowKeyView(logical: logical, display: display, hint: hint)
+    }
+    return makeKeyButton(logical: logical, display: display)
+  }
+
+  private func makeTopRowKeyView(logical: String, display: String, hint: String) -> UIView {
+    let container = UIView()
+    container.translatesAutoresizingMaskIntoConstraints = false
+    let keyView = makeKeyButton(logical: logical, display: display)
+    keyView.translatesAutoresizingMaskIntoConstraints = false
+    container.addSubview(keyView)
+
+    let hintLabel = UILabel()
+    hintLabel.text = hint
+    hintLabel.font = .systemFont(ofSize: 9)
+    hintLabel.textColor = KeyboardTheme.hintText
+    hintLabel.translatesAutoresizingMaskIntoConstraints = false
+    container.addSubview(hintLabel)
+
+    NSLayoutConstraint.activate([
+      container.heightAnchor.constraint(equalToConstant: 44),
+      keyView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+      keyView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+      keyView.topAnchor.constraint(equalTo: container.topAnchor),
+      keyView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+      hintLabel.topAnchor.constraint(equalTo: container.topAnchor, constant: 3),
+      hintLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -5),
+    ])
+    return container
+  }
+
+  private func makeKeyButton(logical: String, display: String) -> UIView {
+    let wrapper = UIControl()
+    wrapper.translatesAutoresizingMaskIntoConstraints = false
+    let button = UIButton(type: .system)
+    let isShiftOn = logical == "⇧" && (keyboardLayer == .shift || keyboardLayer == .caps)
+    button.setTitle(display, for: .normal)
+    button.setTitleColor(isShiftOn ? .white : KeyboardTheme.keyText, for: .normal)
+    button.titleLabel?.font = .systemFont(ofSize: keyFontSize(for: logical))
+    button.backgroundColor = isShiftOn
+      ? KeyboardTheme.primary
+      : (isActionKey(logical) ? KeyboardTheme.keyActionBackground : KeyboardTheme.keyLetterBackground)
+    button.layer.cornerRadius = 8
+    button.isUserInteractionEnabled = false
+    button.translatesAutoresizingMaskIntoConstraints = false
+    wrapper.addSubview(button)
+    NSLayoutConstraint.activate([
+      wrapper.heightAnchor.constraint(equalToConstant: 44),
+      button.topAnchor.constraint(equalTo: wrapper.topAnchor),
+      button.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor),
+      button.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor),
+      button.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
+    ])
+    attachKeyTouchHandlers(to: wrapper, button: button, logical: logical, previewLabel: display)
+    return wrapper
+  }
+
+  private func attachKeyTouchHandlers(to wrapper: UIControl, button: UIButton, logical: String, previewLabel: String) {
+    let isLetter = logical.count == 1 && logical.first?.isLetter == true
+
+    let touchDown = UIAction { [weak self, weak wrapper, weak button] _ in
+      guard let self, let wrapper, let button else { return }
+      self.dismissAlternativesPopup()
+      self.showKeyPreview(previewLabel, anchor: button)
+      self.longPressWorkItem?.cancel()
+      let work = DispatchWorkItem { [weak self, weak wrapper] in
+        guard let self, let wrapper else { return }
+        self.suppressNextKeyUp = true
+        self.dismissKeyPreview(immediate: true)
+        if logical == "⌫" {
+          self.clearAllInputText()
+        } else if isLetter, KeyboardKeyAlternatives.map[logical] != nil {
+          self.showAlternativesPopup(for: logical, anchor: wrapper)
+        }
+      }
+      self.longPressWorkItem = work
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
+    }
+
+    let touchUp = UIAction { [weak self] _ in
+      guard let self else { return }
+      self.longPressWorkItem?.cancel()
+      self.longPressWorkItem = nil
+      self.dismissKeyPreview()
+      if self.suppressNextKeyUp {
+        self.suppressNextKeyUp = false
+        return
+      }
+      self.handleKey(logical)
+    }
+
+    let touchCancel = UIAction { [weak self] _ in
+      self?.longPressWorkItem?.cancel()
+      self?.longPressWorkItem = nil
+      self?.dismissKeyPreview()
+    }
+
+    wrapper.addAction(touchDown, for: .touchDown)
+    wrapper.addAction(touchUp, for: .touchUpInside)
+    wrapper.addAction(touchUp, for: .touchUpOutside)
+    wrapper.addAction(touchCancel, for: .touchCancel)
+  }
 
   private func handleKey(_ key: String) {
+    if voiceCommandPanel.routeKey(key, shiftOn: keyboardLayer == .shift, capsOn: keyboardLayer == .caps) {
+      return
+    }
     guard let proxy = textDocumentProxy as UITextDocumentProxy? else { return }
     switch key {
     case "space":
       recordCompletedWordFromContext()
       proxy.insertText(" ")
-      if isShifted { isShifted = false; renderKeys() }
+      checkAutoCap()
+      if keyboardLayer == .shift {
+        keyboardLayer = .alpha
+        renderKeys()
+      }
     case "⌫":
-      proxy.deleteBackward()
+      if let selected = proxy.selectedText, !selected.isEmpty {
+        proxy.insertText("")
+      } else {
+        proxy.deleteBackward()
+      }
     case "↵":
       recordCompletedWordFromContext()
       proxy.insertText("\n")
     case ".":
       recordCompletedWordFromContext()
       proxy.insertText(".")
+      checkAutoCap()
+    case ",":
+      recordCompletedWordFromContext()
+      proxy.insertText(",")
+      checkAutoCap()
     case "⇧":
-      isShifted.toggle()
+      switch keyboardLayer {
+      case .alpha: keyboardLayer = .shift
+      case .shift: keyboardLayer = .caps
+      case .caps, .symbols: keyboardLayer = .alpha
+      }
+      renderKeys()
+    case "?123":
+      keyboardLayer = .symbols
+      renderKeys()
+    case "ABC":
+      keyboardLayer = .alpha
       renderKeys()
     case "😊":
       showEmojiPanel()
     default:
-      let out = (isShifted && key.count == 1 && key.first?.isLetter == true) ? key.uppercased() : key
-      if out.count == 1 || out == "space" {
-        proxy.insertText(out == "space" ? " " : out)
-        if isShifted && key.count == 1 && key.first?.isLetter == true {
-          isShifted = false
-          renderKeys()
-        }
+      let out: String
+      if isUppercaseLayer, key.count == 1, key.first?.isLetter == true {
+        out = key.uppercased()
+      } else {
+        out = key
+      }
+      proxy.insertText(out)
+      if keyboardLayer == .shift, key.count == 1, key.first?.isLetter == true {
+        keyboardLayer = .alpha
+        renderKeys()
       }
     }
     updateSuggestions()
+  }
+
+  // MARK: - Theme, auto-cap, key preview, snackbar
+
+  private func applyTheme() {
+    let dark = traitCollection.userInterfaceStyle == .dark
+    KeyboardTheme.setDarkMode(dark)
+    view.backgroundColor = KeyboardTheme.keyboardBackground
+    toolbar.backgroundColor = KeyboardTheme.toolbarBackground
+    suggestionScroll.backgroundColor = KeyboardTheme.suggestionBackground
+    suggestionDivider.backgroundColor = KeyboardTheme.suggestionDivider
+    voiceBar.backgroundColor = KeyboardTheme.voiceBarBackground
+    resultBar.backgroundColor = KeyboardTheme.keyboardBackground
+    settingsPanel.backgroundColor = KeyboardTheme.keyActionBackground
+    emojiPanel.backgroundColor = KeyboardTheme.keyboardBackground
+    panelsStack.arrangedSubviews.forEach { $0.backgroundColor = KeyboardTheme.keyboardBackground }
+    renderKeys()
+    renderSettingsPanel()
+    refreshToolbarHighlight()
+  }
+
+  private func applyAutoCapIfNewField() {
+    let before = textDocumentProxy.documentContextBeforeInput ?? ""
+    let after = textDocumentProxy.documentContextAfterInput ?? ""
+    guard before.isEmpty, after.isEmpty, keyboardLayer == .alpha else { return }
+    keyboardLayer = .shift
+    renderKeys()
+  }
+
+  private func checkAutoCap() {
+    guard keyboardLayer == .alpha else { return }
+    guard let before = textDocumentProxy.documentContextBeforeInput, before.count >= 2 else { return }
+    let tail = String(before.suffix(2))
+    if tail == ". " || tail == "! " || tail == "? " {
+      keyboardLayer = .shift
+      renderKeys()
+    }
+  }
+
+  private func clearAllInputText() {
+    if voiceCommandPanel.clearTranscript() { return }
+    guard let proxy = textDocumentProxy as UITextDocumentProxy? else { return }
+    if let selected = proxy.selectedText, !selected.isEmpty {
+      proxy.insertText("")
+      updateSuggestions()
+      return
+    }
+    for _ in 0..<4096 {
+      let before = proxy.documentContextBeforeInput ?? ""
+      let after = proxy.documentContextAfterInput ?? ""
+      if before.isEmpty, after.isEmpty { break }
+      proxy.deleteBackward()
+    }
+    currentPartialWord = ""
+    renderSuggestionChips(words: [], loading: false)
+  }
+
+  private func showKeyPreview(_ label: String, anchor: UIView) {
+    dismissKeyPreview(immediate: true)
+    let preview = UILabel()
+    preview.text = label
+    preview.font = .systemFont(ofSize: 22, weight: .medium)
+    preview.textAlignment = .center
+    preview.textColor = KeyboardTheme.keyText
+    preview.backgroundColor = KeyboardTheme.popupBackground
+    preview.layer.cornerRadius = 8
+    preview.layer.borderWidth = 1
+    preview.layer.borderColor = KeyboardTheme.popupStroke.cgColor
+    preview.layer.shadowOpacity = 0.15
+    preview.layer.shadowRadius = 4
+    preview.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(preview)
+    let anchorFrame = anchor.convert(anchor.bounds, to: view)
+    NSLayoutConstraint.activate([
+      preview.centerXAnchor.constraint(equalTo: view.leadingAnchor, constant: anchorFrame.midX),
+      preview.bottomAnchor.constraint(equalTo: view.topAnchor, constant: anchorFrame.minY - 6),
+      preview.widthAnchor.constraint(greaterThanOrEqualToConstant: 36),
+      preview.heightAnchor.constraint(equalToConstant: 44),
+    ])
+    keyPreviewView = preview
+  }
+
+  private func dismissKeyPreview(immediate: Bool = false) {
+    keyPreviewView?.removeFromSuperview()
+    keyPreviewView = nil
+  }
+
+  private func showAlternativesPopup(for logical: String, anchor: UIView) {
+    dismissAlternativesPopup()
+    guard let alts = KeyboardKeyAlternatives.map[logical], !alts.isEmpty else { return }
+    let row = UIStackView()
+    row.axis = .horizontal
+    row.spacing = 4
+    row.backgroundColor = KeyboardTheme.popupBackground
+    row.layer.cornerRadius = 10
+    row.layer.borderWidth = 1
+    row.layer.borderColor = KeyboardTheme.popupStroke.cgColor
+    row.layoutMargins = UIEdgeInsets(top: 4, left: 4, bottom: 4, right: 4)
+    row.isLayoutMarginsRelativeArrangement = true
+    for alt in alts {
+      let btn = UIButton(type: .system)
+      btn.setTitle(alt, for: .normal)
+      btn.titleLabel?.font = .systemFont(ofSize: 16)
+      btn.setTitleColor(KeyboardTheme.keyText, for: .normal)
+      btn.backgroundColor = KeyboardTheme.keyActionBackground
+      btn.layer.cornerRadius = 6
+      btn.widthAnchor.constraint(equalToConstant: 38).isActive = true
+      btn.heightAnchor.constraint(equalToConstant: 40).isActive = true
+      btn.addAction(UIAction { [weak self] _ in
+        if self?.voiceCommandPanel.insertTranscriptText(alt) != true {
+          self?.textDocumentProxy.insertText(alt)
+        }
+        self?.dismissAlternativesPopup()
+        self?.updateSuggestions()
+      }, for: .touchUpInside)
+      row.addArrangedSubview(btn)
+    }
+    row.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(row)
+    let frame = anchor.convert(anchor.bounds, to: view)
+    NSLayoutConstraint.activate([
+      row.centerXAnchor.constraint(equalTo: view.leadingAnchor, constant: frame.midX),
+      row.bottomAnchor.constraint(equalTo: view.topAnchor, constant: frame.minY - 4),
+    ])
+    alternativesPopup = row
+  }
+
+  private func dismissAlternativesPopup() {
+    alternativesPopup?.removeFromSuperview()
+    alternativesPopup = nil
+  }
+
+  private func setupSnackbar() {
+    snackbarLabel.font = .systemFont(ofSize: 13, weight: .medium)
+    snackbarLabel.textColor = .white
+    snackbarLabel.textAlignment = .center
+    snackbarLabel.backgroundColor = UIColor(red: 0x32 / 255.0, green: 0x32 / 255.0, blue: 0x32 / 255.0, alpha: 0.92)
+    snackbarLabel.layer.cornerRadius = 8
+    snackbarLabel.clipsToBounds = true
+    snackbarLabel.numberOfLines = 2
+    snackbarLabel.isHidden = true
+    snackbarLabel.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(snackbarLabel)
+    NSLayoutConstraint.activate([
+      snackbarLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
+      snackbarLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24),
+      snackbarLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+      snackbarLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -8),
+    ])
+  }
+
+  private func showSnackbar(_ message: String, duration: TimeInterval = 2.2) {
+    snackbarHideTimer?.invalidate()
+    snackbarLabel.text = "  \(message)  "
+    snackbarLabel.isHidden = false
+    snackbarLabel.alpha = 0
+    UIView.animate(withDuration: 0.2) { self.snackbarLabel.alpha = 1 }
+    snackbarHideTimer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { [weak self] _ in
+      UIView.animate(withDuration: 0.2, animations: {
+        self?.snackbarLabel.alpha = 0
+      }, completion: { _ in
+        self?.snackbarLabel.isHidden = true
+      })
+    }
+  }
+
+  private func startContextPolling() {
+    contextPollTimer?.invalidate()
+    let timer = Timer(timeInterval: 0.35, repeats: true) { [weak self] _ in
+      self?.pollDocumentContextIfChanged()
+    }
+    RunLoop.main.add(timer, forMode: .common)
+    contextPollTimer = timer
+  }
+
+  private func stopContextPolling() {
+    contextPollTimer?.invalidate()
+    contextPollTimer = nil
+  }
+
+  private func captureDocumentContextSignature() {
+    let before = textDocumentProxy.documentContextBeforeInput ?? ""
+    let after = textDocumentProxy.documentContextAfterInput ?? ""
+    lastDocumentContextSignature = "\(before)|\(after)"
+  }
+
+  private func pollDocumentContextIfChanged() {
+    let before = textDocumentProxy.documentContextBeforeInput ?? ""
+    let after = textDocumentProxy.documentContextAfterInput ?? ""
+    let signature = "\(before)|\(after)"
+    guard signature != lastDocumentContextSignature else { return }
+    lastDocumentContextSignature = signature
+    updateSuggestions()
+  }
+
+  /// When the host app's caret moves, stop routing keys into the voice-command transcript (Android `onUpdateSelection`).
+  override func selectionWillChange(_ textInput: UITextInput?) {
+    super.selectionWillChange(textInput)
+    guard CFAbsoluteTimeGetCurrent() >= transcriptEditingGraceUntil else { return }
+    if voiceCommandPanel.shouldRouteKeysToTranscript() {
+      voiceCommandPanel.releaseTranscriptRouting()
+    }
   }
 
   // MARK: - Word suggestions (Datamuse)
@@ -661,6 +1178,8 @@ class KeyboardViewController: UIInputViewController {
   private func runKeyboardFeature(_ feature: KeyboardFeature) {
     hideResult()
     hideEmojiPanel()
+    isSettingsVisible = false
+    settingsPanel.isHidden = true
     guard hasFullAccess else {
       showStatusMessage(
         "Turn on \"Allow Full Access\" for Type Easy keyboard (Settings → Keyboard → Keyboards).",
@@ -684,6 +1203,8 @@ class KeyboardViewController: UIInputViewController {
 
     switch feature {
     case .translate:
+      loadingToolbarHighlight = .translate
+      refreshToolbarHighlight()
       showStatusMessage("Translating…", isError: false, isLoading: true)
       activeApiTask?.cancel()
       activeApiTask = Task { [weak self] in
@@ -694,24 +1215,28 @@ class KeyboardViewController: UIInputViewController {
         )
         await MainActor.run {
           guard let self, !Task.isCancelled else { return }
+          self.loadingToolbarHighlight = nil
           if let result = response.result {
-            self.showResult(result, isError: false)
+            self.showResult(result, isError: false, toolbarSource: .translate)
           } else {
-            self.showResult(response.error ?? "Translation failed", isError: true)
+            self.showResult(response.error ?? "Translation failed", isError: true, toolbarSource: .translate)
           }
         }
       }
     case .grammar:
+      loadingToolbarHighlight = .grammar
+      refreshToolbarHighlight()
       showStatusMessage("Checking grammar…", isError: false, isLoading: true)
       activeApiTask?.cancel()
       activeApiTask = Task { [weak self] in
         let response = await KeyboardApiClient.grammarCheck(text: text, userId: userId)
         await MainActor.run {
           guard let self, !Task.isCancelled else { return }
+          self.loadingToolbarHighlight = nil
           if let result = response.result {
-            self.showResult(result, isError: false)
+            self.showResult(result, isError: false, toolbarSource: .grammar)
           } else {
-            self.showResult(response.error ?? "Grammar check failed", isError: true)
+            self.showResult(response.error ?? "Grammar check failed", isError: true, toolbarSource: .grammar)
           }
         }
       }
@@ -737,6 +1262,9 @@ class KeyboardViewController: UIInputViewController {
 
   private func showStatusMessage(_ text: String, isError: Bool, isLoading: Bool = false) {
     hideEmojiPanel()
+    if !isWaitingForDictation, !isCloudDictationRecording {
+      refreshToolbarHighlight()
+    }
     voiceStatusLabel.text = text
     voiceStatusLabel.textColor = isError
       ? UIColor(red: 0xE5 / 255.0, green: 0x39 / 255.0, blue: 0x35 / 255.0, alpha: 1)
@@ -746,15 +1274,31 @@ class KeyboardViewController: UIInputViewController {
     voiceBar.isHidden = false
   }
 
-  private func showResult(_ text: String, isError: Bool) {
+  private func showResult(
+    _ text: String,
+    isError: Bool,
+    isLoading: Bool = false,
+    toolbarSource: ToolbarHighlight? = nil
+  ) {
+    if let toolbarSource {
+      resultToolbarSource = toolbarSource
+    } else if lastResultAppendTrailingSpace {
+      resultToolbarSource = .voice
+    }
     voiceBar.isHidden = true
     resultBar.isHidden = false
     resultLabel.text = text
     resultLabel.textColor = isError
       ? UIColor(red: 0xE5 / 255.0, green: 0x39 / 255.0, blue: 0x35 / 255.0, alpha: 1)
-      : KeyboardTheme.keyText
+      : (isLoading
+        ? UIColor(red: 0x75 / 255.0, green: 0x75 / 255.0, blue: 0x75 / 255.0, alpha: 1)
+        : KeyboardTheme.keyText)
     lastResultIsError = isError
-    resultInsertButton.isHidden = isError
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    let showInsert = !isError && !isLoading && !trimmed.isEmpty
+    resultInsertButton.isHidden = !showInsert
+    resultInsertButton.isEnabled = showInsert
+    refreshToolbarHighlight()
   }
 
   @objc private func hideResult() {
@@ -764,6 +1308,9 @@ class KeyboardViewController: UIInputViewController {
     pendingReplaceSelected = false
     pendingReplaceBeforeChars = 0
     lastResultIsError = false
+    lastResultAppendTrailingSpace = false
+    resultToolbarSource = nil
+    refreshToolbarHighlight()
   }
 
   @objc private func insertResult() {
@@ -775,11 +1322,24 @@ class KeyboardViewController: UIInputViewController {
         proxy.deleteBackward()
       }
     }
-    proxy.insertText(text)
+    let toInsert = lastResultAppendTrailingSpace ? text + " " : text
+    proxy.insertText(toInsert)
     hideResult()
+    updateSuggestions()
   }
 
   @objc private func onVoice() {
+    reloadLanguagesFromSharedConfig()
+    hideEmojiPanel()
+    isSettingsVisible = false
+    settingsPanel.isHidden = true
+    if voiceCommandPanel.isActive {
+      cancelVoiceCommandFlow()
+    }
+    if isCloudDictationRecording {
+      stopCloudDictationAndUpload()
+      return
+    }
     if isWaitingForDictation {
       stopVoice()
       return
@@ -787,8 +1347,326 @@ class KeyboardViewController: UIInputViewController {
     startVoice()
   }
 
+  @objc private func onVoiceCommand() {
+    reloadLanguagesFromSharedConfig()
+    // Match Android `onVoiceCommandPress`: toggle only when the panel is already open.
+    if voiceCommandPanel.isActive {
+      if voiceCommandPanel.isRecording {
+        KeyboardVoiceCommandStore.shared.requestStop()
+      } else {
+        cancelVoiceCommandFlow()
+      }
+      return
+    }
+    stopVoice()
+    hideResult()
+    hideEmojiPanel()
+    isSettingsVisible = false
+    settingsPanel.isHidden = true
+    guard hasFullAccess else {
+      showStatusMessage(
+        "Turn on \"Allow Full Access\" for Type Easy keyboard (Settings → Keyboard → Keyboards).",
+        isError: true
+      )
+      return
+    }
+    guard KeyboardSharedConfig.hasUserId() else {
+      showResult("Open Type Easy and log in before using Voice Command.", isError: true)
+      return
+    }
+    startVoiceCommandFlow()
+  }
+
+  private func startVoiceCommandFlow() {
+    hideEmojiPanel()
+    isSettingsVisible = false
+    settingsPanel.isHidden = true
+    let requestId = UUID().uuidString
+    activeVoiceCommandRequestId = requestId
+    voiceCommandUsesHostApp = false
+    voiceBar.isHidden = true
+    resultBar.isHidden = true
+    voiceCommandPanel.showRecording()
+    voiceCommandPanel.setRecordingStatus("Listening…")
+    refreshToolbarHighlight()
+
+    ensureMicrophoneForVoice { [weak self] granted in
+      DispatchQueue.main.async {
+        guard let self else { return }
+        guard granted else {
+          self.voiceCommandPanel.showReviewError(
+            "Microphone permission denied. Enable mic for Type Easy in Settings → Privacy → Microphone."
+          )
+          self.activeVoiceCommandRequestId = nil
+          return
+        }
+        KeyboardInlineVoiceCommandRecorder.shared.start(requestId: requestId) { [weak self] outcome in
+          DispatchQueue.main.async {
+            guard let self else { return }
+            switch outcome {
+            case .started:
+              self.voiceCommandPanel.setRecordingStatus("Speak now, then tap Stop")
+              self.startVoiceCommandPolling()
+            case .failed(let message):
+              if self.shouldFallbackVoiceCommandToHostApp(message: message) {
+                self.startHostAppVoiceCommandHandoff(requestId: requestId)
+              } else {
+                self.voiceCommandPanel.showReviewError(message)
+                self.activeVoiceCommandRequestId = nil
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /// True when an in-flight voice-command session should survive a brief keyboard hide (mirrors Android IME behavior).
+  private func isVoiceCommandSessionActive() -> Bool {
+    if voiceCommandPanel.isActive { return true }
+    guard let requestId = activeVoiceCommandRequestId, !requestId.isEmpty else { return false }
+    let snap = KeyboardVoiceCommandStore.shared.snapshot()
+    guard snap.requestId == requestId else { return false }
+    switch snap.state {
+    case .pending, .recording, .transcribing, .review:
+      return true
+    case .idle, .error, .cancelled:
+      return false
+    }
+  }
+
+  private func resumeVoiceCommandSessionIfNeeded() {
+    guard isVoiceCommandSessionActive() else { return }
+    voiceBar.isHidden = true
+    resultBar.isHidden = true
+    let snap = KeyboardVoiceCommandStore.shared.snapshot()
+    switch snap.state {
+    case .pending, .recording:
+      voiceCommandPanel.showRecording()
+      if snap.state == .recording {
+        voiceCommandPanel.setRecordingStatus(
+          voiceCommandUsesHostApp
+            ? "Recording in Type Easy — speak, then tap Stop"
+            : "Speak now, then tap Stop"
+        )
+      }
+      startVoiceCommandPolling()
+    case .transcribing:
+      voiceCommandPanel.showReviewLoading("Transcribing your recording…")
+      startVoiceCommandPolling()
+    case .review:
+      commandVoiceAssetId = snap.voiceAssetId.isEmpty ? nil : snap.voiceAssetId
+      commandOriginalTranscript = snap.transcript
+      voiceCommandPanel.showReview(snap.transcript)
+      captureDocumentContextSignature()
+    case .error:
+      voiceCommandPanel.showReviewError(snap.error.isEmpty ? "Voice command failed" : snap.error)
+    case .idle, .cancelled:
+      break
+    }
+  }
+
+  private func ensureMicrophoneForVoice(completion: @escaping (Bool) -> Void) {
+    if #available(iOS 17.0, *) {
+      switch AVAudioApplication.shared.recordPermission {
+      case .granted:
+        completion(true)
+      case .denied:
+        completion(false)
+      case .undetermined:
+        AVAudioApplication.requestRecordPermission { granted in
+          DispatchQueue.main.async { completion(granted) }
+        }
+      @unknown default:
+        completion(false)
+      }
+      return
+    }
+    switch AVAudioSession.sharedInstance().recordPermission {
+    case .granted:
+      completion(true)
+    case .denied:
+      completion(false)
+    case .undetermined:
+      AVAudioSession.sharedInstance().requestRecordPermission { granted in
+        DispatchQueue.main.async { completion(granted) }
+      }
+    @unknown default:
+      completion(false)
+    }
+  }
+
+  private func shouldFallbackVoiceCommandToHostApp(message: String) -> Bool {
+    let lower = message.lowercased()
+    if lower.contains("permission") || lower.contains("denied") { return false }
+    return true
+  }
+
+  private func startHostAppVoiceCommandHandoff(requestId: String) {
+    voiceCommandUsesHostApp = true
+    KeyboardInlineVoiceCommandRecorder.shared.cancel()
+    KeyboardSharedConfig.setExtensionOwnsMic(false)
+    KeyboardVoiceCommandStore.shared.begin(requestId: requestId)
+    KeyboardSharedConfig.setPendingDeepLink(
+      "\(KeyboardSharedConfig.deepLinkVoiceCommand)?requestId=\(requestId)"
+    )
+    KeyboardSharedNotifications.postVoiceCommandStart()
+    voiceCommandPanel.setRecordingStatus("Opening Type Easy…")
+    openHostAppForVoice {
+      KeyboardHostLink.openVoiceCommand(requestId: requestId, extensionContext: self.extensionContext) { [weak self] opened in
+        DispatchQueue.main.async {
+          guard let self else { return }
+          if !opened {
+            self.hostAppHandoffActive = false
+          }
+          if opened {
+            self.voiceCommandPanel.setRecordingStatus("Recording in Type Easy — speak, then tap Stop")
+          } else {
+            self.voiceCommandPanel.setRecordingStatus("Open Type Easy from the app switcher, then speak")
+          }
+          self.startVoiceCommandPolling()
+        }
+      }
+    }
+  }
+
+  private func openHostAppForVoice(_ open: () -> Void) {
+    hostAppHandoffActive = true
+    open()
+  }
+
+  private func resumeHostAppVoiceSessionsIfNeeded() {
+    if isWaitingForDictation || isCloudDictationRecording {
+      voiceBar.isHidden = false
+      voiceStopButton.isHidden = !isCloudDictationRecording && !dictationUsesHostApp
+      if KeyboardExtensionCloudDictation.shared.isRecording {
+        isCloudDictationRecording = true
+        voiceStatusLabel.text = "Recording… tap mic to stop"
+      }
+      startDictationPolling()
+    }
+  }
+
+  private func startVoiceCommandPolling() {
+    voiceCommandPollTimer?.invalidate()
+    let timer = Timer(timeInterval: 0.3, repeats: true) { [weak self] _ in
+      self?.pollVoiceCommandState()
+    }
+    RunLoop.main.add(timer, forMode: .common)
+    voiceCommandPollTimer = timer
+  }
+
+  private func pollVoiceCommandState() {
+    let snap = KeyboardVoiceCommandStore.shared.snapshot()
+    guard let activeId = activeVoiceCommandRequestId, !activeId.isEmpty, snap.requestId == activeId else { return }
+
+    switch snap.state {
+    case .pending:
+      break
+    case .recording:
+      voiceCommandPanel.showRecording()
+      refreshToolbarHighlight()
+      if let start = snap.recordingStartedAt {
+        let elapsed = Int(Date().timeIntervalSince(start))
+        voiceCommandPanel.updateRecordingTimer(String(format: "%d:%02d", elapsed / 60, elapsed % 60))
+      }
+    case .transcribing:
+      voiceCommandPanel.showReviewLoading("Transcribing your recording…")
+    case .review:
+      commandVoiceAssetId = snap.voiceAssetId.isEmpty ? nil : snap.voiceAssetId
+      commandOriginalTranscript = snap.transcript
+      voiceCommandPanel.showReview(snap.transcript)
+      captureDocumentContextSignature()
+      refreshToolbarHighlight()
+      stopVoiceCommandPolling()
+    case .error:
+      voiceCommandPanel.showReviewError(snap.error.isEmpty ? "Voice command failed" : snap.error)
+      stopVoiceCommandPolling()
+    case .cancelled:
+      stopVoiceCommandPolling()
+      voiceCommandPanel.dismiss()
+      activeVoiceCommandRequestId = nil
+      commandVoiceAssetId = nil
+      commandOriginalTranscript = ""
+      KeyboardVoiceCommandStore.shared.reset()
+    case .idle:
+      break
+    }
+  }
+
+  private func stopVoiceCommandPolling() {
+    voiceCommandPollTimer?.invalidate()
+    voiceCommandPollTimer = nil
+  }
+
+  private func executeVoiceCommandFromReview(_ editedText: String) {
+    voiceCommandPanel.setLoading(true, message: "Sending command…")
+    let original = commandOriginalTranscript
+    Task { [weak self] in
+      guard let self else { return }
+      var assetId = self.commandVoiceAssetId ?? ""
+      if assetId.isEmpty {
+        await MainActor.run {
+          self.voiceCommandPanel.showReviewError("Missing voice asset ID — re-record and try again.")
+        }
+        return
+      }
+      if editedText != original {
+        let update = await KeyboardVoiceApiClient.updateTranscript(voiceAssetId: assetId, finalTranscript: editedText)
+        switch update {
+        case .success(let newId):
+          assetId = newId
+        case .failure(let error):
+          await MainActor.run {
+            self.voiceCommandPanel.showReviewError(error.localizedDescription)
+          }
+          return
+        }
+      }
+      let exec = await KeyboardVoiceApiClient.executeVoiceCommand(voiceAssetId: assetId)
+      await MainActor.run {
+        switch exec {
+        case .success(let payload):
+          self.completeVoiceCommandSuccess(payload)
+        case .failure(let error):
+          self.voiceCommandPanel.showReviewError(error.localizedDescription)
+        }
+      }
+    }
+  }
+
+  private func completeVoiceCommandSuccess(_ payload: KeyboardVoiceApiClient.ExecuteResult?) {
+    let trimmedResult = payload?.result?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let message = trimmedResult.isEmpty ? (payload?.status ?? "Command sent") : trimmedResult
+    stopVoiceCommandPolling()
+    activeVoiceCommandRequestId = nil
+    commandVoiceAssetId = nil
+    commandOriginalTranscript = ""
+    voiceCommandPanel.dismiss()
+    KeyboardVoiceCommandStore.shared.reset()
+    showSnackbar(message)
+  }
+
+  private func cancelVoiceCommandFlow() {
+    stopVoiceCommandPolling()
+    activeVoiceCommandRequestId = nil
+    commandVoiceAssetId = nil
+    commandOriginalTranscript = ""
+    voiceCommandPanel.dismiss()
+    if voiceCommandUsesHostApp {
+      KeyboardVoiceCommandStore.shared.requestCancel()
+    } else {
+      KeyboardInlineVoiceCommandRecorder.shared.cancel()
+      KeyboardVoiceCommandStore.shared.reset()
+    }
+    voiceCommandUsesHostApp = false
+    KeyboardSharedConfig.setExtensionOwnsMic(false)
+    refreshToolbarHighlight()
+  }
+
   @objc private func toggleSettings() {
     hideResult()
+    cancelVoiceCommandFlow()
     hideEmojiPanel()
     isSettingsVisible.toggle()
     settingsPanel.isHidden = !isSettingsVisible
@@ -796,6 +1674,7 @@ class KeyboardViewController: UIInputViewController {
       hideLanguagePicker()
     }
     renderSettingsPanel()
+    refreshToolbarHighlight()
   }
 
   private func reloadLanguagesFromSharedConfig() {
@@ -943,7 +1822,6 @@ class KeyboardViewController: UIInputViewController {
     textDocumentProxy.deleteBackward()
   }
 
-  /// iOS does not allow microphone access inside keyboard extensions — dictation runs in the host app.
   private func startVoice() {
     hideResult()
     guard hasFullAccess else {
@@ -957,19 +1835,103 @@ class KeyboardViewController: UIInputViewController {
     let requestId = UUID().uuidString
     activeDictationRequestId = requestId
     isWaitingForDictation = true
-    KeyboardDictationStore.shared.begin(requestId: requestId)
+    dictationUsesHostApp = false
+    isCloudDictationRecording = false
 
-    showStatusMessage("Opening Type Easy to listen…", isError: false)
-
-    KeyboardHostLink.openVoice(requestId: requestId, extensionContext: extensionContext) { [weak self] opened in
+    ensureMicrophoneForVoice { [weak self] granted in
       DispatchQueue.main.async {
         guard let self else { return }
-        self.voiceStopButton.isHidden = false
-        self.startDictationPolling()
-        if opened {
-          self.voiceStatusLabel.text = "Speak in Type Easy, then switch back."
-        } else {
-          self.voiceStatusLabel.text = "Open Type Easy (app switcher), then speak."
+        guard granted else {
+          self.showResult(
+            "Allow microphone access for Type Easy in Settings → Privacy → Microphone.",
+            isError: true
+          )
+          self.finishDictation()
+          return
+        }
+        self.startCloudDictationInKeyboard(requestId: requestId)
+        self.refreshToolbarHighlight()
+      }
+    }
+  }
+
+  private func startInlineSpeechDictation(requestId: String) {
+    KeyboardInlineSpeechDictation.shared.start(requestId: requestId) { [weak self] outcome in
+      DispatchQueue.main.async {
+        guard let self else { return }
+        switch outcome {
+        case .started:
+          self.isCloudDictationRecording = false
+          self.showStatusMessage("Listening… tap mic to stop", isError: false, isLoading: false)
+          self.voiceStopButton.isHidden = false
+          self.startDictationPolling()
+          self.refreshToolbarHighlight()
+        case .failed:
+          if self.hasFullAccess {
+            self.startHostAppDictationHandoff(requestId: requestId)
+          } else {
+            self.showResult(
+              "Voice input failed. Enable Allow Full Access for the Type Easy keyboard.",
+              isError: true
+            )
+            self.finishDictation()
+          }
+        }
+      }
+    }
+  }
+
+  /// Android cloud dictation path — record m4a in the keyboard, then transcribe (works in any app).
+  private func startCloudDictationInKeyboard(requestId: String) {
+    switch KeyboardExtensionCloudDictation.shared.start(requestId: requestId) {
+    case .success:
+      isCloudDictationRecording = true
+      dictationUsesHostApp = false
+      showStatusMessage("Recording… tap mic to stop", isError: false, isLoading: false)
+      voiceStopButton.isHidden = false
+      startDictationPolling()
+      refreshToolbarHighlight()
+    case .failure:
+      self.startInlineSpeechDictation(requestId: requestId)
+    }
+  }
+
+  private func stopCloudDictationAndUpload() {
+    guard isCloudDictationRecording else { return }
+    isCloudDictationRecording = false
+    voiceStatusLabel.text = "Transcribing…"
+    voiceStopButton.isHidden = true
+    KeyboardExtensionCloudDictation.shared.stopAndTranscribe()
+    startDictationPolling()
+  }
+
+  private func startHostAppDictationHandoff(requestId: String) {
+    dictationUsesHostApp = true
+    isCloudDictationRecording = false
+    KeyboardExtensionCloudDictation.shared.cancel()
+    KeyboardInlineSpeechDictation.shared.teardown(markCancelled: true)
+    KeyboardSharedConfig.setExtensionOwnsMic(false)
+    KeyboardDictationStore.shared.begin(requestId: requestId)
+    KeyboardSharedConfig.setPendingDeepLink(
+      "\(KeyboardSharedConfig.deepLinkVoice)?requestId=\(requestId)"
+    )
+    KeyboardSharedNotifications.postDictationStart()
+    showStatusMessage("Opening Type Easy to listen…", isError: false)
+
+    openHostAppForVoice {
+      KeyboardHostLink.openVoice(requestId: requestId, extensionContext: self.extensionContext) { [weak self] opened in
+        DispatchQueue.main.async {
+          guard let self else { return }
+          if !opened {
+            self.hostAppHandoffActive = false
+          }
+          self.voiceStopButton.isHidden = false
+          self.startDictationPolling()
+          if opened {
+            self.voiceStatusLabel.text = "Speak in Type Easy, then switch back."
+          } else {
+            self.voiceStatusLabel.text = "Open Type Easy (app switcher), then speak."
+          }
         }
       }
     }
@@ -977,60 +1939,82 @@ class KeyboardViewController: UIInputViewController {
 
   private func startDictationPolling() {
     dictationPollTimer?.invalidate()
-    dictationPollTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] _ in
+    let timer = Timer(timeInterval: 0.3, repeats: true) { [weak self] _ in
       self?.pollDictationState()
     }
+    RunLoop.main.add(timer, forMode: .common)
+    dictationPollTimer = timer
   }
 
   private func pollDictationState() {
     let snap = KeyboardDictationStore.shared.snapshot()
-    guard snap.requestId == activeDictationRequestId || activeDictationRequestId == nil else { return }
+    guard let activeId = activeDictationRequestId, !activeId.isEmpty, snap.requestId == activeId else { return }
 
     switch snap.state {
     case .listening, .pending:
-      if !snap.partialText.isEmpty {
+      if isCloudDictationRecording {
+        voiceStatusLabel.text = "Recording… tap mic to stop"
+      } else if !snap.partialText.isEmpty {
         voiceStatusLabel.text = snap.partialText
       } else if snap.state == .listening {
-        voiceStatusLabel.text = "Listening in Type Easy…"
+        voiceStatusLabel.text = dictationUsesHostApp
+          ? "Listening in Type Easy…"
+          : "Listening… speak now"
       }
     case .done:
       let text = snap.finalText.trimmingCharacters(in: .whitespacesAndNewlines)
-      if !text.isEmpty {
-        textDocumentProxy.insertText(text + " ")
+      finishDictation()
+      if text.isEmpty {
+        showResult("No speech detected.", isError: true, toolbarSource: .voice)
+      } else {
+        lastResultAppendTrailingSpace = true
+        showResult(text, isError: false, toolbarSource: .voice)
       }
-      finishDictation(errorMessage: nil)
     case .error:
-      finishDictation(errorMessage: snap.error.isEmpty ? "Voice input failed." : snap.error)
+      finishDictation()
+      showResult(
+        snap.error.isEmpty ? "Voice input failed." : snap.error,
+        isError: true,
+        toolbarSource: .voice
+      )
     case .cancelled:
-      finishDictation(errorMessage: nil)
+      finishDictation()
     case .idle:
       break
     }
   }
 
   @objc private func stopVoice() {
+    if isCloudDictationRecording {
+      stopCloudDictationAndUpload()
+      return
+    }
     if isWaitingForDictation {
-      KeyboardDictationStore.shared.requestStop()
+      if dictationUsesHostApp {
+        KeyboardDictationStore.shared.requestStop()
+      } else {
+        KeyboardInlineSpeechDictation.shared.requestStop()
+      }
       pollDictationState()
       return
     }
-    finishDictation(errorMessage: nil)
+    finishDictation()
   }
 
-  private func finishDictation(errorMessage: String?) {
+  private func finishDictation() {
     dictationPollTimer?.invalidate()
     dictationPollTimer = nil
     isWaitingForDictation = false
+    isCloudDictationRecording = false
     activeDictationRequestId = nil
+    dictationUsesHostApp = false
     voiceStopButton.isHidden = true
+    KeyboardExtensionCloudDictation.shared.cancel()
+    KeyboardInlineSpeechDictation.shared.teardown(markCancelled: false)
     KeyboardDictationStore.shared.reset()
-
-    if let errorMessage, !errorMessage.isEmpty {
-      voiceStatusLabel.text = errorMessage
-      voiceBar.isHidden = false
-    } else {
-      voiceBar.isHidden = true
-    }
+    KeyboardSharedConfig.setExtensionOwnsMic(false)
+    voiceBar.isHidden = true
+    refreshToolbarHighlight()
   }
 }
 
@@ -1064,5 +2048,27 @@ extension KeyboardViewController: UITableViewDataSource, UITableViewDelegate {
     tableView.deselectRow(at: indexPath, animated: true)
     let lang = KeyboardLanguages.all[indexPath.row]
     selectLanguage(code: lang.code)
+  }
+}
+
+extension KeyboardViewController: KeyboardVoiceCommandPanelDelegate {
+  func voiceCommandPanelDidActivateTranscriptEditing() {
+    transcriptEditingGraceUntil = CFAbsoluteTimeGetCurrent() + 0.35
+  }
+
+  func voiceCommandPanelDidTapStopRecording() {
+    KeyboardVoiceCommandStore.shared.requestStop()
+  }
+
+  func voiceCommandPanelDidTapCancelRecording() {
+    cancelVoiceCommandFlow()
+  }
+
+  func voiceCommandPanelDidTapCancelReview() {
+    cancelVoiceCommandFlow()
+  }
+
+  func voiceCommandPanelDidTapSend(editedText: String) {
+    executeVoiceCommandFromReview(editedText)
   }
 }

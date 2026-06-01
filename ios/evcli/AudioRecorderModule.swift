@@ -41,7 +41,7 @@ class AudioRecorderModule: RCTEventEmitter, AVAudioPlayerDelegate {
       try session.setCategory(
         .playAndRecord,
         mode: .default,
-        options: [.defaultToSpeaker, .allowBluetooth]
+        options: [.defaultToSpeaker, .allowBluetoothHFP]
       )
     } else {
       try session.setCategory(.playback, mode: .default, options: [.defaultToSpeaker])

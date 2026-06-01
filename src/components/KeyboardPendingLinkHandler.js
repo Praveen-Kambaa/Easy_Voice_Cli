@@ -14,14 +14,16 @@ export function KeyboardPendingLinkHandler({ navigationRef }) {
 
     const run = async () => {
       try {
-        const pending = await KeyboardModule?.consumePendingDeepLink?.();
+        const pending = await KeyboardModule?.peekPendingDeepLink?.();
         if (!pending || typeof pending !== 'string') return;
 
+        // Never consume voice links in JS — native layer starts recording from App Group state.
         if (pending.startsWith('keyboard-voice')) {
-          await Linking.openURL(`typeeasy://${pending}`);
+          await KeyboardModule?.forwardPendingKeyboardLink?.();
           return;
         }
-        if (pending === 'keyboard-settings') {
+        const consumed = await KeyboardModule?.consumePendingDeepLink?.();
+        if (consumed === 'keyboard-settings') {
           navigationRef.navigate('Main', { screen: 'Settings' });
         }
       } catch {

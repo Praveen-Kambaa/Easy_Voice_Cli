@@ -586,8 +586,6 @@ function TranslatorScrollBody({
   onSpeakTranslation,
   onCopyTranslation,
 }) {
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
   const showOutputActions = !!translatedText;
 
   return (

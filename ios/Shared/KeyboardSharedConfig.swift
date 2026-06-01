@@ -8,10 +8,13 @@ enum KeyboardSharedConfig {
   static let keyFromLang = "from_lang"
   static let keyToLang = "to_lang"
   static let keyPendingDeepLink = "pending_deep_link"
+  /// When true, the keyboard extension is recording; the host app must not take the microphone.
+  static let keyExtensionOwnsMic = "extension_owns_mic"
 
   /// Deep link action when the keyboard could not call `extensionContext.open` (e.g. keyboard-settings).
   static let deepLinkSettings = "keyboard-settings"
   static let deepLinkVoice = "keyboard-voice"
+  static let deepLinkVoiceCommand = "keyboard-voice-command"
 
   static func defaults() -> UserDefaults {
     if let shared = UserDefaults(suiteName: appGroupIdentifier) {
@@ -61,7 +64,24 @@ enum KeyboardSharedConfig {
     d.synchronize()
   }
 
+  /// Reads pending deep link without clearing (for RN peek / native forward).
+  static func peekPendingDeepLink() -> String? {
+    let action = defaults().string(forKey: keyPendingDeepLink)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let action, !action.isEmpty else { return nil }
+    return action
+  }
+
   /// Returns and clears a pending action, if any.
+  static func setExtensionOwnsMic(_ owns: Bool) {
+    let d = defaults()
+    d.set(owns, forKey: keyExtensionOwnsMic)
+    d.synchronize()
+  }
+
+  static func extensionOwnsMic() -> Bool {
+    defaults().bool(forKey: keyExtensionOwnsMic)
+  }
+
   static func consumePendingDeepLink() -> String? {
     let d = defaults()
     let action = d.string(forKey: keyPendingDeepLink)?.trimmingCharacters(in: .whitespacesAndNewlines)
