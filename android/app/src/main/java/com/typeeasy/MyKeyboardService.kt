@@ -17,6 +17,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -188,6 +190,8 @@ class MyKeyboardService : InputMethodService() {
     private lateinit var suggestionScroll: HorizontalScrollView
     private var keyboardIsDark = false
     private var theme = KeyboardTheme.light
+    /** Extra space so keys sit above the system nav bar (globe / hide-keyboard). */
+    private var keyboardBottomInsetPx = 0
     private val C_BG get() = theme.bg
     private val C_KEY_LETTER get() = theme.keyLetter
     private val C_KEY_ACTION get() = theme.keyAction
@@ -287,6 +291,7 @@ class MyKeyboardService : InputMethodService() {
                 FrameLayout.LayoutParams(MATCH, WRAP, Gravity.BOTTOM),
             )
         }
+        attachKeyboardInsetListener(wrapper)
         return wrapper
     }
 
@@ -301,6 +306,68 @@ class MyKeyboardService : InputMethodService() {
         pendingFirstCharCapitalize = editorSupportsFirstCharCap && isInputEmptyForFirstCharCap()
         applyInitialShiftForEmptyField()
         refreshClipboardSuggestion()
+        syncKeyboardBottomInset()
+    }
+
+    override fun onWindowShown() {
+        super.onWindowShown()
+        syncKeyboardBottomInset()
+    }
+
+    private fun attachKeyboardInsetListener(host: View) {
+        ViewCompat.setOnApplyWindowInsetsListener(host) { _, insets ->
+            applyKeyboardBottomInset(resolveBottomInset(insets))
+            insets
+        }
+        host.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) {
+                syncKeyboardBottomInset()
+                ViewCompat.requestApplyInsets(v)
+            }
+            override fun onViewDetachedFromWindow(v: View) = Unit
+        })
+        host.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+            if (v.isAttachedToWindow) syncKeyboardBottomInset()
+        }
+        ViewCompat.requestApplyInsets(host)
+    }
+
+    private fun syncKeyboardBottomInset() {
+        val fromHost = window?.window?.decorView?.let { ViewCompat.getRootWindowInsets(it) }
+        applyKeyboardBottomInset(resolveBottomInset(fromHost))
+    }
+
+    private fun resolveBottomInset(insets: WindowInsetsCompat?): Int {
+        val nav = insets?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom ?: 0
+        val tappable = insets?.getInsets(WindowInsetsCompat.Type.tappableElement())?.bottom ?: 0
+        val insetBottom = maxOf(nav, tappable)
+        // Android 15+ IMEs draw edge-to-edge; reserve the system nav height if insets
+        // are not yet dispatched so the globe / hide-keyboard controls do not cover keys.
+        val bottom = if (Build.VERSION.SDK_INT >= 35) {
+            maxOf(insetBottom, systemNavBarHeight())
+        } else {
+            insetBottom
+        }
+        return if (bottom > 0) bottom else 0
+    }
+
+    private fun systemNavBarHeight(): Int {
+        val id = resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        return if (id != 0) resources.getDimensionPixelSize(id) else dp(48)
+    }
+
+    private fun applyKeyboardBottomInset(px: Int) {
+        val bottom = px.coerceAtLeast(0)
+        if (bottom == keyboardBottomInsetPx) {
+            if (::rootLayout.isInitialized && rootLayout.paddingBottom == bottom) return
+        }
+        keyboardBottomInsetPx = bottom
+        if (::rootLayout.isInitialized) {
+            rootLayout.setPadding(0, 0, 0, bottom)
+        }
+        if (::snackbarHost.isInitialized) {
+            snackbarHost.setPadding(dp(24), 0, dp(24), dp(12) + bottom)
+        }
     }
 
     override fun onUpdateSelection(
@@ -357,6 +424,7 @@ class MyKeyboardService : InputMethodService() {
         if (wasDark != keyboardIsDark && ::rootLayout.isInitialized) {
             applyThemeToViews()
         }
+        syncKeyboardBottomInset()
     }
 
     override fun onDestroy() {

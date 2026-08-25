@@ -552,7 +552,7 @@ class KeyboardViewController: UIInputViewController {
       emojiPanel.topAnchor.constraint(equalTo: panelsStack.bottomAnchor, constant: 4),
       emojiPanel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
       emojiPanel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
-      emojiPanel.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -6),
+      emojiPanel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -8),
 
       tabScroll.topAnchor.constraint(equalTo: emojiPanel.topAnchor),
       tabScroll.leadingAnchor.constraint(equalTo: emojiPanel.leadingAnchor),
@@ -608,7 +608,7 @@ class KeyboardViewController: UIInputViewController {
       keysStack.topAnchor.constraint(equalTo: panelsStack.bottomAnchor, constant: 4),
       keysStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
       keysStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
-      keysStack.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -6),
+      keysStack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -8),
     ])
 
     renderKeys()

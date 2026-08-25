@@ -1,7 +1,7 @@
 package com.typeeasy.generated
 
 /**
- * AUTO-GENERATED â€” do not edit manually.
+ * AUTO-GENERATED — do not edit manually.
  * Generated from src/config/api.js by the generateApiConfig Gradle task.
  * Re-runs automatically on every build whenever api.js changes.
  */
