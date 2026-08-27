@@ -38,3 +38,15 @@ allprojects {
         maven { url "https://www.jitpack.io" }
     }
 }
+
+// Skip library verify*Resources (AAPT2 can crash on Windows / AGP 8.12).
+// Do not use afterEvaluate — Gradle 9 rejects it when the project is already evaluated.
+subprojects { subproject ->
+    subproject.pluginManager.withPlugin("com.android.library") {
+        subproject.tasks.configureEach { task ->
+            if (task.name.contains("verify") && task.name.contains("Resources")) {
+                task.enabled = false
+            }
+        }
+    }
+}
