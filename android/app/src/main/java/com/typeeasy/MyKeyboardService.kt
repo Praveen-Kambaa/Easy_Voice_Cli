@@ -201,10 +201,23 @@ class MyKeyboardService : InputMethodService() {
     private val C_TOOLBAR_TXT get() = theme.toolbarText
     private val C_RESULT_BG get() = theme.resultBg
     private val C_PRIMARY get() = theme.primary
+    private val C_ACCENT_CYAN get() = theme.accentCyan
     private val C_SUGGESTION get() = theme.suggestionBg
-    private val C_ERROR_TEXT get() = Color.parseColor("#DC2626")
-    private val C_SUCCESS get() = Color.parseColor("#16A34A")
+    private val C_ERROR_TEXT get() = Color.parseColor("#F87171")
+    private val C_SUCCESS get() = Color.parseColor("#34D399")
 
+    private fun strokedRoundRect(fill: Int, radius: Int, strokeColor: Int, strokeDp: Int = 1): GradientDrawable =
+        GradientDrawable().apply {
+            setColor(fill)
+            cornerRadius = radius.toFloat()
+            setStroke(dp(strokeDp), strokeColor)
+        }
+
+    private fun enterKeyBackground(): GradientDrawable =
+        GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            intArrayOf(theme.enterStart, theme.enterEnd),
+        ).apply { cornerRadius = dp(10).toFloat() }
 
     // ── Number hints for top row ──────────────────────────────────────────────
     private val topRowHints = mapOf(
@@ -270,13 +283,14 @@ class MyKeyboardService : InputMethodService() {
         }
         buildClipboardSuggestionBar()
         buildClipboardSessionPanel()
-        buildSuggestionRow()
-        buildSuggestionToolbarDivider()
+        // Aura Lumina order: ribbon → drawers → predictions → keys
         buildFeatureToolbar()
         buildResultBar()
         buildVoiceBar()
         buildVoiceCommandPanel()
         buildSettingsPanel()
+        buildSuggestionRow()
+        buildSuggestionToolbarDivider()
         buildKeys()
         buildEmojiPanel()
         buildSnackbarOverlay()
@@ -990,7 +1004,7 @@ class MyKeyboardService : InputMethodService() {
 
     private fun buildSuggestionRow() {
         suggestionScroll = HorizontalScrollView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(MATCH, dp(38))
+            layoutParams = LinearLayout.LayoutParams(MATCH, dp(36))
             setBackgroundColor(C_SUGGESTION)
             isHorizontalScrollBarEnabled = false
         }
@@ -998,7 +1012,7 @@ class MyKeyboardService : InputMethodService() {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = ViewGroup.LayoutParams(WRAP, MATCH)
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), dp(6), dp(12), dp(6))
+            setPadding(dp(10), dp(4), dp(10), dp(4))
         }
         suggestionScroll.addView(suggestionRow)
         rootLayout.addView(suggestionScroll)
@@ -1013,7 +1027,7 @@ class MyKeyboardService : InputMethodService() {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Feature toolbar — translate, grammar, voice, settings
+    // Feature toolbar — Aura Lumina smart ribbon
     // ─────────────────────────────────────────────────────────────────────────
 
     private fun buildFeatureToolbar() {
@@ -1021,43 +1035,100 @@ class MyKeyboardService : InputMethodService() {
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(C_TOOLBAR_BG)
             layoutParams = LinearLayout.LayoutParams(MATCH, dp(44))
-            setPadding(dp(10), dp(4), dp(10), dp(4))
+            setPadding(dp(8), dp(6), dp(8), dp(6))
             gravity = Gravity.CENTER_VERTICAL
         }
-        featureToolbar.addView(toolBtn("文A") { onTranslatePress() })
-        featureToolbar.addView(toolDivider())
-        featureToolbar.addView(toolBtn("A✓") { onGrammarPress() })
-        featureToolbar.addView(toolDivider())
-        featureToolbar.addView(toolBtnIcon(R.drawable.ic_mic) { onVoicePress() })
-        featureToolbar.addView(toolDivider())
-        featureToolbar.addView(toolBtnIcon(R.drawable.ic_floating_menu_command) { onVoiceCommandPress() })
-        featureToolbar.addView(toolDivider())
-        featureToolbar.addView(toolBtnIcon(R.drawable.ic_clipboard) { toggleClipboardSession(true) })
-        featureToolbar.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) })
-        featureToolbar.addView(toolBtn("⚙") { toggleSettings() })
-        rootLayout.addView(featureToolbar)
+        // Top neon edge (gradient approx via indigo line)
+        val ribbonStack = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH, WRAP)
+            addView(View(this@MyKeyboardService).apply {
+                layoutParams = LinearLayout.LayoutParams(MATCH, dp(1))
+                setBackgroundColor(Color.parseColor("#806366F1"))
+            })
+            addView(featureToolbar)
+        }
+        populateFeatureToolbar()
+        rootLayout.addView(ribbonStack)
     }
 
-    private fun toolBtn(icon: String, action: () -> Unit) = TextView(this).apply {
-        text = icon; textSize = 17f; gravity = Gravity.CENTER
-        setTextColor(C_TOOLBAR_TXT); setBackgroundColor(Color.TRANSPARENT)
-        typeface = Typeface.DEFAULT_BOLD
-        layoutParams = LinearLayout.LayoutParams(dp(52), dp(40))
+    private fun populateFeatureToolbar() {
+        if (!::featureToolbar.isInitialized) return
+        featureToolbar.removeAllViews()
+        // 1. Aura spark
+        featureToolbar.addView(auraSparkBtn { onVoiceCommandPress() })
+        featureToolbar.addView(toolSpacer())
+        // 2. Translate 文A
+        featureToolbar.addView(toolPill("文A", C_ACCENT_CYAN) { onTranslatePress() })
+        featureToolbar.addView(toolSpacer())
+        // 3. Grammar A✓
+        featureToolbar.addView(toolPill("A✓", theme.primary) { onGrammarPress() })
+        featureToolbar.addView(toolSpacer())
+        // 4. Mic
+        featureToolbar.addView(toolPillIcon(R.drawable.ic_mic) { onVoicePress() })
+        featureToolbar.addView(toolSpacer())
+        // 5. Clipboard
+        featureToolbar.addView(toolPillIcon(R.drawable.ic_clipboard) { toggleClipboardSession(true) })
+        featureToolbar.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) })
+        // Settings
+        featureToolbar.addView(toolPill("⚙", C_HINT_TEXT) { toggleSettings() })
+    }
+
+    private fun toolSpacer() = View(this).apply {
+        layoutParams = LinearLayout.LayoutParams(dp(4), 1)
+    }
+
+    private fun auraSparkBtn(action: () -> Unit) = FrameLayout(this).apply {
+        layoutParams = LinearLayout.LayoutParams(dp(32), dp(32))
+        background = GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            intArrayOf(theme.primary, theme.accentCyan),
+        ).apply { cornerRadius = dp(10).toFloat() }
+        val inner = TextView(this@MyKeyboardService).apply {
+            text = "✦"
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setTextColor(C_ACCENT_CYAN)
+            background = roundRect(Color.parseColor("#090D18"), dp(9))
+            layoutParams = FrameLayout.LayoutParams(MATCH, MATCH).also {
+                it.setMargins(dp(1), dp(1), dp(1), dp(1))
+            }
+        }
+        addView(inner)
         setOnClickListener { action() }
     }
 
-    private fun toolBtnIcon(drawableRes: Int, action: () -> Unit) = ImageView(this).apply {
+    private fun toolPill(label: String, accent: Int, action: () -> Unit) = TextView(this).apply {
+        text = label
+        textSize = 13f
+        gravity = Gravity.CENTER
+        setTextColor(accent)
+        typeface = Typeface.DEFAULT_BOLD
+        background = strokedRoundRect(theme.toolPillBg, dp(8), theme.toolPillBorder)
+        layoutParams = LinearLayout.LayoutParams(WRAP, dp(32)).also {
+            it.setMargins(0, 0, 0, 0)
+        }
+        setPadding(dp(10), 0, dp(10), 0)
+        setOnClickListener { action() }
+    }
+
+    private fun toolPillIcon(drawableRes: Int, action: () -> Unit) = ImageView(this).apply {
         setImageResource(drawableRes)
         setColorFilter(C_TOOLBAR_TXT, PorterDuff.Mode.SRC_IN)
         scaleType = ImageView.ScaleType.CENTER_INSIDE
-        layoutParams = LinearLayout.LayoutParams(dp(52), dp(40))
-        setPadding(dp(10), dp(6), dp(10), dp(6))
+        background = strokedRoundRect(theme.toolPillBg, dp(8), theme.toolPillBorder)
+        layoutParams = LinearLayout.LayoutParams(dp(32), dp(32))
+        setPadding(dp(7), dp(7), dp(7), dp(7))
         setOnClickListener { action() }
     }
 
+    private fun toolBtn(icon: String, action: () -> Unit) = toolPill(icon, C_TOOLBAR_TXT, action)
+
+    private fun toolBtnIcon(drawableRes: Int, action: () -> Unit) = toolPillIcon(drawableRes, action)
+
     private fun toolDivider() = View(this).apply {
-        setBackgroundColor(0x44FFFFFF)
-        layoutParams = LinearLayout.LayoutParams(dp(1), dp(22)).also { it.setMargins(dp(2),0,dp(2),0) }
+        setBackgroundColor(theme.ribbonBorder)
+        layoutParams = LinearLayout.LayoutParams(dp(1), dp(18)).also { it.setMargins(dp(2), 0, dp(2), 0) }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1344,7 +1415,7 @@ class MyKeyboardService : InputMethodService() {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(MATCH, WRAP)
             setBackgroundColor(C_BG)
-            setPadding(dp(4), dp(2), dp(4), dp(4))
+            setPadding(dp(2), dp(6), dp(2), dp(10))
         }
         rootLayout.addView(keysContainer)
         renderKeys()
@@ -1358,16 +1429,17 @@ class MyKeyboardService : InputMethodService() {
         rows.forEachIndexed { rowIdx, keys ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
-                layoutParams = LinearLayout.LayoutParams(MATCH, dp(64))
+                // Gboard-like tall rows (~62dp)
+                layoutParams = LinearLayout.LayoutParams(MATCH, dp(62))
                 gravity = Gravity.CENTER
-                setPadding(if (rowIdx == 1) dp(10) else dp(2), dp(2),
-                           if (rowIdx == 1) dp(10) else dp(2), dp(2))
+                val hPad = if (rowIdx == 1) dp(12) else dp(3)
+                setPadding(hPad, dp(2), hPad, dp(2))
             }
             keys.forEach { logical ->
                 val display = when {
                     isUpper && logical.length == 1 && logical[0].isLetter() -> logical.uppercase()
-                    logical == "SHIFT" && layer == Layer.CAPS -> "⬆"   // filled = caps lock
-                    logical == "SHIFT" -> "↑"                           // outline = shift
+                    logical == "SHIFT" && layer == Layer.CAPS -> "⬆"
+                    logical == "SHIFT" -> "↑"
                     logical == "BKSP"  -> "⌫"
                     logical == "ENTER" -> "⏎"
                     logical == "EMOJI" -> "😊"
@@ -1379,35 +1451,48 @@ class MyKeyboardService : InputMethodService() {
         }
     }
 
+    private fun spaceBarLabel(): String {
+        val lang = languages.firstOrNull { it.first == fromLang }?.second ?: "English"
+        return "$lang"
+    }
+
     private fun makeKey(logical: String, display: String, isTopRow: Boolean): View {
         val isLetter  = logical.length == 1 && logical[0].isLetter()
         val isSpace   = logical == "space"
         val isAction  = logical in listOf("SHIFT","BKSP","?123","ABC","ENTER","EMOJI","/",",",".")
         val isShiftOn = logical == "SHIFT" && (layer == Layer.SHIFT || layer == Layer.CAPS)
+        val isEnter   = logical == "ENTER"
 
         val bgColor = when {
-            isShiftOn -> C_PRIMARY
-            isSpace   -> C_KEY_LETTER
+            isEnter   -> theme.enterStart
+            isShiftOn -> theme.primary
+            isSpace   -> Color.parseColor(if (keyboardIsDark) "#182033" else "#FFFFFF")
             isAction  -> C_KEY_ACTION
             else      -> C_KEY_LETTER
         }
         val weight = when {
             isSpace  -> 4f
             logical in listOf("SHIFT","BKSP","?123","ABC") -> 1.5f
-            logical == "ENTER" -> 1.2f
+            logical == "ENTER" -> 1.35f
             else -> 1f
         }
 
         val wrapper = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(0, MATCH, weight)
-                .also { it.setMargins(dp(2), dp(2), dp(2), dp(2)) }
-            minimumHeight = dp(48)
+                .also { it.setMargins(dp(3), dp(3), dp(3), dp(3)) }
+            minimumHeight = dp(54)
         }
 
         val keyElevation = if (keyboardIsDark) dp(1).toFloat() else dp(2).toFloat()
+        val keyRadius = dp(8)
+        val keyBg = when {
+            isEnter -> enterKeyBackground()
+            else -> roundRect(bgColor, keyRadius)
+        }
+
         val keyView: View = if (isTopRow && isLetter) {
             FrameLayout(this).apply {
-                background = roundRect(bgColor, dp(8)); elevation = keyElevation
+                background = keyBg; elevation = keyElevation
                 layoutParams = FrameLayout.LayoutParams(MATCH, MATCH)
                 addView(TextView(this@MyKeyboardService).apply {
                     text = display; textSize = 22f; gravity = Gravity.CENTER
@@ -1416,25 +1501,32 @@ class MyKeyboardService : InputMethodService() {
                 })
                 addView(TextView(this@MyKeyboardService).apply {
                     text = topRowHints[logical] ?: ""
-                    textSize = 9f; setTextColor(C_HINT_TEXT)
+                    textSize = 10f; setTextColor(C_HINT_TEXT)
+                    typeface = Typeface.MONOSPACE
                     layoutParams = FrameLayout.LayoutParams(WRAP, WRAP, Gravity.TOP or Gravity.END)
-                        .also { it.setMargins(0, dp(3), dp(5), 0) }
+                        .also { it.setMargins(0, dp(3), dp(6), 0) }
                 })
             }
         } else {
             TextView(this).apply {
-                text = if (isSpace) "space" else display
+                text = if (isSpace) spaceBarLabel() else display
                 textSize = when {
-                    isSpace -> 13f
-                    logical in listOf("?123","ABC") -> 13f
-                    logical == "EMOJI" -> 20f
-                    logical in listOf("SHIFT","ENTER") -> 24f
-                    logical in listOf("BKSP") -> 22f
+                    isSpace -> 14f
+                    logical in listOf("?123","ABC") -> 14f
+                    logical == "EMOJI" -> 22f
+                    isEnter -> 24f
+                    logical in listOf("SHIFT","BKSP") -> 22f
                     else -> 22f
                 }
                 gravity = Gravity.CENTER
-                setTextColor(if (isShiftOn) Color.WHITE else C_KEY_TEXT)
-                background = roundRect(bgColor, dp(8)); elevation = keyElevation
+                setTextColor(
+                    when {
+                        isEnter || isShiftOn -> Color.WHITE
+                        isSpace -> C_HINT_TEXT
+                        else -> C_KEY_TEXT
+                    },
+                )
+                background = keyBg; elevation = keyElevation
                 layoutParams = FrameLayout.LayoutParams(MATCH, MATCH)
             }
         }
@@ -1957,32 +2049,53 @@ class MyKeyboardService : InputMethodService() {
         suggestionRow.removeAllViews()
         if (loading) {
             suggestionRow.addView(TextView(this).apply {
-                text = "…"
-                textSize = 15f
-                setTextColor(C_HINT_TEXT)
+                text = "✨ thinking…"
+                textSize = 12f
+                setTextColor(C_ACCENT_CYAN)
                 gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(4), 0, dp(4), 0)
             })
             return
         }
-        if (words.isEmpty()) return
+        if (words.isEmpty()) {
+            suggestionRow.addView(TextView(this).apply {
+                text = "✨ Easy suggestions"
+                textSize = 12f
+                setTextColor(C_HINT_TEXT)
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(4), 0, dp(4), 0)
+            })
+            return
+        }
         val partialLen = currentPartialWord.length
-        words.forEachIndexed { index, word ->
+        words.take(5).forEachIndexed { index, word ->
             if (index > 0) {
-                suggestionRow.addView(TextView(this).apply {
-                    text = "·"
-                    textSize = 15f
-                    setTextColor(C_HINT_TEXT)
-                    setPadding(dp(10), 0, dp(10), 0)
-                    gravity = Gravity.CENTER_VERTICAL
+                suggestionRow.addView(View(this).apply {
+                    setBackgroundColor(theme.suggestionDivider)
+                    layoutParams = LinearLayout.LayoutParams(dp(1), dp(12)).also {
+                        it.setMargins(dp(4), 0, dp(4), 0)
+                        it.gravity = Gravity.CENTER_VERTICAL
+                    }
                 })
             }
+            val isPrimary = index == 0
             suggestionRow.addView(TextView(this).apply {
-                text = word
-                textSize = 15f
-                setTextColor(if (index == 0) C_PRIMARY else C_KEY_TEXT)
-                typeface = if (index == 0) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(4), dp(2), dp(4), dp(2))
+                text = if (isPrimary) "✨ $word" else word
+                textSize = 13f
+                setTextColor(if (isPrimary) C_ACCENT_CYAN else C_KEY_TEXT)
+                typeface = if (isPrimary) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                gravity = Gravity.CENTER
+                if (isPrimary) {
+                    background = strokedRoundRect(
+                        theme.predictionChipBg,
+                        dp(8),
+                        theme.predictionChipBorder,
+                    )
+                    setPadding(dp(10), dp(4), dp(10), dp(4))
+                } else {
+                    setPadding(dp(8), dp(4), dp(8), dp(4))
+                }
+                layoutParams = LinearLayout.LayoutParams(WRAP, MATCH)
                 setOnClickListener { applySuggestionWord(word, partialLen) }
             })
         }
@@ -2100,7 +2213,10 @@ class MyKeyboardService : InputMethodService() {
         if (::suggestionToolbarDivider.isInitialized) {
             suggestionToolbarDivider.setBackgroundColor(theme.suggestionDivider)
         }
-        if (::featureToolbar.isInitialized) featureToolbar.setBackgroundColor(C_TOOLBAR_BG)
+        if (::featureToolbar.isInitialized) {
+            featureToolbar.setBackgroundColor(C_TOOLBAR_BG)
+            populateFeatureToolbar()
+        }
         if (::keysContainer.isInitialized) {
             keysContainer.setBackgroundColor(C_BG)
             renderKeys()
@@ -2112,6 +2228,7 @@ class MyKeyboardService : InputMethodService() {
             settingsPanel.setBackgroundColor(theme.settingsBg)
             if (showSettings) renderSettingsPanel()
         }
+        if (::suggestionRow.isInitialized) updateSuggestions()
     }
 
     // ─────────────────────────────────────────────────────────────────────────
