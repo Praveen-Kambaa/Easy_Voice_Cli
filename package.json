@@ -3,13 +3,14 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "android": "react-native run-android",
+    "android": "adb reverse tcp:8081 tcp:8081 && react-native run-android --port 8081",
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "postinstall": "patch-package",
-    "start": "react-native start --host 0.0.0.0",
+    "start": "react-native start --host 0.0.0.0 --port 8081",
     "start:usb": "bash scripts/ios-usb-metro.sh",
-    "start:android:usb": "bash scripts/android-usb-metro.sh",
+    "start:android:usb": "powershell -ExecutionPolicy Bypass -File scripts/android-usb-metro.ps1",
+    "log:android": "powershell -ExecutionPolicy Bypass -File scripts/log-android.ps1",
     "test": "jest"
   },
   "dependencies": {

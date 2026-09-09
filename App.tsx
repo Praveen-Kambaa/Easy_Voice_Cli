@@ -25,6 +25,7 @@ import {
 } from './src/services/floatingMicConfig';
 import { initVoiceReminderNotifications } from './src/services/voiceReminderService';
 import RequiredPermissionsGate from './src/components/RequiredPermissionsGate';
+import { ErrorBoundary } from './src/utils/errorHandler';
 
 function FloatingMicNativeSync() {
   useEffect(() => {
@@ -61,17 +62,19 @@ function App() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <RequiredPermissionsGate>
-          <AuthProvider>
-            <AlertProvider>
-              <AppNavigation />
-            </AlertProvider>
-          </AuthProvider>
-        </RequiredPermissionsGate>
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <RequiredPermissionsGate>
+            <AuthProvider>
+              <AlertProvider>
+                <AppNavigation />
+              </AlertProvider>
+            </AuthProvider>
+          </RequiredPermissionsGate>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
 

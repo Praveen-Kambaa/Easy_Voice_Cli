@@ -6,7 +6,6 @@ import { apiUtils } from './apiClient';
 import { VOICE_ENDPOINTS } from './endpoints';
 import { buildEasyVoiceUrl } from '../config/api';
 import { apiFetch } from './httpClient';
-import logger from '../utils/logger';
 
 const createResponse = (success = false, data = null, error = null) => ({ success, data, error });
 
@@ -79,7 +78,6 @@ const uploadAudio = async (filePath, options = {}) => {
       },
       180000,
     );
-
     return createResponse(true, responseData);
   } catch (error) {
     if (error.name === 'AbortError') {
@@ -268,8 +266,11 @@ export const executeVoiceCommand = async (voiceAssetId, options = {}) => {
     if (apiUtils.isCancel(error)) {
       return createResponse(false, null, 'Execution was cancelled');
     }
-    logger.error('executeVoiceCommand failed', error.message);
-    return createResponse(false, null, error.message || 'Failed to execute voice command');
+    return createResponse(
+      false,
+      null,
+      error.message || error.response?.data?.message || 'Failed to execute voice command',
+    );
   }
 };
 

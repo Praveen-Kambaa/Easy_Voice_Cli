@@ -157,6 +157,35 @@ android {
     }
 }
 
+// Release APKs crash with "Unable to load script" if mergeReleaseAssets runs
+// before BundleHermesCTask finishes writing index.android.bundle.
+def releaseJsBundleDir = file("$buildDir/generated/assets/react/release")
+tasks.configureEach { task ->
+    if (task.name == "mergeReleaseAssets" || task.name == "generateReleaseAssets") {
+        task.dependsOn("createBundleReleaseJsAndAssets")
+    }
+    if (task.name == "mergeReleaseAssets") {
+        task.doLast {
+            def src = new File(releaseJsBundleDir, "index.android.bundle")
+            if (!src.exists() || src.length() < 1024) {
+                throw new GradleException(
+                    "Release JS bundle missing at ${src}. The APK would crash with 'Unable to load script'."
+                )
+            }
+            def mergedDir = file("$buildDir/intermediates/assets/release/mergeReleaseAssets")
+            mergedDir.mkdirs()
+            def dest = new File(mergedDir, "index.android.bundle")
+            if (!dest.exists() || dest.length() != src.length()) {
+                java.nio.file.Files.copy(
+                    src.toPath(),
+                    dest.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                )
+            }
+        }
+    }
+}
+
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")

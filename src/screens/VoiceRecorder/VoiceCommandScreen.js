@@ -876,7 +876,7 @@ const VoiceCommandScreen = ({ navigation }) => {
 
               <>
 
-                <Text style={styles.editLabel}>Edit Transcript</Text>
+                <Text style={styles.editLabel}>Edit Transcripsssts</Text>
 
                 <TextInput
 

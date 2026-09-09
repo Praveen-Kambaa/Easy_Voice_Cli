@@ -26,57 +26,83 @@ const formatArgs = (args) =>
     })
     .join(' ');
 
+/** Always console.log so LogBox does not spam Metro /symbolicate on API errors. */
+const writeLine = (line) => {
+  // eslint-disable-next-line no-console
+  console.log(line);
+};
+
 const write = (level, tag, args) => {
   if (!enabled || LEVELS[level] < minLevel) return;
   const prefix = tag ? `[${tag}]` : '[App]';
   const line = `${prefix} ${formatArgs(args)}`;
-  switch (level) {
-    case 'error':
-      // eslint-disable-next-line no-console
-      console.error(line);
-      break;
-    case 'warn':
-      // eslint-disable-next-line no-console
-      console.warn(line);
-      break;
-    case 'info':
-      // eslint-disable-next-line no-console
-      console.info(line);
-      break;
-    default:
-      // eslint-disable-next-line no-console
-      console.log(line);
+  if (level === 'error') {
+    // eslint-disable-next-line no-console
+    console.error(line);
+    return;
   }
+  if (level === 'warn') {
+    // eslint-disable-next-line no-console
+    console.warn(line);
+    return;
+  }
+  writeLine(line);
+};
+
+const truncate = (s, max = 4000) => {
+  if (s == null) return s;
+  const str = String(s);
+  return str.length > max ? `${str.slice(0, max)}…` : str;
 };
 
 const redactBody = (body) => {
-  if (body == null) return body;
+  if (body == null) return '(none)';
   if (typeof FormData !== 'undefined' && body instanceof FormData) {
     return '[FormData]';
   }
   if (typeof body === 'string') {
-    return body.length > 2000 ? `${body.slice(0, 2000)}…` : body;
+    try {
+      return truncate(JSON.stringify(JSON.parse(body), null, 2));
+    } catch {
+      return truncate(body);
+    }
   }
   try {
-    const s = JSON.stringify(body);
-    return s.length > 2000 ? `${s.slice(0, 2000)}…` : s;
+    return truncate(JSON.stringify(body, null, 2));
   } catch {
     return '[object]';
   }
 };
 
 const redactResponse = (data) => {
-  if (data == null) return data;
+  if (data == null) return '(empty)';
   if (typeof data === 'string') {
-    return data.length > 2000 ? `${data.slice(0, 2000)}…` : data;
+    try {
+      return truncate(JSON.stringify(JSON.parse(data), null, 2));
+    } catch {
+      return truncate(data);
+    }
   }
   try {
-    const s = JSON.stringify(data);
-    return s.length > 2000 ? `${s.slice(0, 2000)}…` : s;
+    return truncate(JSON.stringify(data, null, 2));
   } catch {
     return '[object]';
   }
 };
+
+/** Skip Metro / DevTools traffic so log:android stays readable. */
+export function isInternalDevUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  return (
+    url.includes('/symbolicate') ||
+    url.includes('/message?') ||
+    url.includes('/inspector') ||
+    url.includes('localhost:8081') ||
+    url.includes('localhost:8082') ||
+    url.includes('127.0.0.1:8081') ||
+    url.includes('127.0.0.1:8082')
+  );
+}
 
 const apiCallHistory = [];
 const MAX_API_HISTORY = 100;
@@ -86,6 +112,15 @@ function pushApiHistory(entry) {
   if (apiCallHistory.length > MAX_API_HISTORY) {
     apiCallHistory.shift();
   }
+}
+
+function logApiBlock(title, lines) {
+  if (!enabled || !API_LOGGING_ENABLED) return;
+  writeLine(`──────── ${title} ────────`);
+  for (const line of lines) {
+    writeLine(line);
+  }
+  writeLine('────────────────────────────');
 }
 
 export const logger = {
@@ -120,58 +155,66 @@ export const logger = {
 
   apiRequest(method, url, body, meta) {
     if (!enabled || !API_LOGGING_ENABLED) return;
+    if (isInternalDevUrl(url)) return;
+    const methodUp = method?.toUpperCase?.() || method || 'GET';
     pushApiHistory({
       type: 'request',
       at: new Date().toISOString(),
-      method: method?.toUpperCase?.() || method,
+      method: methodUp,
       url,
     });
-    write('info', 'API →', [
-      method?.toUpperCase?.() || method,
-      url,
-      body != null ? redactBody(body) : '',
-      meta || '',
-    ]);
+    logApiBlock('API REQUEST', [
+      `METHOD : ${methodUp}`,
+      `URL    : ${url}`,
+      `PAYLOAD: ${redactBody(body)}`,
+      meta ? `META   : ${formatArgs([meta])}` : null,
+    ].filter(Boolean));
   },
 
   apiResponse(method, url, status, data, durationMs) {
     if (!enabled || !API_LOGGING_ENABLED) return;
+    if (isInternalDevUrl(url)) return;
+    const methodUp = method?.toUpperCase?.() || method || 'GET';
     pushApiHistory({
       type: 'response',
       at: new Date().toISOString(),
-      method: method?.toUpperCase?.() || method,
+      method: methodUp,
       url,
       status,
       durationMs,
     });
-    write('info', 'API ←', [
-      method?.toUpperCase?.() || method,
-      url,
-      status,
-      `${durationMs ?? '?'}ms`,
-      redactResponse(data),
+    logApiBlock('API RESPONSE', [
+      `METHOD  : ${methodUp}`,
+      `URL     : ${url}`,
+      `STATUS  : ${status}`,
+      `DURATION: ${durationMs ?? '?'}ms`,
+      `BODY    : ${redactResponse(data)}`,
     ]);
   },
 
   apiError(method, url, err, durationMs) {
     if (!enabled || !API_LOGGING_ENABLED) return;
+    if (isInternalDevUrl(url)) return;
+    const methodUp = method?.toUpperCase?.() || method || '?';
     const status = err?.response?.status ?? err?.status ?? err?.statusCode;
     const message = err?.message || err?.response?.data?.message || String(err);
+    const responseBody = err?.response?.data ?? err?.data ?? null;
     pushApiHistory({
       type: 'error',
       at: new Date().toISOString(),
-      method: method?.toUpperCase?.() || method,
+      method: methodUp,
       url,
       status: status || 'network',
       message,
       durationMs,
     });
-    write('error', 'API ✕', [
-      method?.toUpperCase?.() || method,
-      url,
-      status || 'network',
-      `${durationMs ?? '?'}ms`,
-      message,
+    logApiBlock('API ERROR', [
+      `METHOD  : ${methodUp}`,
+      `URL     : ${url}`,
+      `STATUS  : ${status || 'network'}`,
+      `DURATION: ${durationMs ?? '?'}ms`,
+      `MESSAGE : ${message}`,
+      `BODY    : ${redactResponse(responseBody)}`,
     ]);
   },
 };

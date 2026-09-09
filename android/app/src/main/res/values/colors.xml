@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches JS splash / permissions gate; avoids white blank while Metro loads. -->
+    <color name="app_window_background">#000000</color>
+</resources>

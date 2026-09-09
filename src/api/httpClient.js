@@ -1,7 +1,7 @@
 /**
  * Logged fetch — wraps global fetch for API tracking + timeout support.
  */
-import logger, { API_LOGGING_ENABLED } from '../utils/logger';
+import logger, { API_LOGGING_ENABLED, isInternalDevUrl } from '../utils/logger';
 
 export const originalFetch = global.fetch.bind(global);
 
@@ -33,12 +33,12 @@ export function installGlobalFetchLogger() {
   fetchLoggerInstalled = true;
 
   global.fetch = async (url, options = {}) => {
-    if (!logger.isApiLoggingEnabled()) {
+    const urlStr = urlToString(url);
+    if (!logger.isApiLoggingEnabled() || isInternalDevUrl(urlStr)) {
       return originalFetch(url, options);
     }
 
     const method = options.method || 'GET';
-    const urlStr = urlToString(url);
     const started = Date.now();
     logger.apiRequest(method, urlStr, options.body);
 
@@ -46,7 +46,16 @@ export function installGlobalFetchLogger() {
       const response = await originalFetch(url, options);
       const durationMs = Date.now() - started;
       const preview = await readResponsePreview(response);
-      logger.apiResponse(method, urlStr, response.status, preview, durationMs);
+      if (response.ok) {
+        logger.apiResponse(method, urlStr, response.status, preview, durationMs);
+      } else {
+        logger.apiError(
+          method,
+          urlStr,
+          { message: `HTTP ${response.status}`, status: response.status, response: { status: response.status, data: preview } },
+          durationMs,
+        );
+      }
       return response;
     } catch (error) {
       logger.apiError(method, urlStr, error, Date.now() - started);
@@ -62,11 +71,17 @@ export function initHttpClient() {
 }
 
 /**
- * Fetch with timeout. Uses originalFetch (global patch logs the call once).
+ * Fetch with timeout. Logs URL / payload / response (does not use global.fetch
+ * patch, so logging is done here explicitly).
  */
 export async function apiFetch(url, options = {}, timeoutMs = 120000) {
   const method = options.method || 'GET';
   const started = Date.now();
+  const shouldLog = logger.isApiLoggingEnabled() && !isInternalDevUrl(url);
+
+  if (shouldLog) {
+    logger.apiRequest(method, url, options.body);
+  }
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -90,21 +105,34 @@ export async function apiFetch(url, options = {}, timeoutMs = 120000) {
         message:
           (typeof data === 'object' && (data?.message || data?.error)) ||
           `HTTP ${response.status}`,
+        status: response.status,
         response: { status: response.status, data },
       };
-      if (!logger.isApiLoggingEnabled()) {
+      if (shouldLog) {
         logger.apiError(method, url, err, durationMs);
       }
       throw err;
     }
 
+    if (shouldLog) {
+      logger.apiResponse(method, url, response.status, data, durationMs);
+    }
+
     return data;
   } catch (error) {
-    if (!logger.isApiLoggingEnabled()) {
-      const durationMs = Date.now() - started;
+    if (error?.response || error?.status) {
+      // already logged above for HTTP errors
+      if (error?.name === 'AbortError') {
+        throw { message: 'Request timed out', name: 'AbortError' };
+      }
+      throw error;
+    }
+
+    const durationMs = Date.now() - started;
+    if (shouldLog) {
       if (error?.name === 'AbortError') {
         logger.apiError(method, url, { message: 'Request timed out', name: 'AbortError' }, durationMs);
-      } else if (!error?.response) {
+      } else {
         logger.apiError(method, url, error, durationMs);
       }
     }
