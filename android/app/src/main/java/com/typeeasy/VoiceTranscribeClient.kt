@@ -1,11 +1,14 @@
 package com.typeeasy
 
+import android.content.Context
 import android.util.Log
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -253,6 +256,179 @@ object VoiceTranscribeClient {
             )
         } catch (_: Exception) {
             ""
+        }
+    }
+
+    // ─────────────── Groq-Aware Entry Points ───────────────
+
+    private fun getAiEngine(context: Context): String =
+        context.getSharedPreferences("TypeEasyPrefs", Context.MODE_PRIVATE)
+            .getString("ai_engine_provider", "default") ?: "default"
+
+    private fun getGroqMimeType(file: File): String = when (file.extension.lowercase()) {
+        "m4a", "mp4" -> "audio/mp4"
+        "aac" -> "audio/aac"
+        "mp3" -> "audio/mpeg"
+        "wav" -> "audio/wav"
+        else -> "audio/mp4"
+    }
+
+    /**
+     * Groq Whisper transcription: POST to /audio/transcriptions
+     */
+    private fun transcribeWithGroq(audioFile: File): Result<String> {
+        val apiKey = com.typeeasy.generated.ApiConfig.GROQ_API_KEY
+        val baseUrl = com.typeeasy.generated.ApiConfig.GROQ_BASE_URL.trimEnd('/')
+        val model = com.typeeasy.generated.ApiConfig.GROQ_STT_MODEL
+        return try {
+            val mediaType = getGroqMimeType(audioFile).toMediaType()
+            val multipart = MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("file", audioFile.name, audioFile.asRequestBody(mediaType))
+                .addFormDataPart("model", model)
+                .addFormDataPart("response_format", "json")
+                .build()
+            val request = Request.Builder()
+                .url("$baseUrl/audio/transcriptions")
+                .post(multipart)
+                .header("Authorization", "Bearer $apiKey")
+                .build()
+            val response = client.newCall(request).execute()
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                return Result.failure(IllegalStateException("Groq STT error ${response.code}: $body"))
+            }
+            val text = JSONObject(body).optString("text").trim()
+            if (text.isBlank()) Result.failure(IllegalStateException("Groq returned empty transcript"))
+            else Result.success(text)
+        } catch (e: Exception) {
+            Log.e(TAG, "transcribeWithGroq failed", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Groq translation pipeline: POST /audio/translations (always English), then optionally chain
+     * a chat completion if targetLanguage != "en".
+     */
+    private fun translateSpeechWithGroq(audioFile: File, targetLanguage: String): Result<String> {
+        val apiKey = com.typeeasy.generated.ApiConfig.GROQ_API_KEY
+        val baseUrl = com.typeeasy.generated.ApiConfig.GROQ_BASE_URL.trimEnd('/')
+        val fastModel = com.typeeasy.generated.ApiConfig.GROQ_FAST_LLM_MODEL
+        return try {
+            val mediaType = getGroqMimeType(audioFile).toMediaType()
+            val multipart = MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("file", audioFile.name, audioFile.asRequestBody(mediaType))
+                .addFormDataPart("model", "whisper-large-v3")
+                .addFormDataPart("response_format", "json")
+                .build()
+            val request = Request.Builder()
+                .url("$baseUrl/audio/translations")
+                .post(multipart)
+                .header("Authorization", "Bearer $apiKey")
+                .build()
+            val response = client.newCall(request).execute()
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                return Result.failure(IllegalStateException("Groq translate error ${response.code}: $body"))
+            }
+            val englishText = JSONObject(body).optString("text").trim()
+            val normTarget = targetLanguage.split("-", "_")[0].lowercase()
+            if (normTarget == "en" || englishText.isBlank()) return Result.success(englishText)
+
+            // Chain chat completion for non-English target
+            val chatBody = JSONObject().apply {
+                put("model", fastModel)
+                put("temperature", 0.2)
+                if (fastModel.contains("gpt-oss")) {
+                    put("reasoning_effort", "low")
+                }
+                put("messages", JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("role", "system")
+                        put("content", "Translate the user text to $targetLanguage. Return ONLY the translated text.")
+                    })
+                    put(JSONObject().apply {
+                        put("role", "user")
+                        put("content", englishText)
+                    })
+                })
+            }.toString()
+            val chatReq = Request.Builder()
+                .url("$baseUrl/chat/completions")
+                .post(chatBody.toRequestBody("application/json".toMediaType()))
+                .header("Authorization", "Bearer $apiKey")
+                .header("Content-Type", "application/json")
+                .build()
+            val chatResp = client.newCall(chatReq).execute()
+            val chatRespBody = chatResp.body?.string().orEmpty()
+            val translated = JSONObject(chatRespBody)
+                .optJSONArray("choices")
+                ?.optJSONObject(0)
+                ?.optJSONObject("message")
+                ?.optString("content")
+                ?.trim() ?: englishText
+            Result.success(translated)
+        } catch (e: Exception) {
+            Log.e(TAG, "translateSpeechWithGroq failed", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Context-aware transcription: routes to Groq if engine == "groq".
+     */
+    fun transcribeFileContextAware(
+        context: Context,
+        defaultBaseUrl: String,
+        audioFile: File,
+        language: String = "en-US",
+    ): Result<String> {
+        return if (getAiEngine(context) == "groq") {
+            transcribeWithGroq(audioFile)
+        } else {
+            transcribeFile(defaultBaseUrl, audioFile, language)
+        }
+    }
+
+    /**
+     * Context-aware full transcription (with TranscribeResult): routes to Groq if engine == "groq".
+     */
+    fun transcribeFileFullContextAware(
+        context: Context,
+        defaultBaseUrl: String,
+        audioFile: File,
+        language: String = "en-US",
+    ): Result<TranscribeResult> {
+        return if (getAiEngine(context) == "groq") {
+            transcribeWithGroq(audioFile).map { text ->
+                TranscribeResult(
+                    transcript = text,
+                    rawTranscript = text,
+                    voiceAssetId = "groq-" + System.currentTimeMillis(),
+                )
+            }
+        } else {
+            transcribeFileFull(defaultBaseUrl, audioFile, language)
+        }
+    }
+
+    /**
+     * Context-aware speech translate: routes to Groq if engine == "groq".
+     */
+    fun translateSpeechFileContextAware(
+        context: Context,
+        defaultBaseUrl: String,
+        defaultPath: String,
+        audioFile: File,
+        sourceLanguage: String,
+        targetLanguage: String,
+    ): Result<String> {
+        return if (getAiEngine(context) == "groq") {
+            translateSpeechWithGroq(audioFile, targetLanguage)
+        } else {
+            translateSpeechFile(defaultBaseUrl, defaultPath, audioFile, sourceLanguage, targetLanguage)
         }
     }
 }

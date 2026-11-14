@@ -324,23 +324,11 @@ class NativeAudioService {
   }
 
   async pausePlayback() {
-    try {
-      // Not implemented in native module
-      return { success: false, error: 'Pause not supported' };
-    } catch (error) {
-      logger.error('[NativeAudioService] pausePlayback error:', error);
-      return { success: false, error: error.message };
-    }
+    return { success: false, error: 'Pause not supported' };
   }
 
   async resumePlayback() {
-    try {
-      // Not implemented in native module
-      return { success: false, error: 'Resume not supported' };
-    } catch (error) {
-      logger.error('[NativeAudioService] resumePlayback error:', error);
-      return { success: false, error: error.message };
-    }
+    return { success: false, error: 'Resume not supported' };
   }
 
   async saveRecording(recording) {

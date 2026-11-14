@@ -33,6 +33,17 @@ task generateApiConfig {
         def translate    = (js =~ /TRANSLATE\s*:\s*['"]([^'"]+)['"]/)[0][1]
         def grammarCheck = (js =~ /GRAMMAR_CHECK\s*:\s*['"]([^'"]+)['"]/)[0][1]
 
+        // Extract Groq config
+        def groqBaseUrlMatch = (js =~ /BASE_URL\s*:\s*['"]([^'"]+)['"]/)
+        def groqApiKeyMatch = (js =~ /API_KEY\s*:\s*['"]([^'"]+)['"]/)
+        def groqSttModelMatch = (js =~ /STT_MODEL\s*:\s*['"]([^'"]+)['"]/)
+        def groqFastLlmModelMatch = (js =~ /FAST_LLM_MODEL\s*:\s*['"]([^'"]+)['"]/)
+
+        def groqBaseUrl = groqBaseUrlMatch.find() ? groqBaseUrlMatch[0][1] : "https://api.groq.com/openai/v1"
+        def groqApiKey = groqApiKeyMatch.find() ? groqApiKeyMatch[0][1] : ""
+        def groqSttModel = groqSttModelMatch.find() ? groqSttModelMatch[0][1] : "whisper-large-v3-turbo"
+        def groqFastLlmModel = groqFastLlmModelMatch.find() ? groqFastLlmModelMatch[0][1] : "llama-3.1-8b-instant"
+
         outDir.mkdirs()
         outFile.text = """\
 package com.typeeasy.generated
@@ -54,6 +65,18 @@ object ApiConfig {
         const val GRAMMAR_CHECK = "$grammarCheck"
     }
 
+    const val GROQ_BASE_URL       = "$groqBaseUrl"
+    const val GROQ_API_KEY        = "$groqApiKey"
+    const val GROQ_STT_MODEL      = "$groqSttModel"
+    const val GROQ_FAST_LLM_MODEL = "$groqFastLlmModel"
+
+    object Groq {
+        const val BASE_URL       = "$groqBaseUrl"
+        const val API_KEY        = "$groqApiKey"
+        const val STT_MODEL      = "$groqSttModel"
+        const val FAST_LLM_MODEL = "$groqFastLlmModel"
+    }
+
     fun typeEasyUrl(endpoint: String)  = "\${Servers.TYPE_EASY}\$endpoint"
     fun easyVoiceUrl(endpoint: String) = "\${Servers.EASY_VOICE}\$endpoint"
 }
@@ -63,6 +86,7 @@ object ApiConfig {
         println "  EASY_VOICE = $easyVoice"
         println "  TRANSLATE  = $translate"
         println "  GRAMMAR_CHECK = $grammarCheck"
+        println "  GROQ_BASE_URL = $groqBaseUrl"
     }
 }
 

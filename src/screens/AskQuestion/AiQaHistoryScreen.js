@@ -17,8 +17,8 @@ import { formatDateTime } from '../../utils/dateTimeFormat';
 import { useAlert } from '../../context/AlertContext';
 
 const AiQaHistoryScreen = () => {
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
 
   const navigation = useNavigation();
@@ -128,7 +128,7 @@ const AiQaHistoryScreen = () => {
   );
 };
 
-function createStyles(colors) {
+function createStyles(colors, isDark) {
   return StyleSheet.create({
   screen: {
     backgroundColor: colors.backgroundAlt,
@@ -178,8 +178,8 @@ function createStyles(colors) {
     justifyContent: 'center',
   },
   iconBtnActive: {
-    backgroundColor: 'rgba(30, 136, 255, 0.10)',
-    borderColor: 'rgba(30, 136, 255, 0.18)',
+    backgroundColor: colors.primaryMuted,
+    borderColor: isDark ? 'rgba(0, 229, 146, 0.25)' : 'rgba(30, 136, 255, 0.25)',
   },
   iconBtnDanger: {
     width: 34,
@@ -187,7 +187,7 @@ function createStyles(colors) {
     borderRadius: 12,
     backgroundColor: colors.recording.activeBg,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: colors.status.blockedBg,
     alignItems: 'center',
     justifyContent: 'center',
   },

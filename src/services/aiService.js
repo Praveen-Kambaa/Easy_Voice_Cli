@@ -4,6 +4,8 @@ import {
   AI_PROVIDER_API_KEY,
 } from '../config/aiProvider';
 import { transcribeBySettings } from './transcribeService';
+import { getAiEngineProvider } from './aiEngineConfig';
+import { askAiWithGroq } from './groqService';
 import { fetchLiveContext } from './liveContextService';
 
 /**
@@ -19,6 +21,16 @@ export async function askQuestion(question) {
   const q = (question ?? '').trim();
   if (!q) {
     return { success: false, error: 'Empty question' };
+  }
+
+  const aiEngine = await getAiEngineProvider();
+  if (aiEngine === 'groq') {
+    try {
+      const res = await askAiWithGroq(q);
+      return { success: true, answer: res.answer };
+    } catch (e) {
+      return { success: false, error: e.message || 'Groq AI request failed' };
+    }
   }
 
   const apiKey = (AI_PROVIDER_API_KEY ?? '').trim();

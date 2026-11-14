@@ -35,12 +35,12 @@ const navigationDark = {
   ...DarkTheme,
   colors: {
     ...DarkTheme.colors,
-    primary: '#1E88FF',
+    primary: '#00E592',
     background: '#121820',
     card: '#1A222D',
     text: '#F1F5F9',
     border: '#2A3441',
-    notification: '#1E88FF',
+    notification: '#00E592',
   },
 };
 

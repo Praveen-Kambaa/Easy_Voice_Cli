@@ -90,6 +90,7 @@ export async function executeEditedVoiceCommand(
   logger.info('Voice command: execute', { voiceAssetId: assetId });
   const executeResult = await executeVoiceCommand(assetId, {
     executeAt: new Date().toISOString(),
+    transcript: editedText || originalTranscript,
   });
   if (!executeResult.success) {
     logger.error('Voice command execute failed', executeResult.error);

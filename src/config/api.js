@@ -9,6 +9,24 @@ export const API_SERVERS = {
   EASY_VOICE: 'https://easy-voice-api.kambaaincorporation.in/api',
 };
 
+export const GROQ_CONFIG = {
+  BASE_URL: 'https://api.groq.com/openai/v1',
+  API_KEY: 'PASTE_YOUR_GROQ_API_KEY_HERE',
+  STT_MODEL: 'whisper-large-v3-turbo',
+  TRANSLATE_AUDIO_MODEL: 'whisper-large-v3',
+  FAST_LLM_MODEL: 'openai/gpt-oss-20b',     // 30 RPM, 1K RPD — best for Grammar Check & Keyboard
+  SMART_LLM_MODEL: 'qwen/qwen3.8-27b',      // 30 RPM, 1K RPD — great multilingual quality for Tamil/English Translation & Ask AI (or use 'openai/gpt-oss-120b')
+};
+
+// export const GROQ_CONFIG = {
+//   BASE_URL: 'https://api.groq.com/openai/v1',
+//   API_KEY: 'PASTE_YOUR_GROQ_API_KEY_HERE',
+//   STT_MODEL: 'whisper-large-v3-turbo',
+//   TRANSLATE_AUDIO_MODEL: 'whisper-large-v3',
+//   FAST_LLM_MODEL: 'llama-3.1-8b-instant',
+//   SMART_LLM_MODEL: 'meta-llama/llama-4-scout-17b-16e-instruct', // replace with an active ID from /v1/models
+// };
+
 export const API_ENDPOINTS = {
   TRANSLATE: '/translate',
   GRAMMAR_CHECK: '/grammar-check',

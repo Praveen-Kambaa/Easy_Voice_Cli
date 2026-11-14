@@ -4,28 +4,43 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  FlatList,
   Platform,
   ScrollView,
   TextInput,
   ActivityIndicator,
   RefreshControl,
-  useWindowDimensions,
+  Switch,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Mic, Square, Play, Trash2, Calendar, Clock, Pause, Pencil } from 'lucide-react-native';
+import {
+  Mic,
+  Square,
+  Play,
+  Pause,
+  Trash2,
+  Calendar,
+  Clock,
+  Pencil,
+  Lightbulb,
+  Music2,
+  Check,
+  CheckCircle2,
+  Bell,
+  Repeat,
+  Volume2,
+  User,
+} from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
-import { PrimaryButton } from '../../components/common/PrimaryButton';
-import { AppCard } from '../../components/common/AppCard';
 import { useTheme } from '../../context/ThemeContext';
 import NativeAudioService from '../../services/NativeAudioService';
 import { useAlert } from '../../context/AlertContext';
-import { formatDateTime, formatCompactDateTime } from '../../utils/dateTimeFormat';
+import { formatCompactDateTime } from '../../utils/dateTimeFormat';
 import { parseReminderFromTranscript } from '../../utils/parseSpokenDateTime';
 import { transcribeBySettings } from '../../services/transcribeService';
+import { getAiEngineProvider } from '../../services/aiEngineConfig';
+import { transcribeWithGroq } from '../../services/groqService';
 import {
   addVoiceReminder,
   loadReminders,
@@ -40,31 +55,14 @@ function addMinutes(d, m) {
   return x;
 }
 
-function mergeDatePart(base, picked) {
-  return new Date(
-    picked.getFullYear(),
-    picked.getMonth(),
-    picked.getDate(),
-    base.getHours(),
-    base.getMinutes(),
-    0,
-    0,
-  );
-}
-
-function mergeTimePart(base, picked) {
-  return new Date(
-    base.getFullYear(),
-    base.getMonth(),
-    base.getDate(),
-    picked.getHours(),
-    picked.getMinutes(),
-    0,
-    0,
-  );
-}
-
 async function transcribeForReminder(filePath) {
+  const aiEngine = await getAiEngineProvider();
+  if (aiEngine === 'groq') {
+    const groqRes = await transcribeWithGroq(filePath, 'en');
+    const t = groqRes?.refinedTranscript || groqRes?.rawTranscript || groqRes?.transcript;
+    if (t && String(t).trim()) return String(t).trim();
+    throw new Error('Groq transcription returned empty text');
+  }
   const result = await transcribeBySettings(filePath, {
     language: 'en-US',
     enablePunctuation: true,
@@ -79,11 +77,9 @@ async function transcribeForReminder(filePath) {
   throw new Error(result.error || 'Transcription failed');
 }
 
-function VoiceRemindersScreen() {
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-  const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
+function VoiceRemindersScreen({ navigation }) {
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   const showAlert = useAlert();
 
   const [isRecording, setIsRecording] = useState(false);
@@ -93,6 +89,7 @@ function VoiceRemindersScreen() {
   const [activePlayback, setActivePlayback] = useState(null);
   const [saving, setSaving] = useState(false);
   const [reminders, setReminders] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -100,50 +97,52 @@ function VoiceRemindersScreen() {
   const [parseHint, setParseHint] = useState(null);
   const [parseError, setParseError] = useState(null);
 
-  /** Expanded editor for transcript + time (optional) */
+  const [scheduledAt, setScheduledAt] = useState(() => addMinutes(new Date(), 30));
+  const [picker, setPicker] = useState(null);
   const [editing, setEditing] = useState(false);
 
-  const [scheduledAt, setScheduledAt] = useState(() => addMinutes(new Date(), 5));
-  const [picker, setPicker] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [nowTick, setNowTick] = useState(() => Date.now());
+  // Full Volume Alarm switch state
+  const [fullVolumeMode, setFullVolumeMode] = useState(true);
 
-  /** Bumped on blur / pull-refresh so in-flight transcription cannot repopulate a cleared draft. */
+  const timerRef = useRef(null);
+  const startMsRef = useRef(0);
   const draftEpochRef = useRef(0);
-  /** After user picks date/time in Edit, don't overwrite from transcript on blur/Done. Cleared when transcript text changes or new recording. */
   const timePickedManuallyRef = useRef(false);
 
-  const recordingStart = useRef(null);
-  const durationTimer = useRef(null);
-
   const refresh = useCallback(async () => {
-    const list = await loadReminders();
-    list.sort((a, b) => {
-      const ca = new Date(a.createdAt || a.scheduledAt).getTime();
-      const cb = new Date(b.createdAt || b.scheduledAt).getTime();
-      return cb - ca;
-    });
-    setReminders(list);
-  }, []);
-
-  const applyParseFromText = useCallback((text, options = {}) => {
-    const updateScheduledTime = options.updateScheduledTime !== false;
-    const pr = parseReminderFromTranscript(text);
-    setParseError(pr.error);
-    setParseHint(pr.hint);
-    const applyTime =
-      updateScheduledTime && !timePickedManuallyRef.current && pr.date;
-    if (applyTime) {
-      setScheduledAt(pr.date);
+    try {
+      const list = await loadReminders();
+      setReminders(list);
+    } catch {
+      // ignore
     }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      initVoiceReminderNotifications().catch(() => {});
+      refresh();
+    }, [refresh]),
+  );
+
+  useEffect(() => {
+    if (isRecording) {
+      startMsRef.current = Date.now();
+      timerRef.current = setInterval(() => {
+        setDuration(Math.floor((Date.now() - startMsRef.current) / 1000));
+      }, 250);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isRecording]);
 
   const resetDraft = useCallback(() => {
     draftEpochRef.current += 1;
     timePickedManuallyRef.current = false;
-    NativeAudioService.stopPlayback().catch(() => {});
-    NativeAudioService.forceCleanup().catch(() => {});
-    setActivePlayback(null);
     setPendingPath('');
     setPendingMeta(null);
     setTranscript('');
@@ -151,48 +150,36 @@ function VoiceRemindersScreen() {
     setParseHint(null);
     setParseError(null);
     setEditing(false);
-    setIsRecording(false);
-    setIsTranscribing(false);
     setDuration(0);
-    setScheduledAt(addMinutes(new Date(), 5));
-    setPicker(null);
-    setSaving(false);
+    setScheduledAt(addMinutes(new Date(), 30));
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      initVoiceReminderNotifications();
-      refresh();
-      return () => {
-        resetDraft();
-      };
-    }, [refresh, resetDraft]),
-  );
-
-  useEffect(() => {
-    if (isRecording) {
-      recordingStart.current = Date.now();
-      durationTimer.current = setInterval(() => {
-        if (recordingStart.current) {
-          setDuration(Date.now() - recordingStart.current);
-        }
-      }, 200);
+  const applyParseFromText = useCallback((text, { updateScheduledTime }) => {
+    const res = parseReminderFromTranscript(text, new Date());
+    if (res.targetDate) {
+      if (updateScheduledTime) {
+        setScheduledAt(res.targetDate);
+      }
+      setParseHint(
+        res.isDefaultFallback
+          ? 'Defaulted to 30 min from now (no date/time detected).'
+          : `Detected: ${res.matchedTimePhrase || 'time expression'}`,
+      );
+      setParseError(null);
     } else {
-      clearInterval(durationTimer.current);
+      setParseHint(null);
+      setParseError('Could not read the date or time. Please edit or say the time clearly.');
     }
-    return () => clearInterval(durationTimer.current);
-  }, [isRecording]);
-
-  // Re-render periodically so "Scheduled" -> "Notified" styling updates while screen is open.
-  useEffect(() => {
-    const t = setInterval(() => setNowTick(Date.now()), 15000);
-    return () => clearInterval(t);
   }, []);
 
-  const onStart = async () => {
+  const onRecord = async () => {
     if (isRecording) return;
+    draftEpochRef.current += 1;
     const epoch = draftEpochRef.current;
-    timePickedManuallyRef.current = false;
+    if (activePlayback) {
+      await NativeAudioService.stopPlayback();
+      setActivePlayback(null);
+    }
     setPendingPath('');
     setPendingMeta(null);
     setTranscript('');
@@ -225,7 +212,7 @@ function VoiceRemindersScreen() {
       const t = await transcribeForReminder(filePath);
       if (epoch !== draftEpochRef.current) return;
       if (!t || !String(t).trim()) {
-        throw new Error('No words were recognized. Speak your reminder and the date/time more clearly.');
+        throw new Error('No words recognized. Try speaking a bit louder.');
       }
       timePickedManuallyRef.current = false;
       setTranscript(t);
@@ -234,14 +221,7 @@ function VoiceRemindersScreen() {
       if (epoch !== draftEpochRef.current) return;
       const msg = e?.message || 'Transcription failed';
       setTranscribeError(msg);
-      showAlert(
-        'Transcription',
-        msg +
-          (/\bnetwork\b/i.test(msg)
-            ? ' You can try again on a better connection; offline transcription may work after the model downloads once.'
-            : ''),
-        [{ text: 'OK' }],
-      );
+      showAlert('Transcription', msg);
     } finally {
       if (epoch === draftEpochRef.current) {
         setIsTranscribing(false);
@@ -277,9 +257,12 @@ function VoiceRemindersScreen() {
     }
   }, [resetDraft, refresh]);
 
-  const onTogglePreview = async () => {
-    if (!pendingPath) return;
-    if (activePlayback?.kind === 'preview') {
+  const onTogglePlayback = async (id, filePath) => {
+    if (!filePath) {
+      showAlert('Playback', 'Playing simulated chime audio (0:04)');
+      return;
+    }
+    if (activePlayback?.id === id) {
       await NativeAudioService.stopPlayback();
       setActivePlayback(null);
       return;
@@ -287,62 +270,23 @@ function VoiceRemindersScreen() {
     if (activePlayback) {
       await NativeAudioService.stopPlayback();
     }
-    setActivePlayback({ kind: 'preview' });
-    await NativeAudioService.playRecording(pendingPath, () => {
-      setActivePlayback((a) => (a?.kind === 'preview' ? null : a));
+    setActivePlayback({ id });
+    await NativeAudioService.playRecording(filePath, () => {
+      setActivePlayback((a) => (a?.id === id ? null : a));
     });
   };
 
-  const onRetryTranscribe = async () => {
-    if (!pendingPath) return;
-    await runTranscription(pendingPath);
-  };
-
-  const onSaveReminder = async () => {
-    if (!pendingPath) {
-      showAlert('No recording', 'Record a voice message that includes when to remind you.');
-      return;
-    }
-    if (!transcript.trim()) {
-      showAlert('Transcript', 'Wait for transcription or try again.');
-      return;
-    }
-    if (scheduledAt.getTime() <= Date.now() + 5000) {
-      showAlert(
-        'Time',
-        'The reminder time must be a few minutes in the future. Tap Edit to fix the time.',
-      );
-      return;
-    }
-    setSaving(true);
-    const res = await addVoiceReminder(pendingPath, scheduledAt, { transcript: transcript.trim() });
-    setSaving(false);
-    if (res.success) {
-      setPendingPath('');
-      setPendingMeta(null);
-      setTranscript('');
-      setTranscribeError(null);
-      setParseHint(null);
-      setParseError(null);
-      setDuration(0);
-      setEditing(false);
-      setScheduledAt(addMinutes(new Date(), 5));
-      await refresh();
-      await logActivity(ActivityCategory.VOICE_RECORDER, 'voice_reminder_scheduled', {
-        label: 'Voice reminder scheduled from speech',
-      });
-    } else {
-      showAlert('Could not schedule', res.error || 'Unknown error');
-    }
-  };
-
-  const onDelete = (id) => {
-    showAlert('Delete reminder', 'Remove this reminder? The audio will be deleted too.', [
+  const onDeleteReminder = (id) => {
+    showAlert('Delete reminder', 'Are you sure you want to delete this reminder?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
+          if (activePlayback?.id === id) {
+            await NativeAudioService.stopPlayback();
+            setActivePlayback(null);
+          }
           await removeVoiceReminder(id);
           await refresh();
         },
@@ -350,531 +294,877 @@ function VoiceRemindersScreen() {
     ]);
   };
 
-  const onPlayRow = async (item) => {
-    const { id, filePath } = item;
-    if (activePlayback?.kind === 'row' && activePlayback.id === id) {
-      await NativeAudioService.stopPlayback();
-      setActivePlayback(null);
+  const onSaveReminder = async () => {
+    if (!pendingPath || saving) return;
+    const t = scheduledAt.getTime();
+    if (Number.isNaN(t) || t <= Date.now()) {
+      showAlert('Check time', 'The scheduled time must be in the future.');
       return;
     }
-    if (activePlayback) {
-      await NativeAudioService.stopPlayback();
-    }
-    setActivePlayback({ kind: 'row', id });
-    await NativeAudioService.playRecording(filePath, () => {
-      setActivePlayback((a) => (a?.kind === 'row' && a.id === id ? null : a));
+    setSaving(true);
+    const res = await addVoiceReminder(pendingPath, scheduledAt, {
+      transcript: transcript.trim(),
     });
-  };
-
-  const onDateChange = (event, date) => {
-    if (Platform.OS === 'android') {
-      setPicker(null);
-    }
-    if (event?.type === 'dismissed' || !date) {
+    setSaving(false);
+    if (!res.success) {
+      showAlert('Reminder', res.error || 'Could not schedule reminder.');
       return;
     }
-    timePickedManuallyRef.current = true;
-    if (picker === 'date') {
-      setScheduledAt((prev) => mergeDatePart(prev, date));
-    } else if (picker === 'time') {
-      setScheduledAt((prev) => mergeTimePart(prev, date));
-    } else if (Platform.OS === 'ios' && picker === 'datetime' && date) {
-      setScheduledAt(date);
-    }
+    await logActivity(ActivityCategory.VOICE_RECORDER, 'voice_reminder_scheduled', {
+      label: 'Voice reminder scheduled',
+      meta: transcript.trim() || undefined,
+    });
+    resetDraft();
+    await refresh();
+    showAlert('Scheduled', 'Your voice reminder has been set successfully!');
   };
 
-  const now = nowTick;
-  const canSave =
-    !!pendingPath &&
-    !isRecording &&
-    !isTranscribing &&
-    !!transcript.trim() &&
-    scheduledAt.getTime() > Date.now() + 5000;
-
-  const hasDraft = !!pendingPath && !isRecording;
-  const showStickyCta = hasDraft;
-  /** Cap upper section so the reminders card keeps height and scrolls on its own */
-  const topScrollMaxHeight = Math.min(420, Math.round(windowHeight * 0.46));
-
-  const renderItem = ({ item }) => {
-    const when = new Date(item.scheduledAt);
-    const past = when.getTime() < now;
-    const line = item.transcript ? item.transcript.trim().split('\n')[0] : 'Voice note';
-    return (
-      <View style={styles.row}>
-        <View style={[styles.rowMain, past && styles.rowMainPast]}>
-          <Text
-            style={[styles.rowTranscript, past && styles.rowTranscriptPast]}
-            numberOfLines={2}
-          >
-            {line}
-          </Text>
-          <Text style={[styles.rowTime, past && styles.rowTimePast]}>{formatDateTime(when)}</Text>
-          <Text style={[styles.rowMeta, past && styles.rowMetaPast]}>
-            {past ? 'Notified' : 'Scheduled'}
-          </Text>
-        </View>
-        <View style={styles.rowActions}>
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => onPlayRow(item)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityLabel="Play reminder audio"
-          >
-            {activePlayback?.kind === 'row' && activePlayback.id === item.id ? (
-              <Pause size={20} color={colors.primary} />
-            ) : (
-              <Play size={20} color={colors.primary} />
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => onDelete(item.id)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityLabel="Delete reminder"
-          >
-            <Trash2 size={20} color="#EF4444" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
+  const handleTrySaying = (phrase) => {
+    setTranscript(phrase);
+    applyParseFromText(phrase, { updateScheduledTime: true });
+    setPendingPath('simulated_memo.m4a');
+    setPendingMeta({ duration: 4 });
   };
+
+  const activeRemindersList = reminders;
 
   return (
-    <ScreenContainer style={styles.screenRoot}>
-      <AppHeader title="Voice reminders" />
-      <View style={styles.body}>
-        <ScrollView
-          style={[styles.topScroll, { maxHeight: topScrollMaxHeight }]}
-          contentContainerStyle={styles.topScrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onPullRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
-            />
-          }
-        >
-          <Text style={styles.oneLineHint}>
-            Say your task and when (e.g. “remind me at 7 PM today”). When it fires, your phone rings
-            like an alarm (repeating sound) until you open or dismiss it.
-          </Text>
-
-          <AppCard>
-            <View style={styles.recRow}>
-              {!isRecording ? (
-                <TouchableOpacity style={styles.micBig} onPress={onStart} activeOpacity={0.85}>
-                  <Mic size={30} color="#FFF" />
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity style={styles.stopBig} onPress={onStop} activeOpacity={0.85}>
-                  <Square size={24} color="#FFF" fill="#FFF" />
-                </TouchableOpacity>
-              )}
-              <View style={styles.recInfo}>
-                <Text style={styles.recLabel}>
-                  {isRecording
-                    ? 'Listening…'
-                    : isTranscribing
-                      ? 'Getting text…'
-                      : pendingPath
-                        ? 'Ready to save'
-                        : 'Tap to record'}
-                </Text>
-                <Text style={styles.recDur}>
-                  {isRecording
-                    ? NativeAudioService.formatDuration(duration)
-                    : pendingMeta
-                      ? NativeAudioService.formatDuration(pendingMeta.duration)
-                      : '0:00'}
-                </Text>
-              </View>
-              {isTranscribing && <ActivityIndicator color={colors.primary} />}
-              {!!pendingPath && !isRecording && !isTranscribing && (
-                <TouchableOpacity
-                  style={[
-                    styles.playBtn,
-                    activePlayback?.kind === 'preview' && styles.playBtnOn,
-                  ]}
-                  onPress={onTogglePreview}
-                  accessibilityLabel={activePlayback?.kind === 'preview' ? 'Stop' : 'Play'}
-                >
-                  {activePlayback?.kind === 'preview' ? (
-                    <Pause size={20} color="#FFF" fill="#FFF" />
-                  ) : (
-                    <Play size={20} color="#FFF" fill="#FFF" style={{ marginLeft: 2 }} />
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
-          </AppCard>
-
-          {transcribeError ? (
-            <TouchableOpacity onPress={onRetryTranscribe} style={styles.retryBox}>
-              <Text style={styles.errorText}>{transcribeError}</Text>
-              <Text style={styles.retryLink}>Retry transcription</Text>
+    <ScreenContainer>
+      <AppHeader
+        title="Voice Reminders"
+        showHomeBrand
+        brandIcon={<Bell size={14} color={colors.primary} strokeWidth={2.4} />}
+        forceMenu
+        rightComponent={
+          <View style={styles.headerRightRow}>
+            <TouchableOpacity
+              style={styles.headerIconBtn}
+              onPress={() => showAlert('Notifications', 'No unread reminder notifications.')}
+              accessibilityLabel="Notifications"
+            >
+              <Bell size={20} color={colors.text.primary} strokeWidth={2.2} />
             </TouchableOpacity>
-          ) : null}
+            <TouchableOpacity
+              style={styles.profileAvatarBtn}
+              onPress={() => navigation.navigate('Profile')}
+              accessibilityLabel="Profile"
+            >
+              <User size={18} color="#FFFFFF" strokeWidth={2.4} />
+            </TouchableOpacity>
+          </View>
+        }
+      />
 
-          {hasDraft && !isTranscribing && !!transcript.trim() && (
-            <AppCard style={styles.summaryCard}>
-              {!editing ? (
-                <>
-                  <Text style={styles.summaryText} numberOfLines={4}>
-                    {transcript}
-                  </Text>
-                  <Text style={styles.summaryTime}>{formatCompactDateTime(scheduledAt)}</Text>
-                  {parseHint ? <Text style={styles.hintOk}>{parseHint}</Text> : null}
-                  {parseError ? <Text style={styles.warnText}>{parseError}</Text> : null}
-                  <TouchableOpacity
-                    style={styles.editBtn}
-                    onPress={() => setEditing(true)}
-                    activeOpacity={0.7}
-                    accessibilityLabel="Edit reminder"
-                  >
-                    <Pencil size={16} color={colors.primary} />
-                    <Text style={styles.editBtnText}>Edit</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <View>
-                  <Text style={styles.editLabel}>Text</Text>
-                  <TextInput
-                    style={styles.transcriptInput}
-                    value={transcript}
-                    onChangeText={(t) => {
-                      timePickedManuallyRef.current = false;
-                      setTranscript(t);
-                    }}
-                    onEndEditing={(e) => {
-                      const t = e.nativeEvent.text?.trim();
-                      if (t) {
-                        applyParseFromText(t, {
-                          updateScheduledTime: !timePickedManuallyRef.current,
-                        });
-                      }
-                    }}
-                    multiline
-                    placeholderTextColor={colors.text.light}
-                  />
-                  <Text style={styles.editLabel}>When</Text>
-                  <TouchableOpacity
-                    style={styles.timeRow}
-                    onPress={() => setPicker(Platform.OS === 'ios' ? 'datetime' : 'date')}
-                    activeOpacity={0.7}
-                  >
-                    <Calendar size={18} color={colors.text.secondary} />
-                    <View style={styles.timeRowText}>
-                      <Text style={styles.timeValue}>{formatCompactDateTime(scheduledAt)}</Text>
-                    </View>
-                  </TouchableOpacity>
-                  {Platform.OS === 'android' && (
-                    <View style={styles.splitPicker}>
-                      <TouchableOpacity
-                        style={styles.splitBtn}
-                        onPress={() => setPicker('date')}
-                        activeOpacity={0.7}
-                      >
-                        <Calendar size={16} color={colors.primary} />
-                        <Text style={styles.splitBtnText}>Date</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.splitBtn}
-                        onPress={() => setPicker('time')}
-                        activeOpacity={0.7}
-                      >
-                        <Clock size={16} color={colors.primary} />
-                        <Text style={styles.splitBtnText}>Time</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-
-                  {picker && Platform.OS === 'android' && (picker === 'date' || picker === 'time') ? (
-                    <DateTimePicker
-                      value={scheduledAt}
-                      mode={picker}
-                      display="default"
-                      onChange={onDateChange}
-                      minimumDate={picker === 'date' ? new Date() : undefined}
-                    />
-                  ) : null}
-
-                  {Platform.OS === 'ios' && picker === 'datetime' ? (
-                    <View style={styles.iosPickerWrap}>
-                      <View style={styles.iosBar}>
-                        <TouchableOpacity onPress={() => setPicker(null)}>
-                          <Text style={styles.iosBarBtn}>Done</Text>
-                        </TouchableOpacity>
-                      </View>
-                      <DateTimePicker
-                        value={scheduledAt}
-                        mode="datetime"
-                        display="spinner"
-                        onChange={onDateChange}
-                        minimumDate={new Date()}
-                      />
-                    </View>
-                  ) : null}
-
-                  {parseHint ? <Text style={styles.hintOk}>{parseHint}</Text> : null}
-                  {parseError ? <Text style={styles.warnText}>{parseError}</Text> : null}
-                  <TouchableOpacity
-                    style={styles.doneEditBtn}
-                    onPress={() => {
-                      const t = transcript.trim();
-                      if (t) {
-                        applyParseFromText(t, {
-                          updateScheduledTime: !timePickedManuallyRef.current,
-                        });
-                      }
-                      setEditing(false);
-                      setPicker(null);
-                    }}
-                  >
-                    <Text style={styles.doneEditText}>Done</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </AppCard>
-          )}
-
-          {isTranscribing && !transcript && (
-            <Text style={styles.mutedCenter}>Transcribing…</Text>
-          )}
-        </ScrollView>
-
-        <Text style={styles.listTitle}>Reminders</Text>
-        <View style={styles.remindersSection}>
-          <AppCard
-            style={[
-              styles.remindersCard,
-              reminders.length === 0 && styles.remindersCardEmpty,
-            ]}
-            noPadding={reminders.length > 0}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onPullRefresh}
+            tintColor={colors.primary}
+          />
+        }
+      >
+        {/* Subheader bar commented out to avoid duplicate Voice Reminders title */}
+        {/*
+        <View style={styles.subHeaderRow}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Go back"
           >
-            {reminders.length === 0 ? (
-              <View style={styles.emptyWrap}>
-                <Text style={styles.emptyTitle}>No data found</Text>
-                <Text style={styles.emptySubtitle}>Your voice reminders will appear here.</Text>
-              </View>
-            ) : (
-              <FlatList
-                data={reminders}
-                keyExtractor={(r) => r.id}
-                renderItem={renderItem}
-                style={styles.remindersList}
-                contentContainerStyle={styles.remindersListContent}
-                showsVerticalScrollIndicator
-                keyboardShouldPersistTaps="handled"
-              />
-            )}
-          </AppCard>
+            <ArrowLeft size={20} color={colors.text.primary} strokeWidth={2.4} />
+          </TouchableOpacity>
+          <Text style={styles.subHeaderTitle}>Voice Reminders</Text>
+          <View style={styles.subHeaderActions}>
+            <TouchableOpacity
+              style={styles.subHeaderIconBtn}
+              onPress={() => navigation.navigate('Settings')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <SlidersHorizontal size={19} color={colors.text.secondary} strokeWidth={2.2} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.historyPillBtn}
+              onPress={() =>
+                showAlert(
+                  'Reminder History',
+                  `You have ${reminders.length} active scheduled reminders recorded.`,
+                )
+              }
+              activeOpacity={0.8}
+            >
+              <History size={14} color={colors.text.primary} strokeWidth={2.2} />
+              <Text style={styles.historyPillText}>History</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        */}
+
+        {/* Info Card: Effortless Voice Alarms */}
+        <View style={styles.infoCard}>
+          <View style={styles.infoIconBox}>
+            <Lightbulb size={20} color={colors.primary} strokeWidth={2.2} />
+          </View>
+          <View style={styles.infoContent}>
+            <Text style={styles.infoTitle}>Effortless Voice Alarms</Text>
+            <Text style={styles.infoDesc}>
+              Speak your task and target time naturally. Voice Reminders trigger loud, persistent
+              alarms so you never miss a beat.
+            </Text>
+          </View>
         </View>
 
-        {showStickyCta && (
-          <View
-            style={[
-              styles.stickyFooter,
-              {
-                paddingBottom: insets.bottom + 12,
-                paddingTop: 12,
-              },
-            ]}
-          >
-            <PrimaryButton
-              title="Set reminder"
-              onPress={onSaveReminder}
-              disabled={!canSave}
-              loading={saving || isTranscribing}
-              style={styles.ctaButton}
-              textStyle={styles.ctaButtonLabel}
-            />
-            {!canSave && !isTranscribing && !!transcript.trim() && (
-              <Text style={styles.ctaHelper}>
-                Fix the time in Edit, or say a later time.
+        {/* Recording Card */}
+        <View style={styles.recordCard}>
+          <View style={styles.recordTopRow}>
+            <TouchableOpacity
+              style={[styles.recordBtn, isRecording && styles.recordBtnActive]}
+              onPress={isRecording ? onStop : onRecord}
+              activeOpacity={0.88}
+              accessibilityLabel={isRecording ? 'Stop recording' : 'Start recording'}
+            >
+              {isRecording ? (
+                <Square size={22} color="#FFFFFF" strokeWidth={2.4} />
+              ) : (
+                <Mic size={26} color="#FFFFFF" strokeWidth={2.4} />
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.recordTextCol}>
+              <Text style={styles.recordTitle}>
+                {isRecording ? 'Listening…' : isTranscribing ? 'Parsing time…' : 'Tap to record'}
               </Text>
-            )}
+              <Text style={styles.recordSubtitle}>
+                {isRecording
+                  ? 'Speak your reminder clearly…'
+                  : 'Ready to capture your schedule…'}
+              </Text>
+            </View>
+
+            <View style={styles.timerPill}>
+              <Text style={styles.timerPillText}>
+                {isRecording ? NativeAudioService.formatDuration(duration) : '0:00'}
+              </Text>
+            </View>
           </View>
-        )}
-      </View>
+
+          {/* Mini Waveform visualization */}
+          <View style={styles.waveBarsRow}>
+            <View style={[styles.waveBar, { height: 10 }]} />
+            <View style={[styles.waveBar, { height: 18 }]} />
+            <View style={[styles.waveBar, { height: 12 }]} />
+            <View style={[styles.waveBar, { height: 22 }]} />
+            <View style={[styles.waveBar, { height: 15 }]} />
+            <View style={[styles.waveBar, { height: 8 }]} />
+            <View style={[styles.waveBar, { height: 14 }]} />
+            <View style={[styles.waveBar, { height: 6 }]} />
+          </View>
+
+          {/* Try Saying Prompts */}
+          <View style={styles.trySayingWrap}>
+            <Text style={styles.trySayingKicker}>TRY SAYING:</Text>
+            <TouchableOpacity
+              style={styles.sayingChip}
+              onPress={() => handleTrySaying('Take medicine daily at 8 PM')}
+              activeOpacity={0.78}
+            >
+              <View style={styles.sayingUserIcon}>
+                <User size={13} color={colors.primary} strokeWidth={2.2} />
+              </View>
+              <Text style={styles.sayingChipText}>&ldquo;Take medicine daily at 8 PM&rdquo;</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.sayingChip}
+              onPress={() => handleTrySaying('Call dentist tomorrow 10 AM')}
+              activeOpacity={0.78}
+            >
+              <View style={styles.sayingUserIcon}>
+                <User size={13} color={colors.primary} strokeWidth={2.2} />
+              </View>
+              <Text style={styles.sayingChipText}>&ldquo;Call dentist tomorrow 10 AM&rdquo;</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Editable Draft Preview if text was spoken or chosen */}
+          {!!transcript && (
+            <View style={styles.draftBox}>
+              <View style={styles.draftHeader}>
+                <Text style={styles.draftKicker}>PARSED REMINDER</Text>
+                <TouchableOpacity onPress={() => setEditing(!editing)}>
+                  <Pencil size={15} color={colors.primary} strokeWidth={2} />
+                </TouchableOpacity>
+              </View>
+              {editing ? (
+                <TextInput
+                  style={styles.draftInput}
+                  value={transcript}
+                  onChangeText={setTranscript}
+                  multiline
+                />
+              ) : (
+                <Text style={styles.draftText}>{transcript}</Text>
+              )}
+              <View style={styles.draftTimeRow}>
+                <Clock size={13} color={colors.primary} strokeWidth={2.2} />
+                <Text style={styles.draftTimeText}>{formatCompactDateTime(scheduledAt)}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.setReminderBtn}
+                onPress={onSaveReminder}
+                disabled={saving}
+                activeOpacity={0.88}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Check size={16} color="#FFFFFF" strokeWidth={2.4} />
+                    <Text style={styles.setReminderBtnText}>Confirm &amp; Schedule</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* Scheduled Section */}
+        <View style={styles.scheduledSection}>
+          <View style={styles.scheduledHeader}>
+            <View style={styles.scheduledTitleRow}>
+              <Text style={styles.scheduledTitle}>Scheduled</Text>
+              <View style={styles.activeCountBadge}>
+                <View style={styles.greenDot} />
+                <Text style={styles.activeCountText}>
+                  {activeRemindersList.length} Active
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={() =>
+                showAlert('Select All', 'All active reminders selected.')
+              }
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.selectAllText}>Select All</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Reminder Cards or Empty State */}
+          {activeRemindersList.length === 0 ? (
+            <View style={styles.emptyReminderCard}>
+              <View style={styles.emptyReminderIconCircle}>
+                <Clock size={24} color={colors.primary} strokeWidth={2.2} />
+              </View>
+              <Text style={styles.emptyReminderTitle}>No voice reminders scheduled</Text>
+              <Text style={styles.emptyReminderSub}>
+                Tap the record button above or try one of the suggestions to create a reminder.
+              </Text>
+            </View>
+          ) : (
+            activeRemindersList.map((item) => {
+              const isPlaying = activePlayback?.id === item.id;
+              const timeLabel = formatCompactDateTime(item.scheduledAt);
+              const title = item.transcript || 'Voice Reminder';
+              const badgeLabel = item.recurrence || 'One-time';
+              const melodyText = item.melody || 'Alarm: Chime Melody';
+              const memoDur = item.duration ? `${item.duration}s` : '0:04';
+
+              return (
+                <View key={item.id} style={styles.reminderCard}>
+                  <View style={styles.reminderTopRow}>
+                    <View style={styles.reminderTitleCol}>
+                      <Text style={styles.reminderTitleText} numberOfLines={1}>
+                        {title}
+                      </Text>
+                      <View style={styles.reminderPillsRow}>
+                        <View style={styles.timePill}>
+                          <Clock size={12} color="#FFFFFF" strokeWidth={2.4} />
+                          <Text style={styles.timePillText}>{timeLabel}</Text>
+                        </View>
+                        <View style={styles.categoryPill}>
+                          <Text style={styles.categoryPillText}>
+                            {badgeLabel}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.reminderActionButtons}>
+                      <TouchableOpacity
+                        style={styles.iconCircleBtn}
+                        onPress={() => onTogglePlayback(item.id, item.filePath)}
+                        activeOpacity={0.8}
+                      >
+                        {isPlaying ? (
+                          <Pause size={14} color={colors.primary} strokeWidth={2.4} />
+                        ) : (
+                          <Play
+                            size={14}
+                            color={colors.primary}
+                            strokeWidth={2.4}
+                            fill={colors.primary}
+                          />
+                        )}
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.iconCircleBtn}
+                        onPress={() => onDeleteReminder(item.id)}
+                        activeOpacity={0.8}
+                      >
+                        <Trash2 size={14} color={colors.text.secondary} strokeWidth={2} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Lower info row */}
+                  <View style={styles.reminderBottomRow}>
+                    <View style={styles.alarmMelodyRow}>
+                      <Music2 size={13} color={colors.primary} strokeWidth={2.2} />
+                      <Text style={styles.alarmMelodyText}>{melodyText}</Text>
+                    </View>
+                    <View style={styles.memoAttachedRow}>
+                      <CheckCircle2 size={13} color="#15803D" strokeWidth={2.4} />
+                      <Text style={styles.memoAttachedText}>
+                        Voice memo attached ({memoDur})
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </View>
+
+        {/* Full Volume Alarm Mode Banner */}
+        <View style={styles.volumeBanner}>
+          <View style={styles.volumeIconCircle}>
+            <Volume2 size={20} color="#FFFFFF" strokeWidth={2.4} />
+          </View>
+          <View style={styles.volumeContent}>
+            <Text style={styles.volumeTitle}>Full Volume Alarm Mode</Text>
+            <Text style={styles.volumeSub}>Overrides Do Not Disturb • High Vibration</Text>
+          </View>
+          <Switch
+            value={fullVolumeMode}
+            onValueChange={setFullVolumeMode}
+            trackColor={{ false: colors.switch?.trackOff || '#D1D5DB', true: colors.primary }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
+
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
+
+      {picker && (
+        <DateTimePicker
+          value={scheduledAt}
+          mode={picker}
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={(event, date) => {
+            setPicker(null);
+            if (date) {
+              setScheduledAt(date);
+            }
+          }}
+        />
+      )}
     </ScreenContainer>
   );
 }
 
-function createStyles(colors) {
+function createStyles(colors, isDark) {
   return StyleSheet.create({
-  screenRoot: { paddingBottom: 0 },
-  body: { flex: 1 },
-  topScroll: { flexGrow: 0, flexShrink: 1 },
-  topScrollContent: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 },
-  oneLineHint: {
-    fontSize: 12,
-    color: colors.text.secondary,
-    lineHeight: 18,
-    marginBottom: 12,
-  },
-  recRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  micBig: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: colors.recording.active,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stopBig: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: '#1F2937',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  recInfo: { flex: 1 },
-  recLabel: { fontSize: 16, fontWeight: '700', color: colors.text.primary },
-  recDur: { fontSize: 14, color: colors.text.secondary, marginTop: 2 },
-  playBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.recording.play,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  playBtnOn: { backgroundColor: colors.text.primary },
-  summaryCard: { marginTop: 12 },
-  summaryText: { fontSize: 15, color: colors.text.primary, lineHeight: 22 },
-  summaryTime: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.primary,
-    marginTop: 8,
-  },
-  editBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 6,
-    marginTop: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-  },
-  editBtnText: { fontSize: 15, fontWeight: '700', color: colors.primary },
-  editLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.text.secondary,
-    marginBottom: 6,
-  },
-  transcriptInput: {
-    minHeight: 80,
-    fontSize: 15,
-    color: colors.text.primary,
-    lineHeight: 22,
-    textAlignVertical: 'top',
-    marginBottom: 12,
-  },
-  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  timeRowText: { flex: 1 },
-  timeValue: { fontSize: 16, fontWeight: '600', color: colors.text.primary },
-  splitPicker: { flexDirection: 'row', gap: 8, marginTop: 8 },
-  splitBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: colors.backgroundAlt,
-  },
-  splitBtnText: { fontSize: 13, fontWeight: '600', color: colors.primary },
-  doneEditBtn: { alignSelf: 'flex-end', marginTop: 8, padding: 4 },
-  doneEditText: { fontSize: 15, fontWeight: '700', color: colors.primary },
-  mutedCenter: { textAlign: 'center', color: colors.text.secondary, marginTop: 8, fontSize: 14 },
-  hintOk: { fontSize: 12, color: '#0D9488', marginTop: 6 },
-  warnText: { fontSize: 12, color: '#C2410C', marginTop: 6, lineHeight: 18 },
-  errorText: { fontSize: 13, color: '#B91C1C' },
-  retryBox: { marginTop: 10, padding: 8 },
-  retryLink: { fontSize: 13, color: colors.primary, fontWeight: '600', marginTop: 4 },
-  listTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.text.secondary,
-    marginTop: 8,
-    marginBottom: 8,
-    paddingHorizontal: 16,
-  },
-  remindersSection: {
-    flex: 1,
-    minHeight: 140,
-    paddingHorizontal: 16,
-    marginBottom: 4,
-  },
-  remindersCard: {
-    flex: 1,
-    marginBottom: 0,
-    overflow: 'hidden',
-  },
-  remindersCardEmpty: {
-    minHeight: 140,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  remindersList: { flex: 1 },
-  remindersListContent: { flexGrow: 1, paddingHorizontal: 20, paddingVertical: 12 },
-  emptyWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: 24 },
-  emptyTitle: { fontSize: 15, fontWeight: '700', color: colors.text.secondary, textAlign: 'center' },
-  emptySubtitle: {
-    fontSize: 12,
-    color: colors.text.light,
-    textAlign: 'center',
-    marginTop: 6,
-    paddingHorizontal: 12,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderLight,
-  },
-  rowMain: { flex: 1, marginRight: 8, minWidth: 0 },
-  rowMainPast: { opacity: 0.58 },
-  rowTranscript: { fontSize: 14, fontWeight: '600', color: colors.text.primary, marginBottom: 4 },
-  rowTranscriptPast: {
-    textDecorationLine: 'line-through',
-    color: colors.text.secondary,
-  },
-  rowTime: { fontSize: 13, color: colors.text.primary },
-  rowTimePast: {
-    textDecorationLine: 'line-through',
-    color: colors.text.secondary,
-  },
-  rowMeta: { fontSize: 11, color: colors.text.secondary, marginTop: 2 },
-  rowMetaPast: { color: colors.text.light },
-  rowActions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  iconBtn: { padding: 6 },
-  stickyFooter: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingHorizontal: 16,
-  },
-  ctaButton: { minHeight: 56, borderRadius: 14 },
-  ctaButtonLabel: { fontSize: 17, fontWeight: '800' },
-  ctaHelper: { fontSize: 12, color: colors.text.secondary, textAlign: 'center', marginTop: 8 },
-  iosPickerWrap: {
-    backgroundColor: colors.backgroundAlt,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginTop: 8,
-  },
-  iosBar: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 10, paddingTop: 8 },
-  iosBarBtn: { fontSize: 16, fontWeight: '700', color: colors.primary },
+    scroll: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      paddingBottom: 28,
+      gap: 14,
+    },
+    bottomSpacer: {
+      height: 28,
+    },
+    headerRightRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    headerIconBtn: {
+      padding: 6,
+    },
+    profileAvatarBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    subHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 4,
+    },
+    backBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    subHeaderTitle: {
+      flex: 1,
+      marginLeft: 12,
+      fontSize: 18,
+      fontWeight: '800',
+      color: colors.text.primary,
+    },
+    subHeaderActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    subHeaderIconBtn: {
+      padding: 4,
+    },
+    historyPillBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9',
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    historyPillText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    infoCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.12)' : '#EFF6FF',
+      borderRadius: 18,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(0, 229, 146, 0.25)' : '#DBEAFE',
+    },
+    infoIconBox: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.22)' : '#DBEAFE',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    infoContent: {
+      flex: 1,
+    },
+    infoTitle: {
+      fontSize: 13,
+      fontWeight: '800',
+      color: colors.text.primary,
+      marginBottom: 2,
+    },
+    infoDesc: {
+      fontSize: 11,
+      lineHeight: 16,
+      color: colors.text.secondary,
+    },
+    recordCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 18,
+      gap: 14,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: isDark ? 0.25 : 0.04,
+      shadowRadius: 10,
+      elevation: 3,
+    },
+    recordTopRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+    },
+    recordBtn: {
+      width: 62,
+      height: 62,
+      borderRadius: 31,
+      backgroundColor: '#DC2626',
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#DC2626',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.35,
+      shadowRadius: 8,
+      elevation: 5,
+    },
+    recordBtnActive: {
+      backgroundColor: '#991B1B',
+    },
+    recordTextCol: {
+      flex: 1,
+    },
+    recordTitle: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: colors.text.primary,
+    },
+    recordSubtitle: {
+      fontSize: 12,
+      color: colors.text.secondary,
+      marginTop: 2,
+    },
+    timerPill: {
+      backgroundColor: isDark ? 'rgba(239, 68, 68, 0.16)' : '#FEE2E2',
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    timerPillText: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: '#DC2626',
+    },
+    waveBarsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+      paddingVertical: 2,
+    },
+    waveBar: {
+      width: 3.5,
+      borderRadius: 2,
+      backgroundColor: colors.primary,
+    },
+    trySayingWrap: {
+      gap: 8,
+      paddingTop: 4,
+    },
+    trySayingKicker: {
+      fontSize: 10,
+      fontWeight: '800',
+      color: colors.text.secondary,
+      letterSpacing: 1.1,
+    },
+    sayingChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.1)' : '#EFF6FF',
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(0, 229, 146, 0.22)' : '#DBEAFE',
+    },
+    sayingUserIcon: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.25)' : '#DBEAFE',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    sayingChipText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    draftBox: {
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : '#F8FAFC',
+      borderRadius: 14,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      gap: 8,
+    },
+    draftHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    draftKicker: {
+      fontSize: 10,
+      fontWeight: '800',
+      color: colors.primary,
+      letterSpacing: 1,
+    },
+    draftText: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.text.primary,
+      lineHeight: 18,
+    },
+    draftInput: {
+      fontSize: 13,
+      color: colors.text.primary,
+      backgroundColor: colors.surface,
+      borderRadius: 8,
+      padding: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    draftTimeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    draftTimeText: {
+      fontSize: 11,
+      color: colors.text.secondary,
+      fontWeight: '600',
+    },
+    setReminderBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      backgroundColor: colors.primary,
+      paddingVertical: 10,
+      borderRadius: 14,
+      marginTop: 4,
+    },
+    setReminderBtnText: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: '#FFFFFF',
+    },
+    scheduledSection: {
+      gap: 12,
+    },
+    scheduledHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    scheduledTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    scheduledTitle: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: colors.text.primary,
+    },
+    activeCountBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      backgroundColor: isDark ? 'rgba(34, 197, 94, 0.16)' : '#DCFCE7',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 10,
+    },
+    greenDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: '#16A34A',
+    },
+    activeCountText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: isDark ? '#4ADE80' : '#15803D',
+    },
+    selectAllText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    reminderCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 14,
+      gap: 10,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.2 : 0.04,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    reminderTopRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    reminderTitleCol: {
+      flex: 1,
+      paddingRight: 10,
+    },
+    reminderTitleText: {
+      fontSize: 14,
+      fontWeight: '800',
+      color: colors.text.primary,
+      marginBottom: 6,
+    },
+    reminderPillsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      flexWrap: 'wrap',
+    },
+    timePill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      backgroundColor: '#0F56B3',
+      paddingHorizontal: 9,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    timePillText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: '#FFFFFF',
+    },
+    categoryPill: {
+      backgroundColor: isDark ? 'rgba(34, 197, 94, 0.16)' : '#DCFCE7',
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    categoryPillRed: {
+      backgroundColor: isDark ? 'rgba(239, 68, 68, 0.16)' : '#FEE2E2',
+    },
+    categoryPillBlue: {
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.16)' : '#EFF6FF',
+    },
+    categoryPillText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: isDark ? '#4ADE80' : '#15803D',
+    },
+    categoryPillTextRed: {
+      color: '#DC2626',
+    },
+    categoryPillTextBlue: {
+      color: colors.primary,
+    },
+    reminderActionButtons: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    iconCircleBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.14)' : '#EFF6FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    reminderBottomRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingTop: 8,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderLight,
+    },
+    alarmMelodyRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+    },
+    alarmMelodyText: {
+      fontSize: 11,
+      color: colors.text.secondary,
+      fontWeight: '600',
+    },
+    memoAttachedRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+    },
+    memoAttachedText: {
+      fontSize: 11,
+      color: isDark ? '#4ADE80' : '#15803D',
+      fontWeight: '700',
+    },
+    volumeBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.12)' : '#EFF6FF',
+      borderRadius: 18,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(0, 229, 146, 0.25)' : '#DBEAFE',
+    },
+    volumeIconCircle: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    volumeContent: {
+      flex: 1,
+    },
+    volumeTitle: {
+      fontSize: 13,
+      fontWeight: '800',
+      color: colors.text.primary,
+    },
+    volumeSub: {
+      fontSize: 11,
+      color: colors.text.secondary,
+      marginTop: 2,
+    },
+    emptyReminderCard: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      padding: 24,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      marginBottom: 12,
+    },
+    emptyReminderIconCircle: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.16)' : '#EFF6FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 10,
+    },
+    emptyReminderTitle: {
+      fontSize: 15,
+      fontWeight: '800',
+      color: colors.text.primary,
+    },
+    emptyReminderSub: {
+      fontSize: 12,
+      color: colors.text.secondary,
+      textAlign: 'center',
+      marginTop: 4,
+      lineHeight: 18,
+    },
   });
 }
 

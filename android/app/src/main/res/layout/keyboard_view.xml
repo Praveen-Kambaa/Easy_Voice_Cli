@@ -106,7 +106,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Insert"
-            android:textColor="#1E88FF"
+            android:textColor="#00E592"
             android:textSize="13sp"
             android:fontFamily="sans-serif-medium"
             android:paddingStart="10dp"

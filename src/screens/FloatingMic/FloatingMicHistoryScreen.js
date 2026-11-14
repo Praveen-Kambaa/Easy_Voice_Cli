@@ -194,7 +194,7 @@ function createStyles(colors) {
     borderRadius: 8,
     backgroundColor: colors.recording.activeBg,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: colors.status.blockedBg,
   },
   deleteLabel: {
     fontSize: 13,

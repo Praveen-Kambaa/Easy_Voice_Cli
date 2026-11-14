@@ -37,7 +37,7 @@ function FloatingMicNativeSync() {
 }
 
 function AppNavigation() {
-  const { isDark, navigationTheme, colors } = useTheme();
+  const { isDark, navigationTheme, colors } = useTheme() as any;
   const navigationRef = useAppNavigationRef();
 
   return (

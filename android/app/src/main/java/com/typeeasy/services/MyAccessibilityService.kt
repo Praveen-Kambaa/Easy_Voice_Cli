@@ -273,7 +273,23 @@ class MyAccessibilityService : AccessibilityService() {
         if (!isServiceReady || event == null) return
 
         when (event.eventType) {
-            AccessibilityEvent.TYPE_VIEW_FOCUSED,
+            AccessibilityEvent.TYPE_VIEW_FOCUSED -> {
+                runCatching {
+                    val src = event.source
+                    if (src != null) {
+                        try {
+                            if (src.isEditable && src.isEnabled && src.isVisibleToUser) {
+                                lastFocusedEditable?.recycle()
+                                lastFocusedEditable = AccessibilityNodeInfo.obtain(src)
+                                lastFocusedAtMs = System.currentTimeMillis()
+                            }
+                        } finally {
+                            src.recycle()
+                        }
+                    }
+                }
+                scheduleEvaluateMicVisibility(80)
+            }
             AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED -> {
                 runCatching {
                     val src = event.source
@@ -289,11 +305,14 @@ class MyAccessibilityService : AccessibilityService() {
                         }
                     }
                 }
-                scheduleEvaluateMicVisibility(0)
+                // Avoid redundant window tree traversal on every keystroke when mic is already showing
+                if (!isMicVisible) {
+                    scheduleEvaluateMicVisibility(150)
+                }
             }
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
-                scheduleEvaluateMicVisibility(150)
+                scheduleEvaluateMicVisibility(200)
             }
         }
     }

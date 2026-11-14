@@ -2253,7 +2253,46 @@ class MyKeyboardService : InputMethodService() {
         showResult("Translating…", isError = false, isLoading = true)
         rememberReplacementTarget(selected, beforeCursor)
         executor.execute {
-            if (useInternal) {
+            val aiEngine = getSharedPreferences("TypeEasyPrefs", Context.MODE_PRIVATE)
+                .getString("ai_engine_provider", "default") ?: "default"
+            if (aiEngine == "groq") {
+                // Groq Chat Completion for keyboard translate
+                val groqBaseUrl = com.typeeasy.generated.ApiConfig.GROQ_BASE_URL.trimEnd('/')
+                val groqApiKey = com.typeeasy.generated.ApiConfig.GROQ_API_KEY
+                val groqModel = com.typeeasy.generated.ApiConfig.GROQ_FAST_LLM_MODEL
+                val body = JSONObject().apply {
+                    put("model", groqModel)
+                    put("temperature", 0.2)
+                    if (groqModel.contains("gpt-oss")) {
+                        put("reasoning_effort", "low")
+                    }
+                    put("messages", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("role", "system")
+                            put("content", "Translate the user text to $toLang. Return ONLY the translated text.")
+                        })
+                        put(JSONObject().apply { put("role", "user"); put("content", text) })
+                    })
+                }.toString()
+                try {
+                    val conn = URL("$groqBaseUrl/chat/completions").openConnection() as java.net.HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.setRequestProperty("Authorization", "Bearer $groqApiKey")
+                    conn.setRequestProperty("Content-Type", "application/json")
+                    conn.doOutput = true
+                    conn.outputStream.use { it.write(body.toByteArray()) }
+                    val resp = conn.inputStream.bufferedReader().readText()
+                    val translated = JSONObject(resp)
+                        .optJSONArray("choices")?.optJSONObject(0)
+                        ?.optJSONObject("message")?.optString("content")?.trim()
+                    mainHandler.post {
+                        if (!translated.isNullOrBlank()) showResult(translated, isError = false)
+                        else showResult("Groq translation returned empty", isError = true)
+                    }
+                } catch (e: Exception) {
+                    mainHandler.post { showResult("Groq translate failed: ${e.message}", isError = true) }
+                }
+            } else if (useInternal) {
                 val tr = MlKitTranslateHelper.translate(this, text, fromLang, toLang)
                 mainHandler.post {
                     tr.onSuccess { showResult(it, isError = false) }
@@ -2305,19 +2344,59 @@ class MyKeyboardService : InputMethodService() {
         showResult("Checking grammar…", isError = false, isLoading = true)
         rememberReplacementTarget(selected, beforeCursor)
         executor.execute {
-            val result = callApi(
-                ApiConfig.typeEasyUrl(ApiConfig.Endpoints.GRAMMAR_CHECK),
-                "user_id" to userId,
-                "text" to text,
-                "fast" to "false"
-            )
-            val out = extractApiText(result, "corrected_text", "corrected", "result", "data")
-            val error = extractApiText(result, "error", "message", "detail")
-            mainHandler.post {
-                if (!out.isNullOrBlank()) {
-                    showResult(out, isError = false)
-                } else {
-                    showResult(error ?: "Grammar check failed", isError = true)
+            val aiEngine = getSharedPreferences("TypeEasyPrefs", Context.MODE_PRIVATE)
+                .getString("ai_engine_provider", "default") ?: "default"
+            if (aiEngine == "groq") {
+                val groqBaseUrl = com.typeeasy.generated.ApiConfig.GROQ_BASE_URL.trimEnd('/')
+                val groqApiKey = com.typeeasy.generated.ApiConfig.GROQ_API_KEY
+                val groqModel = com.typeeasy.generated.ApiConfig.GROQ_FAST_LLM_MODEL
+                val body = JSONObject().apply {
+                    put("model", groqModel)
+                    put("temperature", 0.1)
+                    if (groqModel.contains("gpt-oss")) {
+                        put("reasoning_effort", "low")
+                    }
+                    put("messages", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("role", "system")
+                            put("content", "Fix grammar, spelling, and punctuation only. Preserve original meaning and tone. Return ONLY the corrected text with zero commentary.")
+                        })
+                        put(JSONObject().apply { put("role", "user"); put("content", text) })
+                    })
+                }.toString()
+                try {
+                    val conn = URL("$groqBaseUrl/chat/completions").openConnection() as java.net.HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.setRequestProperty("Authorization", "Bearer $groqApiKey")
+                    conn.setRequestProperty("Content-Type", "application/json")
+                    conn.doOutput = true
+                    conn.outputStream.use { it.write(body.toByteArray()) }
+                    val resp = conn.inputStream.bufferedReader().readText()
+                    val corrected = JSONObject(resp)
+                        .optJSONArray("choices")?.optJSONObject(0)
+                        ?.optJSONObject("message")?.optString("content")?.trim()
+                    mainHandler.post {
+                        if (!corrected.isNullOrBlank()) showResult(corrected, isError = false)
+                        else showResult("Groq grammar check returned empty", isError = true)
+                    }
+                } catch (e: Exception) {
+                    mainHandler.post { showResult("Groq grammar failed: ${e.message}", isError = true) }
+                }
+            } else {
+                val result = callApi(
+                    ApiConfig.typeEasyUrl(ApiConfig.Endpoints.GRAMMAR_CHECK),
+                    "user_id" to userId,
+                    "text" to text,
+                    "fast" to "false"
+                )
+                val out = extractApiText(result, "corrected_text", "corrected", "result", "data")
+                val error = extractApiText(result, "error", "message", "detail")
+                mainHandler.post {
+                    if (!out.isNullOrBlank()) {
+                        showResult(out, isError = false)
+                    } else {
+                        showResult(error ?: "Grammar check failed", isError = true)
+                    }
                 }
             }
         }
@@ -2475,12 +2554,12 @@ class MyKeyboardService : InputMethodService() {
                         ?.substringBefore('-'),
                 )
                 if (eleven.isFailure && baseUrl.isNotBlank()) {
-                    VoiceTranscribeClient.transcribeFile(baseUrl, file)
+                    VoiceTranscribeClient.transcribeFileContextAware(this, baseUrl, file)
                 } else {
                     eleven
                 }
             } else {
-                VoiceTranscribeClient.transcribeFile(baseUrl, file)
+                VoiceTranscribeClient.transcribeFileContextAware(this, baseUrl, file)
             }
             mainHandler.post {
                 runCatching { file.delete() }
@@ -2606,7 +2685,7 @@ class MyKeyboardService : InputMethodService() {
         val baseUrl = FloatingMicConfigStore.getVoiceTranscribeBaseUrl(this)
         voiceCommandUi?.showReviewLoading("Transcribing your recording…")
         executor.execute {
-            val result = VoiceTranscribeClient.transcribeFileFull(baseUrl, file)
+            val result = VoiceTranscribeClient.transcribeFileFullContextAware(this, baseUrl, file)
             mainHandler.post {
                 runCatching { file.delete() }
                 commandAudioFile = null

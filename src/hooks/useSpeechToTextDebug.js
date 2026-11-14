@@ -8,33 +8,42 @@ export const useSpeechToTextDebug = () => {
   const [debugLogs, setDebugLogs] = React.useState([]);
   const [isListening, setIsListening] = React.useState(false);
 
+  const addLog = React.useCallback((message, type = 'info') => {
+    const timestamp = formatTime(new Date());
+    setDebugLogs(prev => [...prev, { message, type, timestamp }]);
+  }, []);
+
+  const checkTextInsertion = React.useCallback((expectedText) => {
+    addLog(`📝 Expected text insertion: "${expectedText}"`, 'info');
+    setTimeout(() => {
+      addLog('🔍 Check if text appeared in active field', 'warning');
+      addLog('💡 If not inserted, check:', 'warning');
+      addLog('  1. Accessibility service enabled?', 'warning');
+      addLog('  2. Text field focused?', 'warning');
+      addLog('  3. App blocking accessibility?', 'warning');
+    }, 2000);
+  }, [addLog]);
+
   React.useEffect(() => {
-    // Listen for all floating mic events
     const eventListeners = [
       DeviceEventEmitter.addListener('FloatingMicService_onRecordingStart', () => {
         addLog('🎤 Recording started', 'info');
         setIsListening(true);
       }),
-      
       DeviceEventEmitter.addListener('FloatingMicService_onSpeechResult', (text) => {
         addLog(`✅ Speech recognized: "${text}"`, 'success');
         setIsListening(false);
-        
-        // Check if text was sent to accessibility service
         setTimeout(() => {
           checkTextInsertion(text);
         }, 1000);
       }),
-      
       DeviceEventEmitter.addListener('FloatingMicService_onPartialResult', (text) => {
         addLog(`🔄 Partial: "${text}"`, 'info');
       }),
-      
       DeviceEventEmitter.addListener('FloatingMicService_onError', (error) => {
         addLog(`❌ Error: ${error}`, 'error');
         setIsListening(false);
       }),
-      
       DeviceEventEmitter.addListener('FloatingMicService_onOverlayCreated', () => {
         addLog('🔵 Floating overlay created', 'success');
       }),
@@ -43,27 +52,7 @@ export const useSpeechToTextDebug = () => {
     return () => {
       eventListeners.forEach(listener => listener.remove());
     };
-  }, []);
-
-  const addLog = (message, type = 'info') => {
-    const timestamp = formatTime(new Date());
-    setDebugLogs(prev => [...prev, { message, type, timestamp }]);
-  };
-
-  const checkTextInsertion = (expectedText) => {
-    // This would need to be implemented in native module
-    // For now, just log that we expect text insertion
-    addLog(`📝 Expected text insertion: "${expectedText}"`, 'info');
-    
-    // Suggest manual checks
-    setTimeout(() => {
-      addLog('🔍 Check if text appeared in active field', 'warning');
-      addLog('💡 If not inserted, check:', 'warning');
-      addLog('  1. Accessibility service enabled?', 'warning');
-      addLog('  2. Text field focused?', 'warning');
-      addLog('  3. App blocking accessibility?', 'warning');
-    }, 2000);
-  };
+  }, [addLog, checkTextInsertion]);
 
   const testSpeechRecognition = async () => {
     try {

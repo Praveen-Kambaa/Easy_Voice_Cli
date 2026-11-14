@@ -2,7 +2,8 @@ import React, { useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { Menu, ChevronLeft } from 'lucide-react-native';
+import { Menu, ChevronLeft, Mic } from 'lucide-react-native';
+import { AskAiIcon } from '../common/AskAiIcon';
 import { useTheme } from '../../context/ThemeContext';
 
 const APP_DRAWER_ID = 'AppDrawer';
@@ -69,41 +70,38 @@ function getDrawerFocusedName(drawerNav, tabNav) {
 
 export const AppHeader = ({
   title,
+  subtitle,
   showMenuButton = true,
   rightComponent,
-  /** Dark bar for Translator and similar screens */
+  /** Dark bar override */
   dark = false,
   /** Force hamburger menu (Home only). */
   forceMenu = false,
-  /**
-   * Optional override for the leading control. If omitted, behavior is:
-   * - Drawer route Home → hamburger (open drawer)
-   * - Other drawer routes → back: goBack() when possible, else navigate('Home')
-   */
+  /** Show app icon badge next to title on Home */
+  showHomeBrand = false,
+  /** Optional custom brand icon in the badge */
+  brandIcon,
+  /** Optional override for the leading control */
   onBack,
 }) => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
 
   const drawerNav = useMemo(() => resolveDrawerNavigation(navigation), [navigation]);
   const drawerFocusedRouteName = getDrawerFocusedName(drawerNav, navigation);
-  const isDrawerHome = drawerFocusedRouteName === 'HomeTab';
 
   const openDrawer = useCallback(() => {
     (drawerNav ?? navigation).openDrawer?.();
   }, [drawerNav, navigation]);
 
-  /** Pop inner stack / drawer history first; only then exit module to Home. */
   const handleModuleBack = useCallback(() => {
-    // If we're inside a stack (History/Saved/etc.), prefer normal goBack.
     const st = navigation.getState?.();
     if (st?.type === 'stack' && typeof st.index === 'number' && st.index > 0) {
       navigation.goBack();
       return;
     }
 
-    // If we're on a tab root screen, never "goBack" to previous tab (e.g., Translator -> FloatingMic).
     if (drawerNav && drawerFocusedRouteName && drawerFocusedRouteName !== 'HomeTab') {
       drawerNav.navigate('MainTabs', { screen: 'HomeTab' });
       return;
@@ -114,20 +112,19 @@ export const AppHeader = ({
       return;
     }
     if (drawerNav) {
-      // Return to the Home tab inside MainTabs.
       drawerNav.navigate('MainTabs', { screen: 'HomeTab' });
       return;
     }
     let n = navigation;
     for (let i = 0; i < 10 && n; i += 1) {
-      const st = n.getState?.();
-      if (st?.type === 'drawer' || looksLikeAppDrawerState(st)) {
+      const state = n.getState?.();
+      if (state?.type === 'drawer' || looksLikeAppDrawerState(state)) {
         n.navigate('MainTabs', { screen: 'HomeTab' });
         return;
       }
       n = n.getParent?.();
     }
-  }, [navigation, drawerNav]);
+  }, [navigation, drawerNav, drawerFocusedRouteName]);
 
   const barBg = dark ? '#0f1419' : colors.header.background;
   const barBorder = dark ? 'rgba(255,255,255,0.08)' : colors.header.border;
@@ -158,7 +155,6 @@ export const AppHeader = ({
       </TouchableOpacity>
     );
   } else if (showMenuButton) {
-    // Everywhere else: show Back (Home uses forceMenu).
     leftContent = (
       <TouchableOpacity
         style={styles.menuButton}
@@ -174,13 +170,61 @@ export const AppHeader = ({
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: barBg, borderBottomColor: barBorder }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          paddingTop: insets.top,
+          backgroundColor: barBg,
+          borderBottomColor: barBorder,
+        },
+      ]}
+    >
       <View style={styles.headerRow}>
         {leftContent}
 
-        <Text style={[styles.title, { color: titleColor }]} numberOfLines={1}>
-          {title}
-        </Text>
+        <View style={styles.titleWrap}>
+          {showHomeBrand ? (
+            <View style={styles.brandRow}>
+              <View
+                style={[
+                  styles.brandBadge,
+                  {
+                    backgroundColor: isDark ? 'rgba(0, 229, 146, 0.18)' : '#EFF6FF',
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                {brandIcon ? (
+                  brandIcon
+                ) : title === 'Ask Ai' || title === 'Ask Question' ? (
+                  <AskAiIcon size={16} />
+                ) : (
+                  <Mic size={14} color={colors.primary} strokeWidth={2.4} />
+                )}
+              </View>
+              <Text style={[styles.title, { color: titleColor }]} numberOfLines={1}>
+                {title}
+              </Text>
+            </View>
+          ) : subtitle ? (
+            <View style={styles.titleCol}>
+              <Text style={[styles.title, { color: titleColor }]} numberOfLines={1}>
+                {title}
+              </Text>
+              <View style={styles.subtitleRow}>
+                {subtitle.startsWith('•') ? <View style={styles.greenHeaderDot} /> : null}
+                <Text style={[styles.subtitle, { color: colors.text.secondary }]} numberOfLines={1}>
+                  {subtitle.startsWith('•') ? subtitle.slice(1).trim() : subtitle}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <Text style={[styles.title, { color: titleColor }]} numberOfLines={1}>
+              {title}
+            </Text>
+          )}
+        </View>
 
         <View style={styles.rightSlot}>
           {rightComponent ? rightComponent : <View style={styles.menuPlaceholder} />}
@@ -192,7 +236,7 @@ export const AppHeader = ({
 
 const styles = StyleSheet.create({
   container: {
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -202,27 +246,63 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    minHeight: 56,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minHeight: 52,
   },
   menuButton: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 8,
   },
   menuPlaceholder: {
-    width: 36,
+    width: 38,
+  },
+  titleWrap: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  brandBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleCol: {
+    justifyContent: 'center',
   },
   title: {
-    flex: 1,
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
     letterSpacing: -0.3,
   },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 1,
+  },
+  greenHeaderDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#22C55E',
+  },
+  subtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
   rightSlot: {
+    minWidth: 38,
     alignItems: 'flex-end',
     justifyContent: 'center',
   },

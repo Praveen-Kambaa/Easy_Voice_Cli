@@ -49,7 +49,7 @@ export const useVoiceKeyboard = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showKeyboardSelectionDialog]);
 
   /**
    * Check keyboard status

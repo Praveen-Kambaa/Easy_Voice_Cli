@@ -150,7 +150,7 @@ function createStyles(colors) {
     borderRadius: 12,
     backgroundColor: colors.recording.activeBg,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: colors.status.blockedBg,
     alignItems: 'center',
     justifyContent: 'center',
   },

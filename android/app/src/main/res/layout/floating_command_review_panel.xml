@@ -70,7 +70,7 @@
         android:layout_gravity="start"
         android:layout_marginTop="8dp"
         android:indeterminate="true"
-        android:indeterminateTint="#1E88FF"
+        android:indeterminateTint="#00E592"
         android:visibility="gone" />
 
     <TextView

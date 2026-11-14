@@ -1,5 +1,6 @@
 import { NativeModules, Platform } from 'react-native';
 import { transcribeAudio } from '../api/voiceApi';
+import { getAiEngineProvider } from './aiEngineConfig';
 import { createResponse } from '../utils/apiResponse';
 import { transcribeWithElevenLabs } from './elevenlabsService';
 import { offlineWhisperService } from './offlineWhisperService';
@@ -89,6 +90,10 @@ export async function transcribeViaCloud(fileUri, options = {}) {
  * @returns {Promise<{ success: boolean, data: object|null, error: string|null }>}
  */
 export async function transcribeBySettings(fileUri, options = {}) {
+  const engine = await getAiEngineProvider();
+  if (engine === 'groq') {
+    return transcribeViaCloud(fileUri, options);
+  }
   const internal = await getInternalTranscribeEnabled();
   if (internal) {
     return transcribeOnDevice(fileUri, options);

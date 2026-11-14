@@ -194,26 +194,12 @@ class AudioService {
   }
 
   async pausePlayback() {
-    try {
-      // Not implemented for VoiceRecorder
-      return { success: false, error: 'Pause not supported with current recorder' };
-    } catch (error) {
-      logger.error('[AudioService] pausePlayback error:', error);
-      return { success: false, error: error.message };
-    }
+    return { success: false, error: 'Pause not supported with current recorder' };
   }
 
   async resumePlayback() {
-    try {
-      // Not implemented for VoiceRecorder
-      return { success: false, error: 'Resume not supported with current recorder' };
-    } catch (error) {
-      logger.error('[AudioService] resumePlayback error:', error);
-      return { success: false, error: error.message };
-    }
+    return { success: false, error: 'Resume not supported with current recorder' };
   }
-
-  // ─── Storage ──────────────────────────────────────────────────────────────────
 
   async saveRecording(recording) {
     try {

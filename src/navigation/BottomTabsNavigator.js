@@ -1,169 +1,147 @@
 import React, { useMemo } from 'react';
-import { View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Home, Radio, Languages, MessageCircle, Settings } from 'lucide-react-native';
+import { Mic, Languages, Home, SlidersHorizontal } from 'lucide-react-native';
 
 import HomeScreen from '../screens/Home/HomeScreen';
 import FloatingMicScreen from '../screens/FloatingMic/FloatingMicScreen';
 import TranslatorStack from './TranslatorStack';
 import AskQuestionStack from './AskQuestionStack';
 import SettingsScreen from '../screens/Settings/SettingsScreen';
+import { AskAiIcon } from '../components/common/AskAiIcon';
 import { useTheme } from '../context/ThemeContext';
-import { Shadows } from '../theme/Shadows';
 
 const Tab = createBottomTabNavigator();
 
-function TabBarBackground({ backgroundColor }) {
-  return <View style={[StyleSheet.absoluteFillObject, { backgroundColor }]} />;
-}
-
-function CenterButton({ onPress, accessibilityState, styles }) {
-  const selected = !!accessibilityState?.selected;
+function TabIcon({ Icon, focused, colors, isDark }) {
+  const activePillBg = isDark ? 'rgba(0, 229, 146, 0.22)' : '#DCEBFE';
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.88}
-      style={styles.centerBtnWrap}
-      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      accessibilityRole="button"
-      accessibilityLabel="Home"
+    <View
+      style={[
+        styles.iconCapsule,
+        focused && { backgroundColor: activePillBg },
+      ]}
     >
-      <View style={[styles.centerBtn, selected && styles.centerBtnActive]}>
-        <Home size={22} color="#FFFFFF" strokeWidth={2.2} />
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-function TabIcon({ Icon, focused, colors }) {
-  return (
-    <View style={stylesStatic.iconWrap}>
-      <Icon size={22} color={focused ? colors.primary : colors.text.light} strokeWidth={2} />
+      <Icon
+        size={20}
+        color={focused ? colors.primary : colors.text.secondary}
+        strokeWidth={focused ? 2.3 : 1.9}
+        focused={focused}
+      />
     </View>
   );
 }
 
-const stylesStatic = StyleSheet.create({
-  iconWrap: {
-    width: 44,
-    height: 40,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
-
 export default function BottomTabsNavigator() {
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
-  const styles = useMemo(() => createTabStyles(colors), [colors]);
+  const { colors, isDark } = useTheme();
 
-  const makeTabIcon = (Icon) => ({ focused }) => <TabIcon Icon={Icon} focused={focused} colors={colors} />;
+  const bottomPad = Math.max(insets.bottom, 8);
+  const tabHeight = 58 + bottomPad;
 
-  const tabBarStyle = useMemo(() => {
-    const bottomPad = Math.max(insets.bottom, 8);
-    return [
-      styles.tabBar,
-      {
-        paddingBottom: bottomPad,
-        height: 58 + bottomPad,
-      },
-    ];
-  }, [insets.bottom, styles.tabBar]);
+  const tabBarStyle = useMemo(
+    () => ({
+      backgroundColor: colors.tabBar.background,
+      borderTopColor: colors.tabBar.border,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      paddingTop: 4,
+      paddingBottom: bottomPad,
+      height: tabHeight,
+      ...Platform.select({
+        android: { elevation: 10 },
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.06,
+          shadowRadius: 6,
+        },
+      }),
+    }),
+    [colors.tabBar.background, colors.tabBar.border, bottomPad, tabHeight],
+  );
 
   return (
     <Tab.Navigator
       initialRouteName="HomeTab"
       screenOptions={{
         headerShown: false,
-        tabBarShowLabel: false,
+        tabBarShowLabel: true,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.text.secondary,
+        tabBarLabelStyle: styles.tabLabel,
         tabBarStyle,
-        tabBarBackground: () => <TabBarBackground backgroundColor={colors.tabBar.background} />,
         tabBarHideOnKeyboard: true,
       }}
     >
-      <Tab.Screen name="FloatingMicTab" component={FloatingMicScreen} options={{ tabBarIcon: makeTabIcon(Radio) }} />
+      <Tab.Screen
+        name="FloatingMicTab"
+        component={FloatingMicScreen}
+        options={{
+          tabBarLabel: 'Mic',
+          tabBarIcon: ({ focused }) => (
+            <TabIcon Icon={Mic} focused={focused} colors={colors} isDark={isDark} />
+          ),
+        }}
+      />
       <Tab.Screen
         name="TranslatorTab"
         component={TranslatorStack}
-        options={{ tabBarIcon: makeTabIcon(Languages) }}
+        options={{
+          tabBarLabel: 'Translator',
+          tabBarIcon: ({ focused }) => (
+            <TabIcon Icon={Languages} focused={focused} colors={colors} isDark={isDark} />
+          ),
+        }}
       />
       <Tab.Screen
         name="HomeTab"
         component={HomeScreen}
         options={{
-          tabBarIcon: () => null,
-          tabBarButton: (props) => (
-            <CenterButton
-              accessibilityState={props.accessibilityState}
-              onPress={props.onPress}
-              styles={styles}
-            />
+          tabBarLabel: 'Home',
+          tabBarIcon: ({ focused }) => (
+            <TabIcon Icon={Home} focused={focused} colors={colors} isDark={isDark} />
           ),
         }}
       />
       <Tab.Screen
         name="AskQuestionTab"
         component={AskQuestionStack}
-        options={{ tabBarIcon: makeTabIcon(MessageCircle) }}
+        options={{
+          tabBarLabel: 'Ask AI',
+          tabBarIcon: ({ focused }) => (
+            <TabIcon Icon={AskAiIcon} focused={focused} colors={colors} isDark={isDark} />
+          ),
+        }}
       />
-      <Tab.Screen name="SettingsTab" component={SettingsScreen} options={{ tabBarIcon: makeTabIcon(Settings) }} />
+      <Tab.Screen
+        name="SettingsTab"
+        component={SettingsScreen}
+        options={{
+          tabBarLabel: 'Settings',
+          tabBarIcon: ({ focused }) => (
+            <TabIcon Icon={SlidersHorizontal} focused={focused} colors={colors} isDark={isDark} />
+          ),
+        }}
+      />
     </Tab.Navigator>
   );
 }
 
-function createTabStyles(colors) {
-  return StyleSheet.create({
-    tabBar: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      bottom: 0,
-      borderRadius: 0,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.tabBar.border,
-      borderLeftWidth: 0,
-      borderRightWidth: 0,
-      borderBottomWidth: 0,
-      backgroundColor: colors.tabBar.background,
-      paddingTop: 8,
-      paddingHorizontal: 0,
-      overflow: 'hidden',
-      ...Platform.select({
-        android: { elevation: 12 },
-        ios: {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.06,
-          shadowRadius: 4,
-        },
-      }),
-    },
-    centerBtnWrap: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginTop: -18,
-    },
-    centerBtn: {
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      backgroundColor: colors.primary,
-      borderWidth: 1,
-      borderColor: colors.border,
-      alignItems: 'center',
-      justifyContent: 'center',
-      shadowColor: '#00D2FF',
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.28,
-      shadowRadius: 18,
-      elevation: 10,
-      ...Shadows.md,
-    },
-    centerBtnActive: {
-      transform: [{ scale: 1.02 }],
-    },
-  });
-}
+const styles = StyleSheet.create({
+  iconCapsule: {
+    width: 54,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: -0.1,
+    marginTop: -2,
+    marginBottom: 2,
+  },
+});

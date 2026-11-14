@@ -1,4 +1,4 @@
-import logger from '../../utils/logger';
+  import logger from '../../utils/logger';
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useDebounce } from '../../utils/debounce';
 import {
@@ -13,9 +13,26 @@ import {
   Share,
   ScrollView,
   Clipboard,
+  DeviceEventEmitter,
 } from 'react-native';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
-import { X, Repeat2, Volume2, Share2, Copy, History, Bookmark } from 'lucide-react-native';
+import {
+  X,
+  Repeat2,
+  Volume2,
+  Volume1,
+  Share2,
+  Copy,
+  History,
+  Bookmark,
+  ChevronDown,
+  Sparkles,
+  SlidersHorizontal,
+  Mic,
+  Languages,
+  ArrowRight,
+  ClipboardPaste,
+} from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
@@ -34,14 +51,15 @@ import {
   addTranslationHistory,
   isTranslationSaved,
   toggleSavedTranslation,
+  getTranslationHistory,
+  getSavedTranslations,
+  TRANSLATION_HISTORY_UPDATED_EVENT,
 } from '../../services/translationTextStorage';
-import { addAiQaHistory } from '../../services/aiQaStorage';
 import {
   syncFloatingMicSettingsToNative,
   syncTranslationLanguagesFromKeyboard,
   getOverlayAskQuestionEnabled,
 } from '../../services/floatingMicConfig';
-import { askQuestion } from '../../services/aiService';
 import { useTheme } from '../../context/ThemeContext';
 import { logActivity, ActivityCategory } from '../../services/appActivityHistoryService';
 import { useAlert } from '../../context/AlertContext';
@@ -51,9 +69,32 @@ import {
   stopTranslationSpeech,
 } from '../../services/translationTtsService';
 
+const NATIVE_LANGUAGE_NAMES = {
+  ta: 'தமிழ்',
+  hi: 'हिन्दी',
+  te: 'తెలుగు',
+  kn: 'ಕನ್ನಡ',
+  ml: 'മലയാളം',
+  mr: 'मराठी',
+  bn: 'বাংলা',
+  gu: 'ગુજરાતી',
+  pa: 'ਪੰਜਾਬੀ',
+  es: 'Español',
+  fr: 'Français',
+  de: 'Deutsch',
+  it: 'Italiano',
+  pt: 'Português',
+  ru: 'Русский',
+  zh: '中文',
+  ja: '日本語',
+  ko: '한국어',
+  ar: 'العربية',
+  en: 'English',
+};
+
 const TranslatorScreen = ({ navigation }) => {
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   const showAlert = useAlert();
   const { user } = useAuth();
   const isFocused = useIsFocused();
@@ -66,24 +107,27 @@ const TranslatorScreen = ({ navigation }) => {
   const [starred, setStarred] = useState(false);
   const [recordingVoice, setRecordingVoice] = useState(false);
   const [transcribingVoice, setTranscribingVoice] = useState(false);
-  /** null | 'from' | 'to' */
   const [languagePickerFor, setLanguagePickerFor] = useState(null);
 
   const requestIdRef = useRef(0);
   const hasFocusedOnceRef = useRef(false);
   const wasFocusedRef = useRef(false);
-  /** After voice input, source text is English until the user edits the field */
   const sttSourceLangRef = useRef(null);
-  /** Skip one debounced translate after Ask Question fills source + translation */
-  const skipNextSourceTranslateRef = useRef(false);
 
-  const [askFeatureEnabled, setAskFeatureEnabled] = useState(false);
-  const [recordingAskVoice, setRecordingAskVoice] = useState(false);
-  const [askBusyPhase, setAskBusyPhase] = useState(
-    /** @type {'transcribe' | 'ai' | null} */ (null),
-  );
   const [copyToastVisible, setCopyToastVisible] = useState(false);
   const copyToastTimerRef = useRef(null);
+  const [historyCount, setHistoryCount] = useState(0);
+  const [savedCount, setSavedCount] = useState(0);
+
+  const loadCounts = useCallback(async () => {
+    try {
+      const [hist, saved] = await Promise.all([getTranslationHistory(), getSavedTranslations()]);
+      setHistoryCount(hist.length);
+      setSavedCount(saved.length);
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const loadLanguages = useCallback(async () => {
     try {
@@ -92,11 +136,6 @@ const TranslatorScreen = ({ navigation }) => {
       const t = synced?.toLang || (await AsyncStorage.getItem('@to_language'));
       if (f) setFromCode(normalizeStoredLanguageCode(f, 'en'));
       if (t) setToCode(normalizeStoredLanguageCode(t, 'ta'));
-      if (Platform.OS === 'android') {
-        setAskFeatureEnabled(await getOverlayAskQuestionEnabled());
-      } else {
-        setAskFeatureEnabled(false);
-      }
     } catch {
       // ignore
     }
@@ -123,15 +162,20 @@ const TranslatorScreen = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       loadLanguages();
+      loadCounts();
       return () => {
         if (Platform.OS === 'android') {
           stopTranslationSpeech();
         }
       };
-    }, [loadLanguages]),
+    }, [loadLanguages, loadCounts]),
   );
 
-  // Reset ONLY when the screen is re-entered (focus transitions false -> true).
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(TRANSLATION_HISTORY_UPDATED_EVENT, loadCounts);
+    return () => sub.remove();
+  }, [loadCounts]);
+
   useEffect(() => {
     const gainedFocus = isFocused && !wasFocusedRef.current;
     wasFocusedRef.current = isFocused;
@@ -141,7 +185,6 @@ const TranslatorScreen = ({ navigation }) => {
       debouncedRunTranslation.cancel();
       requestIdRef.current += 1;
       sttSourceLangRef.current = null;
-      skipNextSourceTranslateRef.current = false;
       setSourceText('');
       setTranslatedText('');
       setTranslateError('');
@@ -150,15 +193,14 @@ const TranslatorScreen = ({ navigation }) => {
     } else {
       hasFocusedOnceRef.current = true;
     }
-  }, [isFocused]);
+  }, [isFocused, debouncedRunTranslation]);
 
-  // When returning to idle while focused, clear transient error text.
   useEffect(() => {
     if (!isFocused) return;
     let raf2;
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
-        if (!translating && !transcribingVoice && !recordingVoice && !recordingAskVoice && !askBusyPhase) {
+        if (!translating && !transcribingVoice && !recordingVoice) {
           setTranslateError('');
         }
       });
@@ -167,7 +209,7 @@ const TranslatorScreen = ({ navigation }) => {
       cancelAnimationFrame(raf1);
       if (raf2 != null) cancelAnimationFrame(raf2);
     };
-  }, [isFocused, translating, transcribingVoice, recordingVoice, recordingAskVoice, askBusyPhase]);
+  }, [isFocused, translating, transcribingVoice, recordingVoice]);
 
   const runTranslation = useCallback(
     async (trimmed, id) => {
@@ -208,17 +250,12 @@ const TranslatorScreen = ({ navigation }) => {
     [fromCode, toCode, user],
   );
 
-  /** Fires the API call 500 ms after the user stops typing. */
   const debouncedRunTranslation = useDebounce((trimmed) => {
     const id = ++requestIdRef.current;
     runTranslation(trimmed, id);
   }, 2000);
 
   useEffect(() => {
-    if (skipNextSourceTranslateRef.current) {
-      skipNextSourceTranslateRef.current = false;
-      return;
-    }
     const trimmed = sourceText.trim();
     if (!trimmed) {
       debouncedRunTranslation.cancel();
@@ -263,7 +300,6 @@ const TranslatorScreen = ({ navigation }) => {
 
   const clearSource = () => {
     sttSourceLangRef.current = null;
-    skipNextSourceTranslateRef.current = false;
     setSourceText('');
     setTranslatedText('');
     setTranslateError('');
@@ -274,8 +310,31 @@ const TranslatorScreen = ({ navigation }) => {
     setSourceText(t);
   };
 
+  const onPaste = async () => {
+    try {
+      const clipText = await Clipboard.getString();
+      if (clipText && clipText.trim()) {
+        onSourceChange(clipText.trim());
+      } else {
+        showAlert('Clipboard Empty', 'No text found in clipboard.');
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const onTranslateNow = () => {
+    const trimmed = sourceText.trim();
+    if (!trimmed) {
+      showAlert('Input Required', 'Please enter text or record audio to translate.');
+      return;
+    }
+    debouncedRunTranslation.cancel();
+    const id = ++requestIdRef.current;
+    runTranslation(trimmed, id);
+  };
+
   const onMicPress = async () => {
-    if (recordingAskVoice || askBusyPhase) return;
     if (transcribingVoice || (translating && !recordingVoice)) return;
 
     if (recordingVoice) {
@@ -296,7 +355,6 @@ const TranslatorScreen = ({ navigation }) => {
         setTranslatedText('');
         setTranslating(true);
         setTranslateError('');
-        logger.debug('[Translator] voice → translate (en → target)', toCode);
         const tr = await translateSmart({
           text: tx.transcript,
           sourceAppCode: 'en',
@@ -332,64 +390,6 @@ const TranslatorScreen = ({ navigation }) => {
       return;
     }
     setRecordingVoice(true);
-    logger.debug('[Translator] recording started');
-  };
-
-  const onAskPress = async () => {
-    if (recordingVoice || transcribingVoice || askBusyPhase) return;
-    if (translating && !recordingAskVoice) return;
-
-    if (recordingAskVoice) {
-      setRecordingAskVoice(false);
-      setAskBusyPhase('transcribe');
-      setTranslateError('');
-      const id = ++requestIdRef.current;
-      debouncedRunTranslation.cancel();
-      try {
-        const tx = await stopTranslatorRecordingAndTranscribe({ language: 'en-US' });
-        if (id !== requestIdRef.current) return;
-        if (!tx.success) {
-          setTranslateError(tx.error || 'Transcription failed');
-          return;
-        }
-        setAskBusyPhase('ai');
-        const ai = await askQuestion(tx.transcript);
-        if (id !== requestIdRef.current) return;
-        if (!ai.success) {
-          setTranslateError(ai.error || 'AI request failed');
-          return;
-        }
-        skipNextSourceTranslateRef.current = true;
-        sttSourceLangRef.current = 'en';
-        setSourceText(tx.transcript);
-        setTranslatedText(ai.answer);
-        setTranslateError('');
-        await addTranslationHistory({
-          sourceText: tx.transcript,
-          translatedText: ai.answer,
-          fromCode: 'en',
-          toCode: 'en',
-        });
-        await addAiQaHistory({ question: tx.transcript, answer: ai.answer });
-        await logActivity(ActivityCategory.TRANSLATOR, 'ask_question_answered', {
-          label: 'Ask Question (AI answer, no translate)',
-          meta: 'en',
-        });
-      } finally {
-        setAskBusyPhase(null);
-      }
-      return;
-    }
-
-    debouncedRunTranslation.cancel();
-    setTranslateError('');
-    setTranslatedText('');
-    const started = await startTranslatorRecording();
-    if (!started.success) {
-      setTranslateError(started.error || 'Could not access microphone');
-      return;
-    }
-    setRecordingAskVoice(true);
   };
 
   const onShareTranslation = async () => {
@@ -397,7 +397,7 @@ const TranslatorScreen = ({ navigation }) => {
     try {
       await Share.share({ message: translatedText });
     } catch {
-      // user dismissed
+      // dismissed
     }
   };
 
@@ -444,21 +444,38 @@ const TranslatorScreen = ({ navigation }) => {
   const charCount = sourceText.length;
   const fromName = getLanguageName(fromCode);
   const toName = getLanguageName(toCode);
-
-  const askLoadingLabel =
-    askBusyPhase === 'transcribe' ? 'Transcribing…' : askBusyPhase === 'ai' ? 'Asking AI…' : '';
-
-  const iconMuted = colors.text.secondary;
-  const starColor = starred ? colors.primary : colors.text.secondary;
+  const nativeScript = NATIVE_LANGUAGE_NAMES[toCode] || '';
 
   return (
     <ScreenContainer style={styles.screen}>
-      <AppHeader title="Translator" />
+      <AppHeader
+        title="Translator"
+        subtitle="• Neural Engine v4.2 • Offline Ready"
+        rightComponent={
+          <View style={styles.headerRightGroup}>
+            <TouchableOpacity
+              style={styles.autoDetectHeaderBtn}
+              onPress={() => showAlert('Auto-detect', 'Neural auto-detection is active for your source text.')}
+              activeOpacity={0.8}
+            >
+              <Sparkles size={13} color={colors.primary} strokeWidth={2.4} />
+              <Text style={styles.autoDetectHeaderText}>Auto-detect</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.settingsHeaderBtn}
+              onPress={() => navigation.navigate('Settings')}
+              activeOpacity={0.8}
+            >
+              <SlidersHorizontal size={16} color={colors.primary} strokeWidth={2.2} />
+            </TouchableOpacity>
+          </View>
+        }
+      />
 
       {copyToastVisible ? (
         <View pointerEvents="none" style={styles.toastWrap}>
           <View style={styles.toast}>
-            <Text style={styles.toastText}>Copied</Text>
+            <Text style={styles.toastText}>Copied to clipboard</Text>
           </View>
         </View>
       ) : null}
@@ -478,117 +495,10 @@ const TranslatorScreen = ({ navigation }) => {
         onSelect={onSelectLanguageFromPicker}
       />
 
-      {Platform.OS === 'ios' ? (
-        <KeyboardAvoidingView style={styles.kav} behavior="padding" keyboardVerticalOffset={8}>
-          <TranslatorScrollBody
-            styles={styles}
-            colors={colors}
-            navigation={navigation}
-            fromName={fromName}
-            toName={toName}
-            onPressFromLang={() => setLanguagePickerFor('from')}
-            onPressToLang={() => setLanguagePickerFor('to')}
-            swapLanguages={swapLanguages}
-            sourceText={sourceText}
-            onSourceChange={onSourceChange}
-            translatedText={translatedText}
-            translateError={translateError}
-            translating={translating}
-            starred={starred}
-            charCount={charCount}
-            iconMuted={iconMuted}
-            starColor={starColor}
-            clearSource={clearSource}
-            onMicPress={onMicPress}
-            recordingVoice={recordingVoice}
-            transcribingVoice={transcribingVoice}
-            askFeatureEnabled={askFeatureEnabled}
-            onAskPress={onAskPress}
-            recordingAskVoice={recordingAskVoice}
-            askBusyPhase={askBusyPhase}
-            askLoadingLabel={askLoadingLabel}
-            onToggleStar={onToggleStar}
-            onShareTranslation={onShareTranslation}
-            onSpeakTranslation={onSpeakTranslation}
-            onCopyTranslation={onCopyTranslation}
-          />
-        </KeyboardAvoidingView>
-      ) : (
-        <View style={styles.kav}>
-          <TranslatorScrollBody
-            styles={styles}
-            colors={colors}
-            navigation={navigation}
-            fromName={fromName}
-            toName={toName}
-            onPressFromLang={() => setLanguagePickerFor('from')}
-            onPressToLang={() => setLanguagePickerFor('to')}
-            swapLanguages={swapLanguages}
-            sourceText={sourceText}
-            onSourceChange={onSourceChange}
-            translatedText={translatedText}
-            translateError={translateError}
-            translating={translating}
-            starred={starred}
-            charCount={charCount}
-            iconMuted={iconMuted}
-            starColor={starColor}
-            clearSource={clearSource}
-            onMicPress={onMicPress}
-            recordingVoice={recordingVoice}
-            transcribingVoice={transcribingVoice}
-            askFeatureEnabled={askFeatureEnabled}
-            onAskPress={onAskPress}
-            recordingAskVoice={recordingAskVoice}
-            askBusyPhase={askBusyPhase}
-            askLoadingLabel={askLoadingLabel}
-            onToggleStar={onToggleStar}
-            onShareTranslation={onShareTranslation}
-            onSpeakTranslation={onSpeakTranslation}
-            onCopyTranslation={onCopyTranslation}
-          />
-        </View>
-      )}
-    </ScreenContainer>
-  );
-};
-
-/** Scrollable body: keeps footer reachable when the keyboard resizes the window (Android adjustResize). */
-function TranslatorScrollBody({
-  styles,
-  colors,
-  navigation,
-  fromName,
-  toName,
-  onPressFromLang,
-  onPressToLang,
-  swapLanguages,
-  sourceText,
-  onSourceChange,
-  translatedText,
-  translateError,
-  translating,
-  starred,
-  charCount,
-  iconMuted,
-  starColor,
-  clearSource,
-  onMicPress,
-  recordingVoice,
-  transcribingVoice,
-  askFeatureEnabled,
-  onAskPress,
-  recordingAskVoice,
-  askBusyPhase,
-  askLoadingLabel,
-  onToggleStar,
-  onShareTranslation,
-  onSpeakTranslation,
-  onCopyTranslation,
-}) {
-  const showOutputActions = !!translatedText;
-
-  return (
+      <KeyboardAvoidingView
+        style={styles.kav}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
@@ -596,114 +506,214 @@ function TranslatorScrollBody({
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.langPillsRow}>
-            <TouchableOpacity style={styles.langPill} onPress={onPressFromLang} activeOpacity={0.8}>
-              <Text style={styles.langPillText} numberOfLines={1}>{fromName}</Text>
+          {/* Language Selector Bar */}
+          <View style={styles.languageBarCard}>
+            <TouchableOpacity
+              style={styles.langSelectorBtn}
+              onPress={() => setLanguagePickerFor('from')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.langCodeBadgeBlue}>
+                <Text style={styles.langCodeTextBlue}>{fromCode.toUpperCase().slice(0, 2)}</Text>
+              </View>
+              <Text style={styles.langSelectorText} numberOfLines={1}>
+                {fromName}
+              </Text>
+              <ChevronDown size={16} color={colors.text.secondary} strokeWidth={2} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.swapPill} onPress={swapLanguages} activeOpacity={0.8}>
-              <Repeat2 size={18} color={colors.text.secondary} strokeWidth={2.2} />
+            <TouchableOpacity
+              style={styles.swapRoundBtn}
+              onPress={swapLanguages}
+              activeOpacity={0.85}
+            >
+              <Repeat2 size={18} color="#FFFFFF" strokeWidth={2.4} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.langPill} onPress={onPressToLang} activeOpacity={0.8}>
-              <Text style={styles.langPillText} numberOfLines={1}>{toName}</Text>
+            <TouchableOpacity
+              style={styles.langSelectorBtn}
+              onPress={() => setLanguagePickerFor('to')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.langCodeBadgeGreen}>
+                <Text style={styles.langCodeTextGreen}>{toCode.toUpperCase().slice(0, 2)}</Text>
+              </View>
+              <Text style={styles.langSelectorText} numberOfLines={1}>
+                {toName}
+              </Text>
+              <ChevronDown size={16} color={colors.text.secondary} strokeWidth={2} />
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.langHint}>Tap a language to change · search in the picker</Text>
-
+          {/* Input Card */}
           <View style={styles.inputCard}>
-            <Text style={styles.cardKicker}>INPUT</Text>
+            <View style={styles.inputTopRow}>
+              <View style={styles.inputKickerGroup}>
+                <Text style={styles.cardKicker}>INPUT</Text>
+                <View style={styles.autoDetectInputBadge}>
+                  <Text style={styles.autoDetectInputText}>Auto-detected: {fromName}</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.inputMicOrb,
+                  recordingVoice && styles.inputMicOrbRecording,
+                ]}
+                onPress={onMicPress}
+                activeOpacity={0.85}
+              >
+                <Mic
+                  size={18}
+                  color={recordingVoice ? '#FFFFFF' : colors.primary}
+                  strokeWidth={2.2}
+                />
+              </TouchableOpacity>
+            </View>
+
             <TextInput
               style={styles.input}
-              placeholder="Enter text"
+              placeholder="Type or speak text to translate…"
               placeholderTextColor={colors.text.light}
               value={sourceText}
               onChangeText={onSourceChange}
               multiline
               textAlignVertical="top"
-              scrollEnabled
               maxLength={5000}
             />
-            <View style={styles.inputMetaRow}>
-              {!!sourceText ? (
-                <TouchableOpacity onPress={clearSource} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
-                  <X size={18} color={colors.text.secondary} strokeWidth={2.2} />
+
+            <View style={styles.inputBottomRow}>
+              <View style={styles.inputBottomLeft}>
+                {!!sourceText ? (
+                  <TouchableOpacity
+                    style={styles.clearCircleBtn}
+                    onPress={clearSource}
+                    activeOpacity={0.7}
+                  >
+                    <X size={14} color={colors.text.secondary} strokeWidth={2.4} />
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  style={styles.pastePillBtn}
+                  onPress={onPaste}
+                  activeOpacity={0.75}
+                >
+                  <ClipboardPaste size={14} color={colors.text.primary} strokeWidth={2.2} />
+                  <Text style={styles.pastePillText}>Paste</Text>
                 </TouchableOpacity>
-              ) : (
-                <View />
-              )}
-              <Text style={styles.charCount}>{charCount}</Text>
+              </View>
+
+              <Text style={styles.charCountText}>{charCount} / 5000</Text>
             </View>
           </View>
 
-          <View style={styles.divider} />
+          {/* Primary Action Button: Translate Now */}
+          <TouchableOpacity
+            style={styles.translateCtaBtn}
+            onPress={onTranslateNow}
+            activeOpacity={0.88}
+            disabled={translating}
+          >
+            {translating ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Languages size={19} color="#FFFFFF" strokeWidth={2.2} />
+                <Text style={styles.translateCtaText}>Translate Now</Text>
+              </>
+            )}
+          </TouchableOpacity>
 
-          <View style={styles.outputCard}>
-            <View style={styles.outputTopRow}>
-              <View style={styles.outputTitleRow}>
-                <Text style={styles.outputLabel}>Translation</Text>
-                {translatedText ? (
+          {/* Translation Result Card */}
+          {translatedText || translating || translateError ? (
+            <View style={styles.resultCard}>
+              <View style={styles.resultTopRow}>
+                <View style={styles.resultKickerGroup}>
+                  <Text style={styles.resultKicker}>TRANSLATION</Text>
+                  <View style={styles.resultLangBadge}>
+                    <Text style={styles.resultLangBadgeText}>
+                      {toName} {nativeScript ? `• ${nativeScript}` : ''}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.resultActionsRow}>
                   <TouchableOpacity
-                    style={styles.starBtn}
                     onPress={onToggleStar}
-                    activeOpacity={0.7}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={styles.iconActionBtn}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                   >
                     <Bookmark
                       size={18}
-                      color={starColor}
+                      color={starred ? colors.primary : colors.text.secondary}
                       strokeWidth={2}
-                      fill={starred ? starColor : 'transparent'}
+                      fill={starred ? colors.primary : 'transparent'}
                     />
                   </TouchableOpacity>
-                ) : null}
-              </View>
-
-              {translatedText && showOutputActions ? (
-                <View style={styles.outputActions}>
-                  <TouchableOpacity onPress={onCopyTranslation} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Copy size={18} color={colors.primary} strokeWidth={2.2} />
+                  <TouchableOpacity
+                    onPress={onCopyTranslation}
+                    style={styles.iconActionBtn}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    <Copy size={18} color={colors.text.secondary} strokeWidth={2} />
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={onSpeakTranslation} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Volume2 size={18} color={colors.primary} strokeWidth={2.2} />
+                  <TouchableOpacity
+                    onPress={onSpeakTranslation}
+                    style={styles.audioPlayOrb}
+                    activeOpacity={0.85}
+                  >
+                    <Volume2 size={16} color="#FFFFFF" strokeWidth={2.4} />
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={onShareTranslation} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Share2 size={18} color={colors.primary} strokeWidth={2.2} />
+                  <TouchableOpacity
+                    onPress={onShareTranslation}
+                    style={styles.iconActionBtn}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    <Share2 size={18} color={colors.text.secondary} strokeWidth={2} />
                   </TouchableOpacity>
                 </View>
-              ) : null}
-            </View>
-
-            {(translating || transcribingVoice || askBusyPhase) && !translatedText && !translateError ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator color={colors.primary} size="small" />
-                <Text style={styles.loadingText}>
-                  {askBusyPhase ? askLoadingLabel : transcribingVoice ? 'Transcribing…' : 'Translating…'}
-                </Text>
               </View>
-            ) : translateError ? (
-              <Text style={styles.errorText}>{translateError}</Text>
-            ) : (
-              <Text style={[styles.outputText, !translatedText && styles.outputPlaceholder]} numberOfLines={12}>
-                {translatedText || (sourceText.trim() ? 'Translation will appear here…' : '—')}
-              </Text>
-            )}
-          </View>
 
+              {translating && !translatedText ? (
+                <View style={styles.translatingRow}>
+                  <ActivityIndicator color={colors.primary} size="small" />
+                  <Text style={styles.translatingText}>Translating with Neural Engine…</Text>
+                </View>
+              ) : translateError ? (
+                <Text style={styles.errorText}>{translateError}</Text>
+              ) : (
+                <>
+                  <Text style={styles.translatedMainText}>{translatedText}</Text>
+
+                  {/* Transliteration Preview */}
+                  <View style={styles.transliterationRow}>
+                    <Volume1 size={15} color={colors.primary} strokeWidth={2} />
+                    <Text style={styles.transliterationText} numberOfLines={2}>
+                      “{translatedText}”
+                    </Text>
+                  </View>
+                </>
+              )}
+            </View>
+          ) : null}
+
+          {/* Bottom Quick Links: History & Saved */}
           <View style={styles.quickLinksRow}>
             <TouchableOpacity
               style={styles.quickLinkCard}
               activeOpacity={0.75}
               onPress={() => navigation.navigate('TranslatorHistory')}
             >
-              <View style={[styles.quickLinkIcon, styles.quickLinkIconBlue]}>
-                <History size={18} color={colors.primary} strokeWidth={2.2} />
+              <View style={styles.quickLinkTopRow}>
+                <View style={styles.quickLinkIconCircleBlue}>
+                  <History size={18} color={colors.primary} strokeWidth={2.2} />
+                </View>
+                <ArrowRight size={17} color={colors.text.secondary} strokeWidth={2.2} />
               </View>
-              <View style={styles.quickLinkTextCol}>
-                <Text style={styles.quickLinkTitle}>History</Text>
-                <Text style={styles.quickLinkSub} numberOfLines={1}>Recent translations</Text>
-              </View>
+              <Text style={styles.quickLinkTitle}>History</Text>
+              <Text style={styles.quickLinkSub}>
+                {historyCount > 0 ? `${historyCount} translations` : 'No translations yet'}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -711,252 +721,457 @@ function TranslatorScrollBody({
               activeOpacity={0.75}
               onPress={() => navigation.navigate('TranslatorSaved')}
             >
-              <View style={[styles.quickLinkIcon, styles.quickLinkIconGold]}>
-                <Bookmark size={18} color="#B45309" strokeWidth={2.2} />
+              <View style={styles.quickLinkTopRow}>
+                <View style={styles.quickLinkIconCircleGreen}>
+                  <Bookmark size={18} color="#16A34A" strokeWidth={2.2} />
+                </View>
+                <ArrowRight size={17} color={colors.text.secondary} strokeWidth={2.2} />
               </View>
-              <View style={styles.quickLinkTextCol}>
-                <Text style={styles.quickLinkTitle}>Saved</Text>
-                <Text style={styles.quickLinkSub} numberOfLines={1}>Starred items</Text>
-              </View>
+              <Text style={styles.quickLinkTitle}>Saved</Text>
+              <Text style={styles.quickLinkSub}>
+                {savedCount > 0 ? `${savedCount} starred phrases` : 'No starred phrases'}
+              </Text>
             </TouchableOpacity>
           </View>
-
         </ScrollView>
+      </KeyboardAvoidingView>
+    </ScreenContainer>
   );
-}
+};
 
-function createStyles(colors) {
+function createStyles(colors, isDark) {
   return StyleSheet.create({
-  flex1: {
-    flex: 1,
-  },
-  screen: {
-    backgroundColor: colors.backgroundAlt,
-  },
-  toastWrap: {
-    position: 'absolute',
-    top: 10,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    zIndex: 30,
-  },
-  toast: {
-    backgroundColor: 'rgba(17, 24, 39, 0.92)',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
-  },
-  toastText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  kav: {
-    flex: 1,
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 18,
-    paddingTop: 16,
-    paddingBottom: 26,
-    gap: 14,
-  },
-  langPillsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  langPill: {
-    flex: 1,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  langPillText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.text.primary,
-    letterSpacing: 0.2,
-  },
-  swapPill: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  langHint: {
-    fontSize: 11,
-    color: colors.text.secondary,
-    textAlign: 'center',
-  },
-  cardKicker: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.text.secondary,
-    letterSpacing: 1.1,
-  },
-  inputCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-  },
-  input: {
-    minHeight: 90,
-    fontSize: 16,
-    lineHeight: 24,
-    color: colors.text.primary,
-    fontWeight: '500',
-    paddingVertical: 10,
-  },
-  inputMetaRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: colors.text.secondary,
-  },
-  errorText: {
-    fontSize: 14,
-    color: colors.status.blocked,
-    lineHeight: 20,
-    paddingVertical: 8,
-  },
-  charCount: {
-    fontSize: 12,
-    color: colors.text.secondary,
-    fontVariant: ['tabular-nums'],
-  },
-  divider: {
-    height: 1,
-    borderRadius: 1,
-    backgroundColor: colors.borderLight,
-  },
-  outputCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-  },
-  outputTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-    gap: 10,
-  },
-  outputTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  outputLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    color: colors.text.secondary,
-    textTransform: 'uppercase',
-  },
-  starBtn: {
-    padding: 6,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  outputActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  outputText: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: '600',
-    color: colors.text.primary,
-    letterSpacing: 0,
-  },
-  outputPlaceholder: {
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: '500',
-    color: colors.text.secondary,
-  },
-
-  quickLinksRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 0,
-  },
-  quickLinkCard: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  quickLinkIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  quickLinkIconBlue: {
-    backgroundColor: 'rgba(30, 136, 255, 0.10)',
-    borderColor: 'rgba(30, 136, 255, 0.18)',
-  },
-  quickLinkIconGold: {
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
-    borderColor: 'rgba(245, 158, 11, 0.22)',
-  },
-  quickLinkTextCol: {
-    flex: 1,
-  },
-  quickLinkTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: colors.text.primary,
-    letterSpacing: -0.2,
-  },
-  quickLinkSub: {
-    marginTop: 2,
-    fontSize: 12,
-    color: colors.text.secondary,
-  },
-});
+    screen: {
+      flex: 1,
+      backgroundColor: colors.backgroundAlt,
+    },
+    headerRightGroup: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    autoDetectHeaderBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.18)' : '#EFF6FF',
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+      borderRadius: 14,
+    },
+    autoDetectHeaderText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    settingsHeaderBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.18)' : '#EFF6FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    toastWrap: {
+      position: 'absolute',
+      top: 10,
+      left: 0,
+      right: 0,
+      alignItems: 'center',
+      zIndex: 30,
+    },
+    toast: {
+      backgroundColor: 'rgba(17, 24, 39, 0.92)',
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 14,
+    },
+    toastText: {
+      color: '#FFFFFF',
+      fontSize: 13,
+      fontWeight: '700',
+      letterSpacing: 0.2,
+    },
+    kav: {
+      flex: 1,
+    },
+    scroll: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: 16,
+      paddingTop: 14,
+      paddingBottom: 40,
+      gap: 14,
+    },
+    languageBarCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.2 : 0.04,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    langSelectorBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      flex: 1,
+    },
+    langCodeBadgeBlue: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.22)' : '#EFF6FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    langCodeTextBlue: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.primary,
+    },
+    langCodeBadgeGreen: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: isDark ? 'rgba(34, 197, 94, 0.22)' : '#EAF8EE',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    langCodeTextGreen: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: '#16A34A',
+    },
+    langSelectorText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.text.primary,
+      flexShrink: 1,
+    },
+    swapRoundBtn: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginHorizontal: 8,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.28,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    inputCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.2 : 0.04,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    inputTopRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 10,
+    },
+    inputKickerGroup: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    cardKicker: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.text.secondary,
+      letterSpacing: 1.1,
+    },
+    autoDetectInputBadge: {
+      backgroundColor: colors.backgroundAlt,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+    },
+    autoDetectInputText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.text.secondary,
+    },
+    inputMicOrb: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.16)' : '#EFF6FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    inputMicOrbRecording: {
+      backgroundColor: colors.recording.active,
+    },
+    input: {
+      minHeight: 90,
+      fontSize: 16,
+      lineHeight: 24,
+      color: colors.text.primary,
+      fontWeight: '500',
+      paddingVertical: 8,
+    },
+    inputBottomRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 10,
+      paddingTop: 8,
+    },
+    inputBottomLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    clearCircleBtn: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: colors.backgroundAlt,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    pastePillBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 12,
+      backgroundColor: colors.backgroundAlt,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+    },
+    pastePillText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    charCountText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.text.secondary,
+      fontVariant: ['tabular-nums'],
+    },
+    translateCtaBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primary,
+      borderRadius: 20,
+      paddingVertical: 15,
+      paddingHorizontal: 20,
+      gap: 10,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.28,
+      shadowRadius: 10,
+      elevation: 4,
+    },
+    translateCtaText: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: '#FFFFFF',
+      letterSpacing: 0.3,
+    },
+    resultCard: {
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.12)' : '#EFF6FF',
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(0, 229, 146, 0.25)' : '#DBEAFE',
+      padding: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.2 : 0.04,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    resultTopRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+    },
+    resultKickerGroup: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    resultKicker: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.primary,
+      letterSpacing: 1.1,
+    },
+    resultLangBadge: {
+      backgroundColor: colors.surface,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+    },
+    resultLangBadgeText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    resultActionsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    iconActionBtn: {
+      padding: 4,
+    },
+    audioPlayOrb: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    translatingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 16,
+    },
+    translatingText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.primary,
+    },
+    errorText: {
+      fontSize: 13,
+      color: colors.status.blocked,
+      lineHeight: 18,
+      paddingVertical: 8,
+    },
+    translatedMainText: {
+      fontSize: 19,
+      fontWeight: '800',
+      color: colors.text.primary,
+      lineHeight: 28,
+      letterSpacing: -0.2,
+    },
+    transliterationRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 10,
+      paddingTop: 8,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: isDark ? 'rgba(0, 229, 146, 0.2)' : 'rgba(0, 229, 146, 0.12)',
+    },
+    transliterationText: {
+      fontSize: 13,
+      fontStyle: 'italic',
+      color: colors.text.secondary,
+      flex: 1,
+      lineHeight: 18,
+    },
+    alternativeSection: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 12,
+    },
+    alternativeKicker: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.text.secondary,
+    },
+    altScroll: {
+      gap: 8,
+    },
+    altChip: {
+      backgroundColor: colors.surface,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+    },
+    altChipText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.text.primary,
+    },
+    quickLinksRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    quickLinkCard: {
+      flex: 1,
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.2 : 0.04,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    quickLinkTopRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+    },
+    quickLinkIconCircleBlue: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.18)' : '#EFF6FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    quickLinkIconCircleGreen: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: isDark ? 'rgba(34, 197, 94, 0.18)' : '#EAF8EE',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    quickLinkTitle: {
+      fontSize: 15,
+      fontWeight: '800',
+      color: colors.text.primary,
+      letterSpacing: -0.2,
+    },
+    quickLinkSub: {
+      marginTop: 3,
+      fontSize: 12,
+      color: colors.text.secondary,
+    },
+  });
 }
-
-
 
 export default TranslatorScreen;

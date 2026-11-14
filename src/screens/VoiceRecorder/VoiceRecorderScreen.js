@@ -32,6 +32,15 @@ import {
   Play,
   RotateCw,
   Save,
+  BadgeCheck,
+  ArrowRight,
+  Folder,
+  Upload,
+  Cloud,
+  FileText,
+  Headphones,
+  ShieldCheck,
+  Lightbulb,
 } from 'lucide-react-native';
 import { FileSystem } from 'react-native-file-access';
 import NativeAudioService from '../../services/NativeAudioService';
@@ -56,8 +65,8 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
   { navigation, embedded = false, homeEmbedded = false },
   ref,
 ) {
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   const showAlert = useAlert();
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -187,6 +196,17 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
     return false;
   }, [showAlert, isRecording]);
 
+  const handleStopRef = useRef(null);
+  const handleTranscriptionRef = useRef(null);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      startRecording: handleStart,
+      stopRecording: (...args) => handleStopRef.current?.(...args),
+    }),
+    [handleStart],
+  );
   const handleStop = async () => {
     if (!isRecording) return;
     setIsTranscribing(true);
@@ -209,15 +229,6 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
     });
     await handleTranscription(result.filePath, result.recordingData);
   };
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      startRecording: handleStart,
-      stopRecording: handleStop,
-    }),
-    [handleStart],
-  );
 
   const handlePlayPause = async () => {
     const path = lastRecording?.filePath || filePath;
@@ -244,6 +255,9 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
     }
   };
 
+  handleStopRef.current = handleStop;
+  handleTranscriptionRef.current = handleTranscription;
+
   const handlePickExistingAudio = useCallback(async () => {
     if (isRecording || isTranscribing) return;
     try {
@@ -264,7 +278,7 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
       setDuration(0);
 
       setIsTranscribing(true);
-      await handleTranscription(pickedUri, null);
+      await handleTranscriptionRef.current?.(pickedUri, null);
     } catch (e) {
       if (/cancel/i.test(e?.message || '')) return;
       showAlert('Upload audio', e?.message || 'Could not pick an audio file.');
@@ -492,44 +506,48 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
             ]}
           >
             <View style={styles.heroTopRow}>
-              <Animated.View
-                style={[
-                  styles.heroIconWrap,
-                  isRecording && !isPaused && styles.heroIconWrapActive,
-                  { transform: [{ scale: pulseAnim }] },
-                ]}
-              >
-                {isRecording ? (
-                  <Mic
-                    size={micIconSize}
-                    color={isRecording && !isPaused ? colors.recording.active : colors.text.secondary}
-                    strokeWidth={1.6}
-                  />
-                ) : (
-                  <MicOff size={micIconSize} color={colors.text.light} strokeWidth={1.6} />
-                )}
-              </Animated.View>
+              <View style={styles.heroIconBadgeWrap}>
+                <Animated.View
+                  style={[
+                    styles.heroIconWrap,
+                    isRecording && !isPaused && styles.heroIconWrapActive,
+                    { transform: [{ scale: pulseAnim }] },
+                  ]}
+                >
+                  {isRecording ? (
+                    <Mic
+                      size={24}
+                      color={isRecording && !isPaused ? colors.recording.active : colors.text.secondary}
+                      strokeWidth={2}
+                    />
+                  ) : (
+                    <MicOff size={24} color={colors.text.light} strokeWidth={2} />
+                  )}
+                </Animated.View>
+                <View style={styles.heroOnlineDot} />
+              </View>
 
               <View style={styles.heroTextCol}>
-                <Text style={styles.heroTitle}>
-                  {isRecording ? (isPaused ? 'Recording paused' : 'Recording…') : 'Voice Command'}
-                </Text>
+                <View style={styles.heroTitleRow}>
+                  <Text style={styles.heroTitle}>Voice Command</Text>
+                  <BadgeCheck size={18} color={colors.primary} strokeWidth={2.4} />
+                </View>
                 <Text style={styles.heroSub}>
-                  {isRecording
-                    ? 'Speak clearly. Tap Stop & Send when done.'
-                    : 'Record now or import an existing audio from Files.'}
+                  Record now or import an existing audio file from your device...
                 </Text>
               </View>
             </View>
 
-            <View style={styles.heroMetaRow}>
-              {isRecording ? (
-                <Text style={styles.heroMetaValue}>{NativeAudioService.formatDuration(duration)}</Text>
-              ) : hasRecording ? (
-                <Text style={styles.heroMetaHint}>Last recording saved ✓</Text>
-              ) : (
-                <Text style={styles.heroMetaHint}>Ready</Text>
-              )}
+            {/* Status indicator line */}
+            <View style={styles.heroDividerWrap}>
+              <View style={styles.heroDividerLine} />
+              <View style={[styles.heroStatusPill, isRecording && styles.heroStatusPillActive]}>
+                <Text style={[styles.heroStatusPillText, isRecording && styles.heroStatusPillTextActive]}>
+                  {isRecording
+                    ? `• RECORDING (${NativeAudioService.formatDuration(duration)})`
+                    : '• READY'}
+                </Text>
+              </View>
             </View>
           </Animated.View>
 
@@ -537,86 +555,87 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
             {!isRecording ? (
               showPrimaryStart ? (
                 <TouchableOpacity
-                  style={[styles.actionTile, styles.actionPrimary]}
+                  style={styles.bigStartBtn}
                   onPress={handleStart}
                   disabled={isTranscribing}
-                  activeOpacity={0.85}
+                  activeOpacity={0.88}
                 >
-                  <View style={[styles.actionIcon, { backgroundColor: 'rgba(255,255,255,0.18)' }]}>
-                    <Circle size={18} color="#FFFFFF" strokeWidth={2.4} />
+                  <View style={styles.bigStartCircle}>
+                    <Circle size={16} color="#FFFFFF" strokeWidth={3.5} fill="#FFFFFF" />
                   </View>
-                  <View style={styles.actionTextCol}>
-                    <Text style={styles.actionTitleLight}>Start</Text>
-                    <Text style={styles.actionSubLight}>Record now</Text>
+                  <View style={styles.bigBtnTextCol}>
+                    <Text style={styles.bigStartTitle}>Start</Text>
+                    <Text style={styles.bigStartSub}>Record live voice input</Text>
+                  </View>
+                  <View style={styles.bigStartArrowWrap}>
+                    <View style={styles.miniWaveBarsWhite}>
+                      <View style={[styles.miniBarWhite, { height: 6 }]} />
+                      <View style={[styles.miniBarWhite, { height: 12 }]} />
+                      <View style={[styles.miniBarWhite, { height: 8 }]} />
+                    </View>
+                    <ArrowRight size={20} color="#FFFFFF" strokeWidth={2.4} />
                   </View>
                 </TouchableOpacity>
               ) : null
             ) : (
               <TouchableOpacity
-                style={[
-                  styles.actionTile,
-                  styles.actionDanger,
-                  homeEmbedded && styles.controlBtnHomeWide,
-                ]}
+                style={styles.bigStopBtn}
                 onPress={handleStop}
-                activeOpacity={0.85}
+                activeOpacity={0.88}
               >
-                <View style={[styles.actionIcon, { backgroundColor: 'rgba(255,255,255,0.18)' }]}>
-                  <Square size={18} color="#FFFFFF" strokeWidth={2.2} />
+                <View style={styles.bigStartCircle}>
+                  <Square size={16} color="#FFFFFF" strokeWidth={2.6} fill="#FFFFFF" />
                 </View>
-                <View style={styles.actionTextCol}>
-                  <Text style={styles.actionTitleLight}>Stop</Text>
-                  <Text style={styles.actionSubLight}>Send to server</Text>
+                <View style={styles.bigBtnTextCol}>
+                  <Text style={styles.bigStartTitle}>Stop & Send</Text>
+                  <Text style={styles.bigStartSub}>Send audio to whisper backend</Text>
                 </View>
+                <ArrowRight size={20} color="#FFFFFF" strokeWidth={2.4} />
               </TouchableOpacity>
             )}
 
             {!isRecording ? (
               <TouchableOpacity
-                style={[styles.actionTile, styles.actionOutline, homeEmbedded && styles.controlBtnHomeWide]}
+                style={styles.importBtn}
                 onPress={handlePickExistingAudio}
                 disabled={isTranscribing}
                 activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Upload existing audio"
               >
-                <View style={styles.actionIconOutline}>
-                  <Music size={18} color={colors.primary} strokeWidth={2.2} />
+                <View style={styles.importIconWrap}>
+                  <Folder size={20} color={colors.primary} strokeWidth={2.2} />
                 </View>
-                <View style={styles.actionTextCol}>
-                  <Text style={styles.actionTitle}>Import</Text>
-                  <Text style={styles.actionSub}>From Files</Text>
+                <View style={styles.bigBtnTextCol}>
+                  <Text style={styles.importTitle}>Import</Text>
+                  <Text style={styles.importSub}>From device or cloud...</Text>
                 </View>
+                <View style={styles.formatBadge}>
+                  <Text style={styles.formatBadgeText}>MP3, WAV, AAC</Text>
+                </View>
+                <Upload size={18} color={colors.text.secondary} strokeWidth={2.2} />
               </TouchableOpacity>
             ) : null}
 
             {hasRecording && !isRecording && (
               <TouchableOpacity
-                style={[
-                  styles.actionTile,
-                  isPlaying ? styles.actionMuted : styles.actionInfo,
-                  homeEmbedded && styles.controlBtnHomeWide,
-                ]}
+                style={styles.playbackBtn}
                 onPress={handlePlayPause}
                 disabled={isTranscribing}
                 activeOpacity={0.85}
               >
-                <View style={[styles.actionIcon, { backgroundColor: 'rgba(255,255,255,0.18)' }]}>
+                <View style={styles.playIconWrap}>
                   {isPlaying ? (
-                    <Square size={18} color="#FFFFFF" strokeWidth={2.2} />
+                    <Square size={16} color="#FFFFFF" strokeWidth={2.2} fill="#FFFFFF" />
                   ) : (
-                    <Play size={18} color="#FFFFFF" strokeWidth={2.2} />
+                    <Play size={16} color="#FFFFFF" strokeWidth={2.2} fill="#FFFFFF" />
                   )}
                 </View>
-                <View style={styles.actionTextCol}>
-                  <Text style={styles.actionTitleLight}>{isPlaying ? 'Stop' : 'Play'}</Text>
-                  <Text style={styles.actionSubLight}>{isPlaying ? 'Playback' : 'Listen'}</Text>
+                <View style={styles.bigBtnTextCol}>
+                  <Text style={styles.playbackTitle}>{isPlaying ? 'Stop' : 'Play Recorded Audio'}</Text>
+                  <Text style={styles.playbackSub}>{isPlaying ? 'Playing back recording' : 'Listen before sending'}</Text>
                 </View>
               </TouchableOpacity>
             )}
           </View>
-
-
         </>
       ) : null}
 
@@ -752,23 +771,72 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
       )}
 
       {!homeEmbedded ? (
-        <AppCard>
-          <Text style={styles.tipsTitle}>Quick Tips</Text>
-          {[
-            { Icon: Circle, text: 'Tap Start to begin recording', color: colors.recording.active },
-            { Icon: Square, text: 'Tap Stop & Send to upload to backend', color: colors.primary },
-            { Icon: Music, text: 'Tap Import to choose an existing audio from Files', color: colors.primary },
-            { Icon: Play, text: 'Play back the recorded audio', color: colors.status.info },
-            { Icon: Music, text: 'Files saved in MP4/AAC format', color: colors.text.secondary },
-          ].map(({ Icon, text, color }) => (
-            <View key={text} style={styles.tipRow}>
-              <View style={[styles.tipIconWrap, { backgroundColor: `${color}14`, borderColor: `${color}22` }]}>
-                <Icon size={16} color={color} strokeWidth={2.2} />
+        <>
+          <View style={styles.quickTipsCard}>
+            <View style={styles.tipsHeaderRow}>
+              <View style={styles.tipsTitleRow}>
+                <View style={styles.bulbBadge}>
+                  <Lightbulb size={16} color={colors.primary} strokeWidth={2.4} />
+                </View>
+                <Text style={styles.tipsTitle}>Quick Tips</Text>
               </View>
-              <Text style={styles.tipText}>{text}</Text>
+              <View style={styles.bestPracticeBadge}>
+                <Text style={styles.bestPracticeText}>5 Best Practices</Text>
+              </View>
             </View>
-          ))}
-        </AppCard>
+
+            {[
+              {
+                Icon: Circle,
+                text: 'Tap Start to begin recording',
+                subtext: 'Zero lag with offline stream backup',
+                color: '#EF4444',
+                fill: '#EF4444',
+              },
+              {
+                Icon: Cloud,
+                text: 'Tap Stop & Send to transcribe',
+                subtext: 'Instant text extraction with Whisper backend',
+                color: colors.primary,
+              },
+              {
+                Icon: FileText,
+                text: 'Tap Import to load saved voice clips',
+                subtext: 'Supports memos, lectures, and calls',
+                color: '#6366F1',
+              },
+              {
+                Icon: Headphones,
+                text: 'Play back recorded audio anytime',
+                subtext: 'Waveform timeline with segment scrub',
+                color: '#0EA5E9',
+              },
+              {
+                Icon: ShieldCheck,
+                text: 'Files saved in high-res MP4/AAC',
+                subtext: 'Stored on-device with zero-knowledge encryption',
+                color: '#16A34A',
+              },
+            ].map(({ Icon, text, subtext, color, fill }) => (
+              <View key={text} style={styles.tipRow}>
+                <View style={[styles.tipIconWrap, { backgroundColor: `${color}18` }]}>
+                  <Icon size={16} color={color} strokeWidth={2.2} fill={fill || 'none'} />
+                </View>
+                <View style={styles.tipTextCol}>
+                  <Text style={styles.tipTitleText}>{text}</Text>
+                  <Text style={styles.tipSubText}>{subtext}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          {/* Specs Footer Capsule */}
+          <View style={styles.specsCapsule}>
+            <Text style={styles.specsCapsuleText}>
+              • 48kHz • 256kbps Stereo Audio • Whisper v3 Ready
+            </Text>
+          </View>
+        </>
       ) : null}
     </>
   );
@@ -803,6 +871,7 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
     <View style={styles.safeArea}>
       <AppHeader
         title="Voice Command"
+        subtitle="Fast audio dictation & sync"
         rightComponent={
           <View style={styles.headerActions}>
             <TouchableOpacity
@@ -834,7 +903,7 @@ const VoiceRecorderScreen = forwardRef(function VoiceRecorderScreen(
   );
 });
 
-function createStyles(colors) {
+function createStyles(colors, isDark) {
   return StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -859,7 +928,7 @@ function createStyles(colors) {
     borderColor: colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
+    shadowOpacity: isDark ? 0.2 : 0.06,
     shadowRadius: 8,
     elevation: 2,
   },
@@ -913,7 +982,8 @@ function createStyles(colors) {
     marginBottom: 0,
   },
   scrollContent: {
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 40,
   },
   inlineHeaderActions: {
@@ -930,111 +1000,347 @@ function createStyles(colors) {
   },
   heroCard: {
     backgroundColor: colors.surface,
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 1.5,
+    borderRadius: 22,
+    padding: 18,
+    marginBottom: 14,
+    borderWidth: 1,
     borderColor: colors.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: isDark ? 0.25 : 0.06,
+    shadowRadius: 10,
+    elevation: 3,
   },
   heroCardActive: {
-    borderColor: 'rgba(16, 185, 129, 0.35)',
+    borderColor: colors.recording.active,
     backgroundColor: colors.recording.activeBg,
   },
   heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
+  },
+  heroIconBadgeWrap: {
+    position: 'relative',
   },
   heroIconWrap: {
-    width: 68,
-    height: 68,
-    borderRadius: 22,
+    width: 60,
+    height: 60,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.backgroundAlt,
-    borderWidth: 1.5,
+    backgroundColor: isDark ? 'rgba(0, 229, 146, 0.16)' : '#EFF6FF',
+    borderWidth: 1,
     borderColor: colors.border,
   },
   heroIconWrapActive: {
-    backgroundColor: 'rgba(16, 185, 129, 0.10)',
-    borderColor: 'rgba(16, 185, 129, 0.25)',
+    backgroundColor: colors.recording.activeBg,
+    borderColor: colors.recording.active,
+  },
+  heroOnlineDot: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#22C55E',
+    borderWidth: 2.5,
+    borderColor: colors.surface,
   },
   heroTextCol: {
     flex: 1,
   },
+  heroTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   heroTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '800',
     color: colors.text.primary,
     letterSpacing: -0.2,
   },
   heroSub: {
-    marginTop: 2,
+    marginTop: 4,
     fontSize: 12,
     color: colors.text.secondary,
-    lineHeight: 16,
+    lineHeight: 17,
   },
-  heroMetaRow: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+  heroDividerWrap: {
+    marginTop: 16,
+    paddingTop: 6,
     alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
   },
-  heroMetaValue: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: colors.text.primary,
-    fontFamily: 'monospace',
-    letterSpacing: -0.5,
+  heroDividerLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: colors.borderLight,
   },
-  heroMetaHint: {
-    fontSize: 12,
-    color: colors.text.secondary,
-    fontWeight: '600',
+  heroStatusPill: {
+    backgroundColor: colors.badge.engineBg,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(74, 222, 128, 0.25)' : '#BBF7D0',
+  },
+  heroStatusPillActive: {
+    backgroundColor: colors.recording.activeBg,
+    borderColor: colors.recording.active,
+  },
+  heroStatusPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.badge.engineText,
+    letterSpacing: 0.6,
+  },
+  heroStatusPillTextActive: {
+    color: colors.recording.active,
   },
   actionRow: {
     flexDirection: 'column',
-    gap: 10,
+    gap: 12,
     marginBottom: 16,
   },
-  actionTile: {
-    width: '100%',
+  bigStartBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.recording.active,
+    borderRadius: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    gap: 14,
+    shadowColor: colors.recording.active,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  bigStartCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bigBtnTextCol: {
+    flex: 1,
+  },
+  bigStartTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+  },
+  bigStartSub: {
+    marginTop: 2,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.85)',
+  },
+  bigStartArrowWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  miniWaveBarsWhite: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  miniBarWhite: {
+    width: 2.5,
+    borderRadius: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  bigStopBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    gap: 14,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  importBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: isDark ? 0.2 : 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  importIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: isDark ? 'rgba(0, 229, 146, 0.18)' : '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  importTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.text.primary,
+  },
+  importSub: {
+    marginTop: 2,
+    fontSize: 12,
+    color: colors.text.secondary,
+  },
+  formatBadge: {
+    backgroundColor: isDark ? 'rgba(0, 229, 146, 0.16)' : '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    marginRight: 4,
+  },
+  formatBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  playbackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  playIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playbackTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.text.primary,
+  },
+  playbackSub: {
+    fontSize: 12,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  quickTipsCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 18,
+    marginTop: 4,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: isDark ? 0.2 : 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  tipsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  tipsTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  bulbBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: isDark ? 'rgba(0, 229, 146, 0.18)' : '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tipsTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: colors.text.primary,
+    letterSpacing: -0.2,
+  },
+  bestPracticeBadge: {
+    backgroundColor: isDark ? 'rgba(0, 229, 146, 0.14)' : '#EFF6FF',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  bestPracticeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  tipRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    marginBottom: 14,
+  },
+  tipIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tipTextCol: {
+    flex: 1,
+  },
+  tipTitleText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  tipSubText: {
+    fontSize: 11,
+    color: colors.text.secondary,
+    marginTop: 1,
+  },
+  specsCapsule: {
+    backgroundColor: isDark ? 'rgba(0, 229, 146, 0.12)' : '#EFF6FF',
     borderRadius: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 16,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  actionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(0, 229, 146, 0.20)' : '#DBEAFE',
+    marginBottom: 16,
   },
-  actionIconOutline: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(30, 136, 255, 0.05)',
-    borderWidth: 1.2,
-    borderColor: 'rgba(30, 136, 255, 0.12)',
+  specsCapsuleText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 0.3,
   },
   actionTextCol: {
     flex: 1,
@@ -1075,7 +1381,7 @@ function createStyles(colors) {
   },
   actionOutline: {
     backgroundColor: colors.surface,
-    borderColor: 'rgba(30, 136, 255, 0.55)',
+    borderColor: 'rgba(0, 229, 146, 0.55)',
     borderStyle: 'dashed',
     borderWidth: 1.5,
     shadowOpacity: 0.02,
@@ -1261,27 +1567,6 @@ function createStyles(colors) {
   },
   errorChipDisabled: {
     opacity: 0.38,
-  },
-  tipsTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginBottom: 14,
-  },
-  tipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  tipIconWrap: {
-    width: 26,
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  tipText: {
-    fontSize: 13,
-    color: colors.text.secondary,
-    flex: 1,
   },
   });
 }

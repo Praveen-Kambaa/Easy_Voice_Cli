@@ -208,6 +208,33 @@ class FloatingMicModule(reactContext: ReactApplicationContext) : ReactContextBas
     }
 
     @ReactMethod
+    fun setAiEngineProvider(provider: String, promise: Promise) {
+        try {
+            reactApplicationContext
+                .getSharedPreferences("TypeEasyPrefs", Context.MODE_PRIVATE)
+                .edit()
+                .putString("ai_engine_provider", provider)
+                .apply()
+            reactApplicationContext.sendAppScopedBroadcast(Intent("com.typeeasy.AI_ENGINE_UPDATED"))
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("AI_ENGINE_SYNC_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun getAiEngineProvider(promise: Promise) {
+        try {
+            val provider = reactApplicationContext
+                .getSharedPreferences("TypeEasyPrefs", Context.MODE_PRIVATE)
+                .getString("ai_engine_provider", "default") ?: "default"
+            promise.resolve(provider)
+        } catch (e: Exception) {
+            promise.resolve("default")
+        }
+    }
+
+    @ReactMethod
     fun injectText(text: String, promise: Promise) {
         try {
             val context = reactApplicationContext

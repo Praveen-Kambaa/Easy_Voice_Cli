@@ -19,3 +19,5 @@ export const AI_CHAT_MODEL = 'liquid/lfm-2.5-1.2b-instruct:free';
 /** In-app Ask Question + native overlay. */
 export const AI_PROVIDER_API_KEY =
   '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';
+
+export { GROQ_CONFIG } from './api';

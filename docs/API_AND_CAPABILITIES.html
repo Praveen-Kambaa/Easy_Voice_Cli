@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Type Easy — API Servers, Keys &amp; Capabilities</title>
+  <style>
+    :root {
+      --ink: #1a2332;
+      --muted: #5a6577;
+      --line: #d8dee8;
+      --bg: #f7f8fb;
+      --card: #ffffff;
+      --accent: #1e88ff;
+      --accent-soft: #e8f3ff;
+      --typeeasy: #0d6e6e;
+      --typeeasy-bg: #e6f5f5;
+      --easyvoice: #1e4d8c;
+      --easyvoice-bg: #e8f0fa;
+      --onddevice: #2e6b3a;
+      --onddevice-bg: #eaf6ec;
+      --key: #8a4b12;
+      --key-bg: #fff4e8;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.55;
+      font-size: 15px;
+    }
+
+    .page {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 40px 28px 64px;
+    }
+
+    header.doc-header {
+      background: linear-gradient(135deg, #0f2744 0%, #1e88ff 100%);
+      color: #fff;
+      border-radius: 16px;
+      padding: 36px 32px 28px;
+      margin-bottom: 28px;
+      box-shadow: 0 10px 28px rgba(30, 136, 255, 0.22);
+    }
+
+    header.doc-header h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    header.doc-header p {
+      margin: 0;
+      opacity: 0.92;
+      font-size: 15px;
+      max-width: 620px;
+    }
+
+    .meta {
+      margin-top: 18px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.28);
+    }
+
+    section {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 24px 26px;
+      margin-bottom: 18px;
+      box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 18px;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h2 .num {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    h3 {
+      margin: 20px 0 10px;
+      font-size: 15px;
+      color: var(--ink);
+    }
+
+    p, li { color: var(--ink); }
+    .note { color: var(--muted); font-size: 13.5px; margin-top: 10px; }
+
+    .servers {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    @media (max-width: 720px) {
+      .servers { grid-template-columns: 1fr; }
+      .page { padding: 24px 16px 48px; }
+    }
+
+    .server-card {
+      border-radius: 12px;
+      padding: 16px 18px;
+      border: 1px solid var(--line);
+    }
+
+    .server-card.typeeasy {
+      background: var(--typeeasy-bg);
+      border-color: #b8e0e0;
+    }
+
+    .server-card.easyvoice {
+      background: var(--easyvoice-bg);
+      border-color: #b8cce8;
+    }
+
+    .server-card .label {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .server-card.typeeasy .label { color: var(--typeeasy); }
+    .server-card.easyvoice .label { color: var(--easyvoice); }
+
+    .server-card .url {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12.5px;
+      word-break: break-all;
+      margin: 0 0 8px;
+      color: var(--ink);
+    }
+
+    .server-card .role {
+      margin: 0;
+      font-size: 13.5px;
+      color: var(--muted);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+      margin-top: 8px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+
+    th {
+      background: #f0f3f8;
+      font-weight: 650;
+      color: #334155;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    code, .mono {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12.5px;
+      background: #eef2f7;
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      font-weight: 650;
+    }
+
+    .pill.te { background: var(--typeeasy-bg); color: var(--typeeasy); }
+    .pill.ev { background: var(--easyvoice-bg); color: var(--easyvoice); }
+    .pill.od { background: var(--onddevice-bg); color: var(--onddevice); }
+    .pill.key { background: var(--key-bg); color: var(--key); }
+    .pill.none { background: #eef2f7; color: #64748b; }
+
+    .model {
+      background: #0f2744;
+      color: #e8eef8;
+      border-radius: 12px;
+      padding: 18px 20px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      white-space: pre;
+      overflow-x: auto;
+    }
+
+    pre.curl {
+      background: #0f2744;
+      color: #dce7f5;
+      border-radius: 12px;
+      padding: 16px 18px;
+      font-size: 12.5px;
+      overflow-x: auto;
+      line-height: 1.55;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+
+    .actions button {
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      font-size: 13px;
+      padding: 10px 16px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    .actions button.secondary {
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 12.5px;
+      margin-top: 8px;
+    }
+
+    @media print {
+      body { background: #fff; }
+      .actions { display: none; }
+      .page { max-width: none; padding: 0; }
+      header.doc-header { box-shadow: none; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      section { break-inside: avoid; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="actions">
+      <button type="button" onclick="window.print()">Print / Save as PDF</button>
+      <button type="button" class="secondary" onclick="window.close()">Close</button>
+    </div>
+
+    <header class="doc-header">
+      <h1>Type Easy — API &amp; Capabilities Guide</h1>
+      <p>
+        Complete reference for backend servers, third-party API keys,
+        and on-device phone features used by the EVC / Type Easy Android app.
+      </p>
+      <div class="meta">
+        <span class="badge">Project: EVC / Type Easy</span>
+        <span class="badge">Config: src/config/api.js</span>
+        <span class="badge">Updated: Jul 2026</span>
+      </div>
+    </header>
+
+    <!-- 1 -->
+    <section>
+      <h2><span class="num">1</span> Two backend servers</h2>
+      <div class="servers">
+        <div class="server-card typeeasy">
+          <div class="label">TYPE_EASY</div>
+          <p class="url">https://easyvoice.kambaaincorporation.in/apiv2</p>
+          <p class="role">Account, auth, cloud text translate, grammar check, usage / plan / tokens.</p>
+        </div>
+        <div class="server-card easyvoice">
+          <div class="label">EASY_VOICE</div>
+          <p class="url">https://easy-voice-api.kambaaincorporation.in/api</p>
+          <p class="role">Voice STT, voice command (transcribe → execute), speech-translate, voice-server text translate.</p>
+        </div>
+      </div>
+      <p class="note">
+        Helpers: <code>buildTypeEasyUrl()</code> and <code>buildEasyVoiceUrl()</code> in
+        <code>src/config/api.js</code>. Android mirror: <code>ApiConfig.kt</code> (generated at build).
+      </p>
+    </section>
+
+    <!-- 2 -->
+    <section>
+      <h2><span class="num">2</span> What uses TYPE_EASY</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Endpoint</th>
+            <th>Credential</th>
+            <th>Where</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Login / Register / OTP / Reset / Google Sign-In</td>
+            <td><code>/auth/user-login</code>, <code>/auth/send-otp</code>, <code>/auth/verify-otp</code>, <code>/auth/complete-registration</code>, <code>/auth/google-signin</code>, …</td>
+            <td>Email/password, OTP, Google token</td>
+            <td><code>AuthContext.js</code></td>
+          </tr>
+          <tr>
+            <td>Translate (cloud API path)</td>
+            <td><code>POST /translate</code></td>
+            <td>Form: <code>user_id</code>, <code>text</code>, <code>target_language</code></td>
+            <td><code>translationService.js</code>; keyboard when internal translation is OFF</td>
+          </tr>
+          <tr>
+            <td>Grammar Check</td>
+            <td><code>POST /grammar-check</code></td>
+            <td>Form: <code>user_id</code>, <code>text</code>, <code>fast</code></td>
+            <td>Grammar screen; keyboard Grammar button</td>
+          </tr>
+          <tr>
+            <td>Usage / Plan / Tokens</td>
+            <td><code>/usage/{userId}</code>, <code>/user-plan/{userId}</code>, <code>/update-tokens</code></td>
+            <td>Optional <code>Bearer</code> login token</td>
+            <td><code>typeEasyUsageApi.js</code>, Profile</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="note">
+        Login returns a user JWT stored by the app. Keyboard translate/grammar send
+        <code>user_id</code> synced from the logged-in user — not a separate API key.
+      </p>
+    </section>
+
+    <!-- 3 -->
+    <section>
+      <h2><span class="num">3</span> What uses EASY_VOICE</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Endpoint</th>
+            <th>Auth in client</th>
+            <th>Where</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Voice Input (cloud)</td>
+            <td><code>POST /voice/transcribe</code></td>
+            <td><span class="pill none">None</span></td>
+            <td>Keyboard mic, floating mic (cloud), <code>voiceApi.js</code></td>
+          </tr>
+          <tr>
+            <td>Voice Command</td>
+            <td><code>/voice/transcribe</code> → optional <code>PUT /voice/transcript</code> → <code>POST /voice/execute</code></td>
+            <td><span class="pill none">None</span></td>
+            <td>Keyboard / floating Voice Command; always cloud</td>
+          </tr>
+          <tr>
+            <td>Speech → Translate (cloud)</td>
+            <td><code>POST /voice/speech-translate</code></td>
+            <td><span class="pill none">None</span></td>
+            <td>Floating Translator when internal translation is OFF</td>
+          </tr>
+          <tr>
+            <td>Text translate (voice server)</td>
+            <td><code>POST /voice/translate-text</code></td>
+            <td><span class="pill none">—</span></td>
+            <td><code>textTranslationApi.js</code></td>
+          </tr>
+          <tr>
+            <td>History / Delete / Health</td>
+            <td><code>/voice/history</code>, <code>/voice/delete/…</code>, <code>/health</code></td>
+            <td><span class="pill none">—</span></td>
+            <td><code>voiceApi.js</code></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="note">
+        <strong>Voice Command always uses Easy Voice</strong> (needs <code>voiceAssetId</code> for execute).
+        The Internal Transcribe toggle does not apply to Voice Command.
+      </p>
+    </section>
+
+    <!-- 4 -->
+    <section>
+      <h2><span class="num">4</span> Third-party API keys</h2>
+      <p class="note" style="margin-top:0">These are separate from TYPE_EASY / EASY_VOICE. Values live in config files or Settings — this document lists purpose and location only.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Configured in</th>
+            <th>Provider</th>
+            <th>Used for</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="pill key">AI_PROVIDER_API_KEY</span></td>
+            <td><code>src/config/aiProvider.js</code></td>
+            <td>OpenRouter</td>
+            <td>Ask Question chat completions (Bearer). Also synced to floating Ask mode.</td>
+          </tr>
+          <tr>
+            <td><span class="pill key">AI_CHAT_API_BASE_URL</span> + <span class="pill key">AI_CHAT_MODEL</span></td>
+            <td><code>src/config/aiProvider.js</code></td>
+            <td>OpenRouter (or compatible)</td>
+            <td>Chat host + model id for Ask Question</td>
+          </tr>
+          <tr>
+            <td><span class="pill key">TAVILY_API_KEY</span></td>
+            <td><code>src/config/liveContextProvider.js</code></td>
+            <td>Tavily Search</td>
+            <td>Optional live web snippets before Ask</td>
+          </tr>
+          <tr>
+            <td><span class="pill key">ElevenLabs API key</span></td>
+            <td>Settings → AsyncStorage <code>@elevenlabs_api_key</code></td>
+            <td>ElevenLabs STT</td>
+            <td>Cloud mic transcription when Internal Transcribe is OFF and a real key is set</td>
+          </tr>
+          <tr>
+            <td><span class="pill key">Google webClientId</span></td>
+            <td><code>AuthContext.js</code></td>
+            <td>Google OAuth</td>
+            <td>Google login → then Type Easy <code>/auth/google-signin</code></td>
+          </tr>
+          <tr>
+            <td><span class="pill key">Login Bearer token</span></td>
+            <td>After login (app auth state)</td>
+            <td>Type Easy backend</td>
+            <td>Profile usage / plan APIs</td>
+          </tr>
+        </tbody>
+      </table>
+      <h3>No API key required</h3>
+      <ul>
+        <li><strong>Datamuse</strong> word suggestions — <code>https://api.datamuse.com/sug</code> (public)</li>
+        <li><strong>TYPE_EASY / EASY_VOICE voice clients</strong> — no Authorization header in current native/JS voice clients</li>
+      </ul>
+      <p class="note">Security: OpenRouter / Tavily keys in JS are for development. Prefer a backend proxy in production. Do not commit real production secrets publicly.</p>
+    </section>
+
+    <!-- 5 -->
+    <section>
+      <h2><span class="num">5</span> On-device (phone hardware / OS software)</h2>
+      <p class="note" style="margin-top:0">These use the phone’s mic, OS APIs, or Google Play / ML Kit — <strong>no app API key</strong>.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Capability</th>
+            <th>Technology</th>
+            <th>Used in</th>
+            <th>API key?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="pill od">Internal Transcribe</span> (default ON)</td>
+            <td>Android <code>SpeechRecognizer</code></td>
+            <td>Keyboard Voice Input, floating Microphone, some Ask STT paths</td>
+            <td><span class="pill none">No</span></td>
+          </tr>
+          <tr>
+            <td>On-device Whisper</td>
+            <td>Offline Whisper module</td>
+            <td>Call recording transcription; some RN internal paths</td>
+            <td><span class="pill none">No</span></td>
+          </tr>
+          <tr>
+            <td><span class="pill od">Internal Floating Translation</span> (default ON)</td>
+            <td>Google ML Kit Translate</td>
+            <td>Translator, keyboard Translate (internal ON), floating Translator</td>
+            <td><span class="pill none">No</span></td>
+          </tr>
+          <tr>
+            <td>Mic recording</td>
+            <td><code>MediaRecorder</code> / RN recorder</td>
+            <td>Voice command, cloud dictation, call recording</td>
+            <td>Permission only</td>
+          </tr>
+          <tr>
+            <td>Custom keyboard</td>
+            <td><code>InputMethodService</code></td>
+            <td>Typing, clipboard, feature toolbar</td>
+            <td>N/A</td>
+          </tr>
+          <tr>
+            <td>Floating overlay</td>
+            <td><code>SYSTEM_ALERT_WINDOW</code></td>
+            <td>Floating mic over other apps</td>
+            <td>N/A</td>
+          </tr>
+          <tr>
+            <td>Call assist / inject</td>
+            <td>Accessibility service</td>
+            <td>Call-related flows</td>
+            <td>N/A</td>
+          </tr>
+          <tr>
+            <td>Speak translation / Clipboard</td>
+            <td>Device TTS / <code>ClipboardManager</code></td>
+            <td>Translator speak; keyboard clipboard</td>
+            <td><span class="pill none">No</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 6 -->
+    <section>
+      <h2><span class="num">6</span> Settings: Internal vs Cloud</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Setting</th>
+            <th>ON (internal)</th>
+            <th>OFF (cloud / external)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Internal Transcribe</strong></td>
+            <td>Device SpeechRecognizer (Whisper in some RN flows)</td>
+            <td>Prefer <strong>ElevenLabs</strong> if a real key is set; else <span class="pill ev">EASY_VOICE</span> <code>/voice/transcribe</code></td>
+          </tr>
+          <tr>
+            <td><strong>Internal Floating Translation</strong></td>
+            <td>ML Kit on-device</td>
+            <td><span class="pill ev">EASY_VOICE</span> <code>/voice/speech-translate</code> (floating) or <span class="pill te">TYPE_EASY</span> <code>/translate</code> (keyboard text API path)</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 7 -->
+    <section>
+      <h2><span class="num">7</span> Feature cheat sheet</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Server / provider</th>
+            <th>Key / credential</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Auth, profile usage</td>
+            <td><span class="pill te">TYPE_EASY</span></td>
+            <td>Login token + userId</td>
+          </tr>
+          <tr>
+            <td>Grammar (app + keyboard)</td>
+            <td><span class="pill te">TYPE_EASY</span></td>
+            <td>user_id</td>
+          </tr>
+          <tr>
+            <td>Translate (API path)</td>
+            <td><span class="pill te">TYPE_EASY</span></td>
+            <td>user_id</td>
+          </tr>
+          <tr>
+            <td>Translate (internal)</td>
+            <td><span class="pill od">ML Kit</span></td>
+            <td>None</td>
+          </tr>
+          <tr>
+            <td>Voice Input (internal)</td>
+            <td><span class="pill od">SpeechRecognizer</span></td>
+            <td>None</td>
+          </tr>
+          <tr>
+            <td>Voice Input (cloud)</td>
+            <td>ElevenLabs or <span class="pill ev">EASY_VOICE</span></td>
+            <td>ElevenLabs key or none</td>
+          </tr>
+          <tr>
+            <td>Voice Command</td>
+            <td><span class="pill ev">EASY_VOICE</span> only</td>
+            <td>None in client</td>
+          </tr>
+          <tr>
+            <td>Ask Question</td>
+            <td>OpenRouter (+ optional Tavily)</td>
+            <td>AI_PROVIDER_API_KEY, TAVILY_API_KEY</td>
+          </tr>
+          <tr>
+            <td>Word suggestions</td>
+            <td>Datamuse</td>
+            <td>None</td>
+          </tr>
+          <tr>
+            <td>Clipboard</td>
+            <td><span class="pill od">Device</span></td>
+            <td>None</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 8 -->
+    <section>
+      <h2><span class="num">8</span> Mental model</h2>
+      <div class="model">TYPE_EASY  →  account + grammar + cloud text translate + usage
+EASY_VOICE →  voice STT + voice command + speech-translate
+OpenRouter →  Ask AI answers
+Tavily     →  optional live web context for Ask
+ElevenLabs →  optional cloud STT when Internal Transcribe is off
+Phone OS   →  SpeechRecognizer, ML Kit, mic, IME, overlay, accessibility</div>
+    </section>
+
+    <!-- 9 -->
+    <section>
+      <h2><span class="num">9</span> Sample Easy Voice curls</h2>
+      <p class="note" style="margin-top:0">Base: <code>https://easy-voice-api.kambaaincorporation.in/api</code></p>
+      <h3>1) Transcribe (Voice Input cloud / Voice Command step 1)</h3>
+      <pre class="curl">curl -X POST "https://easy-voice-api.kambaaincorporation.in/api/voice/transcribe" \
+  -H "Accept: application/json" \
+  -F "file=@/path/to/recording.m4a;type=audio/mp4" \
+  -F "language=en-US" \
+  -F "enablePunctuation=true" \
+  -F "enableTimestamps=false"</pre>
+
+      <h3>2) Update transcript (Voice Command — only if user edited)</h3>
+      <pre class="curl">curl -X PUT "https://easy-voice-api.kambaaincorporation.in/api/voice/transcript" \
+  -H "Accept: application/json" \
+  -H "Content-Type: application/json" \
+  -d '{"voiceAssetId":"YOUR_ASSET_ID","finalTranscript":"Edited command text"}'</pre>
+
+      <h3>3) Execute (Voice Command)</h3>
+      <pre class="curl">curl -X POST "https://easy-voice-api.kambaaincorporation.in/api/voice/execute" \
+  -H "Accept: application/json" \
+  -H "Content-Type: application/json" \
+  -d '{"easyVoiceAssetId":"YOUR_ASSET_ID","executeAt":"2026-05-29T10:15:45.123Z"}'</pre>
+    </section>
+
+    <!-- 10 -->
+    <section>
+      <h2><span class="num">10</span> Related source files</h2>
+      <table>
+        <thead>
+          <tr><th>Topic</th><th>Path</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Server bases</td><td><code>src/config/api.js</code></td></tr>
+          <tr><td>Voice endpoints</td><td><code>src/api/endpoints.js</code></td></tr>
+          <tr><td>Voice HTTP (RN)</td><td><code>src/api/voiceApi.js</code></td></tr>
+          <tr><td>OpenRouter</td><td><code>src/config/aiProvider.js</code></td></tr>
+          <tr><td>Tavily</td><td><code>src/config/liveContextProvider.js</code></td></tr>
+          <tr><td>ElevenLabs + sync</td><td><code>src/services/floatingMicConfig.js</code></td></tr>
+          <tr><td>Ask Question</td><td><code>src/services/aiService.js</code></td></tr>
+          <tr><td>ML Kit translate</td><td><code>src/services/translationService.js</code></td></tr>
+          <tr><td>Keyboard IME</td><td><code>android/.../MyKeyboardService.kt</code></td></tr>
+          <tr><td>Floating mic</td><td><code>android/.../FloatingMicService.kt</code></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer>
+      Type Easy / EVC — API &amp; Capabilities Guide · Open this file in a browser · Use “Print / Save as PDF” for a shareable PDF
+    </footer>
+  </div>
+
+  <script>
+    // Open file:// documents cleanly; print works from the button above.
+  </script>
+</body>
+</html>

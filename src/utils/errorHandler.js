@@ -375,7 +375,7 @@ const styles = {
     marginBottom: 20,
   },
   retryButton: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#1E88FF',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,

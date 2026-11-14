@@ -26,7 +26,7 @@ const OPTIONS = [
 
 export function ThemeModeSelector() {
   const { colors, themeMode, setThemeMode, isDark } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   return (
     <View style={styles.wrap}>
@@ -68,7 +68,7 @@ export function ThemeModeSelector() {
   );
 }
 
-function createStyles(colors) {
+function createStyles(colors, isDark) {
   return StyleSheet.create({
     wrap: {
       gap: 0,
@@ -94,8 +94,8 @@ function createStyles(colors) {
       justifyContent: 'center',
     },
     iconWrapSelected: {
-      backgroundColor: 'rgba(30, 136, 255, 0.12)',
-      borderColor: 'rgba(30, 136, 255, 0.35)',
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.16)' : 'rgba(30, 136, 255, 0.12)',
+      borderColor: isDark ? 'rgba(0, 229, 146, 0.35)' : 'rgba(30, 136, 255, 0.35)',
     },
     textCol: {
       flex: 1,

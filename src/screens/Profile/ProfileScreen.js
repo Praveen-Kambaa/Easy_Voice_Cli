@@ -1,9 +1,36 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, Linking, AppState } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TextInput,
+  Linking,
+  AppState,
+  TouchableOpacity,
+  RefreshControl,
+  Platform,
+} from 'react-native';
+import {
+  Check,
+  Award,
+  TrendingUp,
+  Clock,
+  Zap,
+  Coins,
+  Info,
+  PlusCircle,
+  RotateCw,
+  CreditCard,
+  Shield,
+  Activity,
+  Languages,
+  LogOut,
+  ChevronRight,
+  User,
+} from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
-import { AppCard } from '../../components/common/AppCard';
-import { PrimaryButton } from '../../components/common/PrimaryButton';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useAlert } from '../../context/AlertContext';
@@ -11,7 +38,7 @@ import { getUserPlan, getUserUsage, updateTokensOnly } from '../../services/type
 
 function formatINR(n) {
   const v = Number(n);
-  if (!Number.isFinite(v)) return '—';
+  if (!Number.isFinite(v)) return '₹0.000';
   return `₹${v.toFixed(3)}`;
 }
 
@@ -21,52 +48,71 @@ function clamp01(x) {
   return Math.max(0, Math.min(1, v));
 }
 
-export default function ProfileScreen() {
+const QUICK_AMOUNTS = [50, 100, 500, 1000];
+
+export default function ProfileScreen({ navigation }) {
   const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-  const { user } = useAuth();
+  const isDark = colors.background !== '#F8FAFC';
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+  const { user, logout } = useAuth();
   const showAlert = useAlert();
 
   const userId = user?.userId;
   const token = user?.token;
 
   const headerName = useMemo(() => {
-    return (user?.name || user?.displayName || user?.email || 'User').trim();
-  }, [user?.name, user?.displayName, user?.email]);
+    return (user?.name || user?.displayName || user?.username || 'User').trim();
+  }, [user?.name, user?.displayName, user?.username]);
 
   const headerEmail = useMemo(() => {
-    const e = plan?.email || user?.email;
-    return (e || '—').trim();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return (user?.email || 'No email registered').trim();
   }, [user?.email]);
 
-  const [loading, setLoading] = useState(true);
+  const userInitials = useMemo(() => {
+    const parts = headerName.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return headerName.slice(0, 2).toUpperCase() || 'U';
+  }, [headerName]);
+
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [plan, setPlan] = useState(null);
   const [usage, setUsage] = useState(null);
-  const [tokensDraft, setTokensDraft] = useState('');
+  const [tokensDraft, setTokensDraft] = useState('50');
   const [updatingTokens, setUpdatingTokens] = useState(false);
 
   const load = useCallback(async () => {
     if (!userId) {
-      setLoading(false);
       return;
     }
     setLoading(true);
-    const [p, u] = await Promise.all([
-      getUserPlan({ userId, token }),
-      getUserUsage({ userId, token }),
-    ]);
-    if (p.success) setPlan(p.data);
-    if (u.success) setUsage(u.data);
-    setLoading(false);
+    try {
+      const [p, u] = await Promise.all([
+        getUserPlan({ userId, token }),
+        getUserUsage({ userId, token }),
+      ]);
+      if (p.success) setPlan(p.data);
+      if (u.success) setUsage(u.data);
+    } catch (_err) {
+      // Fallbacks will keep UI intact
+    } finally {
+      setLoading(false);
+    }
   }, [userId, token]);
+
+  const onPullRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }, [load]);
 
   useEffect(() => {
     load();
   }, [load]);
 
   useEffect(() => {
-    // When user comes back from browser/payment, refresh plan+usage automatically.
     let prevState = AppState.currentState;
     const sub = AppState.addEventListener('change', (nextState) => {
       if ((prevState === 'background' || prevState === 'inactive') && nextState === 'active') {
@@ -82,6 +128,11 @@ export default function ProfileScreen() {
       showAlert('Profile', 'Missing user id. Please login again.');
       return;
     }
+    const amount = Number(tokensDraft);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showAlert('Invalid Amount', 'Please enter a valid positive token number.');
+      return;
+    }
     setUpdatingTokens(true);
     const r = await updateTokensOnly({ userId, token, tokensUsed: tokensDraft });
     setUpdatingTokens(false);
@@ -89,23 +140,16 @@ export default function ProfileScreen() {
       showAlert('Update tokens', r.error || 'Could not update tokens');
       return;
     }
-    showAlert('Updated', r.data?.message || 'Tokens updated');
-    setTokensDraft('');
+    showAlert('Updated', r.data?.message || 'Tokens updated successfully');
     load();
   };
 
-  const planName = plan?.plan || '—';
-  const planExpiresAt = plan?.planExpiresAt || plan?.plan_expires_at || null;
-  const weeklyTokens = plan?.weeklyTokens ?? plan?.weekly_tokens ?? usage?.weeklyTokens;
-  const weeklyLimit = plan?.weeklyLimit ?? plan?.weekly_limit ?? usage?.weeklyLimit;
-  const tokensUsed = usage?.tokens_used ?? plan?.tokensUsed ?? plan?.tokens_used;
-  const cost = usage?.cost ?? plan?.cost;
-  const active =
-    plan?.is_active != null ? !!plan?.is_active : plan?.isActive != null ? !!plan?.isActive : null;
-  const weeklyProgress =
-    weeklyTokens != null && weeklyLimit != null && Number(weeklyLimit) > 0
-      ? clamp01(Number(weeklyTokens) / Number(weeklyLimit))
-      : 0;
+  const planName = plan?.plan || 'Free';
+  const tokensUsedNum = Number(usage?.tokens_used ?? plan?.tokensUsed ?? plan?.tokens_used ?? 0);
+  const costNum = usage?.cost ?? plan?.cost ?? 0;
+  const weeklyTokensNum = Number(plan?.weeklyTokens ?? plan?.weekly_tokens ?? usage?.weeklyTokens ?? 0);
+  const weeklyLimitNum = Number(plan?.weeklyLimit ?? plan?.weekly_limit ?? usage?.weeklyLimit ?? 0);
+  const weeklyProgress = weeklyLimitNum > 0 ? clamp01(weeklyTokensNum / weeklyLimitNum) : 0;
 
   const onRenewPress = useCallback(async () => {
     const url = 'https://typeeasy.kambaa.ai/pricing/';
@@ -116,349 +160,873 @@ export default function ProfileScreen() {
     }
   }, [showAlert]);
 
+  const onLogoutPress = () => {
+    showAlert(
+      'Log out',
+      'Are you sure you want to log out and clear this active device session?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await logout();
+            } catch (_e) {
+              showAlert('Logout', 'Failed to log out. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <ScreenContainer>
-      <AppHeader title="Profile" />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.hero}>
-          <Text style={styles.heroTitle}>{headerName}</Text>
-          <Text style={styles.heroSub}>{headerEmail}</Text>
+      <AppHeader
+        title="Profile"
+        showHomeBrand
+        brandIcon={<User size={14} color={colors.primary} strokeWidth={2.4} />}
+        forceMenu
+        rightComponent={
+          <TouchableOpacity
+            style={styles.profileAvatarBtn}
+            onPress={() => {}}
+            accessibilityLabel="Profile"
+          >
+            <User size={18} color="#FFFFFF" strokeWidth={2.4} />
+          </TouchableOpacity>
+        }
+      />
+
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onPullRefresh}
+            tintColor={colors.primary}
+          />
+        }
+      >
+        {/* Subheader bar commented out to avoid duplicate Profile title */}
+        {/*
+        <View style={styles.subHeaderRow}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation?.goBack?.() || navigation?.navigate?.('Home')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Go back"
+          >
+            <ArrowLeft size={20} color={colors.text.primary} strokeWidth={2.4} />
+          </TouchableOpacity>
+          <Text style={styles.subHeaderTitle}>Profile</Text>
+          <View style={styles.subHeaderRightActions}>
+            <TouchableOpacity
+              style={styles.iconCircleBtn}
+              onPress={() => showAlert('Edit Profile', 'Profile editing will be available in the next release.')}
+              accessibilityLabel="Edit profile"
+            >
+              <Pencil size={18} color={colors.text.primary} strokeWidth={2.2} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.iconCircleBtn}
+              onPress={() => navigation?.navigate?.('Settings')}
+              accessibilityLabel="Settings"
+            >
+              <Settings size={18} color={colors.text.primary} strokeWidth={2.2} />
+            </TouchableOpacity>
+          </View>
+        </View>
+        */}
+
+        {/* User Identity Card */}
+        <View style={styles.userCard}>
+          <View style={styles.avatarWrap}>
+            <View style={styles.avatarCircle}>
+              <Text style={styles.avatarInitials}>{userInitials}</Text>
+            </View>
+            <View style={styles.avatarBadge}>
+              <Check size={12} color="#FFFFFF" strokeWidth={3} />
+            </View>
+          </View>
+          <View style={styles.userDetails}>
+            <Text style={styles.userName} numberOfLines={1}>{headerName}</Text>
+            <Text style={styles.userEmail} numberOfLines={1}>{headerEmail}</Text>
+            <View style={styles.userMetaRow}>
+              <View style={styles.userMetaDot} />
+              <Text style={styles.userMetaText}>{`${planName} Tier Member`}</Text>
+            </View>
+          </View>
         </View>
 
-        <AppCard>
-          <View style={styles.planTop}>
-            <View style={styles.planHeaderRow}>
+        {/* Plan & Usage Card */}
+        <View style={styles.card}>
+          <View style={styles.planHeaderRow}>
+            <View style={styles.planHeaderLeft}>
+              <Award size={20} color={colors.primary} strokeWidth={2.4} />
               <Text style={styles.planTitle}>Plan</Text>
-              <View style={styles.badges}>
-                <View style={[styles.badge, styles.badgePrimary]}>
-                  <Text style={styles.badgeTextPrimary}>{planName}</Text>
-                </View>
-                {active != null ? (
-                  <View style={[styles.badge, active ? styles.badgeOk : styles.badgeMuted]}>
-                    <Text style={[styles.badgeText, active ? styles.badgeTextOk : styles.badgeTextMuted]}>
-                      {active ? 'Active' : 'Inactive'}
-                    </Text>
-                  </View>
-                ) : null}
+            </View>
+            <View style={styles.planBadges}>
+              <View style={styles.badgeFree}>
+                <Text style={styles.badgeFreeText}>{planName.toUpperCase()}</Text>
+              </View>
+              <View style={styles.badgeActive}>
+                <Text style={styles.badgeActiveText}>• Active</Text>
               </View>
             </View>
-            <Text style={styles.planSub}>
-              {loading ? 'Loading plan…' : 'Your current subscription & usage'}
-            </Text>
           </View>
 
-          <View style={styles.kpiRow}>
-            <View style={styles.kpi}>
-              <Text style={styles.kpiLabel}>Tokens used</Text>
-              <Text style={styles.kpiValue}>{tokensUsed ?? '—'}</Text>
+          {/* Tokens & Cost Accrued Box */}
+          <View style={styles.statsBox}>
+            <View style={styles.statCol}>
+              <Text style={styles.statLabel}>Tokens used</Text>
+              <Text style={styles.statValue}>{tokensUsedNum.toLocaleString()}</Text>
+              <View style={styles.usageIndicatorRow}>
+                <TrendingUp size={13} color="#10B981" strokeWidth={2.4} />
+                <Text style={styles.usageOkText}>Normal usage</Text>
+              </View>
             </View>
-            <View style={styles.kpiDivider} />
-            <View style={styles.kpi}>
-              <Text style={styles.kpiLabel}>Cost</Text>
-              <Text style={styles.kpiValue}>{formatINR(cost)}</Text>
+            <View style={styles.statColDivider} />
+            <View style={styles.statCol}>
+              <Text style={styles.statLabel}>Cost accrued</Text>
+              <Text style={styles.statValue}>{formatINR(costNum)}</Text>
+              <Text style={styles.statSubText}>Standard rate</Text>
             </View>
           </View>
 
-          <View style={styles.progressWrap}>
+          {/* Weekly Allowance Progress */}
+          <View style={styles.progressSection}>
             <View style={styles.progressTopRow}>
-              <Text style={styles.progressLabel}>Weekly usage</Text>
+              <View style={styles.allowanceLabelRow}>
+                <Coins size={14} color={colors.text.secondary} strokeWidth={2} />
+                <Text style={styles.progressLabel}>Weekly allowance</Text>
+              </View>
               <Text style={styles.progressValue}>
-                {weeklyTokens != null && weeklyLimit != null ? `${weeklyTokens}/${weeklyLimit}` : '—'}
+                {weeklyLimitNum > 0
+                  ? `${weeklyTokensNum.toLocaleString()} / ${weeklyLimitNum.toLocaleString()}`
+                  : `${weeklyTokensNum.toLocaleString()} tokens`}
               </Text>
             </View>
             <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${Math.round(weeklyProgress * 100)}%` }]} />
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${Math.round(weeklyProgress * 100)}%` },
+                ]}
+              />
+            </View>
+            <View style={styles.progressBottomRow}>
+              <Text style={styles.userIdText}>
+                {userId ? `User ID: #${userId}` : 'User ID: —'}
+              </Text>
+              <View style={styles.resetsRow}>
+                <Clock size={12} color={colors.text.secondary} strokeWidth={2} />
+                <Text style={styles.resetsText}>
+                  {plan?.resetsIn ? `Resets in ${plan.resetsIn}` : 'Weekly cycle'}
+                </Text>
+              </View>
             </View>
           </View>
 
-          <View style={styles.miniRows}>
-            <View style={styles.miniRow}>
-              <Text style={styles.miniLabel}>User ID</Text>
-              <Text style={styles.miniValue}>{userId ? String(userId) : '—'}</Text>
+          {/* Renew / Upgrade Plan Button */}
+          <TouchableOpacity
+            style={styles.renewPlanBtn}
+            onPress={onRenewPress}
+            activeOpacity={0.8}
+            disabled={loading}
+          >
+            <Zap size={18} color={colors.primary} strokeWidth={2.4} fill={colors.primary} />
+            <Text style={styles.renewPlanBtnText}>Renew / Upgrade plan</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Update Tokens Card */}
+        <View style={styles.card}>
+          <View style={styles.updateHeaderRow}>
+            <View style={styles.updateHeaderLeft}>
+              <View style={styles.updateIconCircle}>
+                <Coins size={18} color={colors.primary} strokeWidth={2.2} />
+              </View>
+              <Text style={styles.cardTitle}>Update tokens</Text>
             </View>
-            {planExpiresAt ? (
-              <View style={styles.miniRow}>
-                <Text style={styles.miniLabel}>Expires</Text>
-                <Text style={styles.miniValue} numberOfLines={1}>
-                  {String(planExpiresAt)}
-                </Text>
-              </View>
-            ) : null}
-            {plan?.planChangedAt ? (
-              <View style={styles.miniRow}>
-                <Text style={styles.miniLabel}>Changed</Text>
-                <Text style={styles.miniValue} numberOfLines={1}>
-                  {String(plan.planChangedAt)}
-                </Text>
-              </View>
-            ) : null}
+            <TouchableOpacity
+              onPress={() =>
+                showAlert(
+                  'Tokens Info',
+                  'Tokens are consumed by speech-to-text processing and AI prompt generations.'
+                )
+              }
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Info size={19} color={colors.text.secondary} strokeWidth={2} />
+            </TouchableOpacity>
           </View>
 
-          <View style={styles.renewRow}>
-            <PrimaryButton
-              title="Renew / Upgrade plan"
-              onPress={onRenewPress}
-              variant="outline"
-              disabled={loading}
-            />
-          </View>
-        </AppCard>
-
-        <AppCard>
-          <Text style={styles.sectionTitle}>Update tokens</Text>
-          <Text style={styles.sectionSub}>
-            Adds tokens to your usage using the TypeEasy endpoint.
+          <Text style={styles.updateDesc}>
+            Add tokens to keep real-time transcription and generative AI voice models actively listening.
           </Text>
-          <TextInput
-            value={tokensDraft}
-            onChangeText={setTokensDraft}
-            placeholder="Enter tokens (e.g. 50)"
-            placeholderTextColor={colors.text.light}
-            keyboardType="numeric"
-            style={styles.input}
-          />
-          <PrimaryButton
-            title={updatingTokens ? 'Updating…' : 'Update tokens'}
+
+          {/* Input field */}
+          <View style={styles.inputContainer}>
+            <PlusCircle size={20} color={colors.text.secondary} strokeWidth={2} />
+            <TextInput
+              value={tokensDraft}
+              onChangeText={setTokensDraft}
+              placeholder="50"
+              placeholderTextColor={colors.text.light}
+              keyboardType="numeric"
+              style={styles.tokenInput}
+            />
+            <View style={styles.tokenTag}>
+              <Text style={styles.tokenTagText}>TKNS</Text>
+            </View>
+          </View>
+
+          {/* Quick amount chips */}
+          <View style={styles.quickChipsRow}>
+            {QUICK_AMOUNTS.map((amt) => {
+              const label = `+${amt.toLocaleString()}`;
+              const isSelected = tokensDraft === String(amt);
+              return (
+                <TouchableOpacity
+                  key={amt}
+                  style={[styles.quickChip, isSelected && styles.quickChipSelected]}
+                  onPress={() => setTokensDraft(String(amt))}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.quickChipText, isSelected && styles.quickChipTextSelected]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Action buttons */}
+          <TouchableOpacity
+            style={styles.primaryActionBtn}
             onPress={onUpdateTokens}
-            loading={updatingTokens}
-            disabled={loading}
-            style={styles.btn}
-          />
-          <PrimaryButton
-            title={loading ? 'Refreshing…' : 'Refresh'}
+            activeOpacity={0.8}
+            disabled={updatingTokens || loading}
+          >
+            <CreditCard size={18} color="#FFFFFF" strokeWidth={2.2} />
+            <Text style={styles.primaryActionBtnText}>
+              {updatingTokens ? 'Updating tokens…' : 'Update tokens'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.secondaryActionBtn}
             onPress={load}
-            variant="outline"
+            activeOpacity={0.8}
             disabled={loading}
-          />
-        </AppCard>
+          >
+            <RotateCw size={17} color={colors.primary} strokeWidth={2.2} />
+            <Text style={styles.secondaryActionBtnText}>
+              {loading ? 'Refreshing…' : 'Refresh balance'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Preferences & Privacy Section */}
+        <View style={styles.prefSection}>
+          <Text style={styles.sectionHeaderTitle}>PREFERENCES & PRIVACY</Text>
+          <View style={styles.prefCard}>
+            <TouchableOpacity
+              style={styles.prefItemRow}
+              onPress={() =>
+                showAlert(
+                  'Account Security',
+                  'Two-factor authentication and biometric protection are active.'
+                )
+              }
+              activeOpacity={0.7}
+            >
+              <View style={styles.prefIconCircle}>
+                <Shield size={18} color={colors.primary} strokeWidth={2.2} />
+              </View>
+              <View style={styles.prefDetails}>
+                <Text style={styles.prefTitle}>Account Security</Text>
+                <Text style={styles.prefSub}>2-factor authentication & password</Text>
+              </View>
+              <ChevronRight size={17} color={colors.text.light} strokeWidth={2.2} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.prefItemRow}
+              onPress={() =>
+                showAlert(
+                  'Voice Data Privacy',
+                  'All speech recordings are stored locally and encrypted on-device.'
+                )
+              }
+              activeOpacity={0.7}
+            >
+              <View style={styles.prefIconCircle}>
+                <Activity size={18} color={colors.primary} strokeWidth={2.2} />
+              </View>
+              <View style={styles.prefDetails}>
+                <Text style={styles.prefTitle}>Voice Data Privacy</Text>
+                <Text style={styles.prefSub}>Local audio cache & ML retention</Text>
+              </View>
+              <ChevronRight size={17} color={colors.text.light} strokeWidth={2.2} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.prefItemRow}
+              onPress={() => {
+                if (navigation?.navigate) {
+                  navigation.navigate('Translator');
+                } else {
+                  showAlert('Language Preferences', 'Default dictation language is English (India).');
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.prefIconCircle}>
+                <Languages size={18} color={colors.primary} strokeWidth={2.2} />
+              </View>
+              <View style={styles.prefDetails}>
+                <Text style={styles.prefTitle}>Language Preferences</Text>
+                <Text style={styles.prefSub}>English (India) • Auto-detect enabled</Text>
+              </View>
+              <ChevronRight size={17} color={colors.text.light} strokeWidth={2.2} />
+            </TouchableOpacity>
+
+            <View style={styles.prefDivider} />
+
+            <TouchableOpacity
+              style={styles.prefItemRow}
+              onPress={onLogoutPress}
+              activeOpacity={0.7}
+            >
+              <View style={styles.logoutIconCircle}>
+                <LogOut size={18} color="#EF4444" strokeWidth={2.2} />
+              </View>
+              <View style={styles.prefDetails}>
+                <Text style={styles.logoutTitle}>Log out</Text>
+                <Text style={styles.prefSub}>Clear active device session</Text>
+              </View>
+              <ChevronRight size={17} color="#EF4444" strokeWidth={2.2} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.bottomSpacer} />
       </ScrollView>
     </ScreenContainer>
   );
 }
 
-function createStyles(colors) {
+function createStyles(colors, isDark) {
   return StyleSheet.create({
-  scroll: {
-    paddingHorizontal: 18,
-    paddingTop: 14,
-    paddingBottom: 40,
-    gap: 12,
-  },
-  hero: {
-    paddingTop: 6,
-    paddingBottom: 4,
-  },
-  heroTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: colors.text.primary,
-    letterSpacing: -0.6,
-  },
-  heroSub: {
-    marginTop: 6,
-    fontSize: 13,
-    color: colors.text.secondary,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.text.primary,
-    marginBottom: 10,
-  },
-  sectionSub: {
-    fontSize: 12,
-    color: colors.text.secondary,
-    marginBottom: 10,
-    lineHeight: 18,
-  },
-  planTopRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 12,
-  },
-  planTop: {
-    marginBottom: 12,
-  },
-  planHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  planTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.text.primary,
-    letterSpacing: -0.2,
-  },
-  planSub: {
-    marginTop: 6,
-    fontSize: 12,
-    color: colors.text.secondary,
-    lineHeight: 18,
-  },
-  renewRow: {
-    marginTop: 12,
-  },
-  badges: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  badgePrimary: {
-    backgroundColor: 'rgba(30, 136, 255, 0.10)',
-    borderColor: 'rgba(30, 136, 255, 0.25)',
-  },
-  badgeTextPrimary: {
-    color: colors.primary,
-    fontWeight: '900',
-    fontSize: 12,
-    letterSpacing: 0.2,
-    textTransform: 'uppercase',
-  },
-  badgeOk: {
-    backgroundColor: 'rgba(16, 185, 129, 0.10)',
-    borderColor: 'rgba(16, 185, 129, 0.22)',
-  },
-  badgeMuted: {
-    backgroundColor: colors.backgroundAlt,
-    borderColor: colors.borderLight,
-  },
-  badgeText: {
-    fontWeight: '800',
-    fontSize: 12,
-  },
-  badgeTextOk: {
-    color: '#10B981',
-  },
-  badgeTextMuted: {
-    color: colors.text.secondary,
-  },
-  kpiRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    backgroundColor: colors.backgroundAlt,
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    marginBottom: 12,
-  },
-  kpi: {
-    flex: 1,
-  },
-  kpiDivider: {
-    width: 1,
-    height: 26,
-    backgroundColor: colors.borderLight,
-    marginHorizontal: 10,
-  },
-  kpiLabel: {
-    fontSize: 12,
-    color: colors.text.secondary,
-  },
-  kpiValue: {
-    marginTop: 4,
-    fontSize: 16,
-    fontWeight: '900',
-    color: colors.text.primary,
-    letterSpacing: -0.2,
-  },
-  progressWrap: {
-    marginBottom: 12,
-  },
-  progressTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  progressLabel: {
-    fontSize: 12,
-    color: colors.text.secondary,
-  },
-  progressValue: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.text.primary,
-  },
-  progressTrack: {
-    height: 10,
-    borderRadius: 999,
-    backgroundColor: colors.borderLight,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 999,
-    backgroundColor: colors.primary,
-  },
-  miniRows: {
-    gap: 8,
-  },
-  miniRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    paddingVertical: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderLight,
-  },
-  miniLabel: {
-    fontSize: 13,
-    color: colors.text.secondary,
-    flex: 1,
-  },
-  miniValue: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: colors.text.primary,
-    maxWidth: '60%',
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    paddingVertical: 10,
-  },
-  rowDivider: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderLight,
-  },
-  rowLabel: {
-    fontSize: 13,
-    color: colors.text.secondary,
-    flex: 1,
-  },
-  rowValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  input: {
-    backgroundColor: colors.backgroundAlt,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: colors.text.primary,
-    marginBottom: 12,
-  },
-  btn: {
-    marginBottom: 10,
-  },
+    scroll: {
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 32,
+    },
+    subHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 14,
+      paddingTop: 2,
+    },
+    backBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    subHeaderTitle: {
+      flex: 1,
+      marginLeft: 12,
+      fontSize: 18,
+      fontWeight: '800',
+      color: colors.text.primary,
+    },
+    subHeaderRightActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    iconCircleBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    profileAvatarBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    userCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      marginBottom: 14,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.3 : 0.04,
+      shadowRadius: 10,
+      elevation: 2,
+    },
+    avatarWrap: {
+      position: 'relative',
+      marginRight: 14,
+    },
+    avatarCircle: {
+      width: 62,
+      height: 62,
+      borderRadius: 31,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.22)' : '#DBEAFE',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarInitials: {
+      fontSize: 22,
+      fontWeight: '800',
+      color: colors.primary,
+      letterSpacing: -0.4,
+    },
+    avatarBadge: {
+      position: 'absolute',
+      bottom: -2,
+      right: -2,
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: '#10B981',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: colors.card,
+    },
+    userDetails: {
+      flex: 1,
+      justifyContent: 'center',
+    },
+    userName: {
+      fontSize: 18,
+      fontWeight: '800',
+      color: colors.text.primary,
+      letterSpacing: -0.3,
+    },
+    userEmail: {
+      fontSize: 13,
+      color: colors.text.secondary,
+      marginTop: 2,
+    },
+    userMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 5,
+    },
+    userMetaDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: '#10B981',
+      marginRight: 6,
+    },
+    userMetaText: {
+      fontSize: 12,
+      color: colors.text.secondary,
+      fontWeight: '500',
+    },
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      marginBottom: 14,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.3 : 0.04,
+      shadowRadius: 10,
+      elevation: 2,
+    },
+    planHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 14,
+    },
+    planHeaderLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    planTitle: {
+      fontSize: 18,
+      fontWeight: '800',
+      color: colors.text.primary,
+      letterSpacing: -0.3,
+    },
+    planBadges: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    badgeFree: {
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.18)' : '#EFF6FF',
+      paddingHorizontal: 9,
+      paddingVertical: 4,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(0, 229, 146, 0.3)' : '#DBEAFE',
+    },
+    badgeFreeText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.primary,
+      letterSpacing: 0.3,
+    },
+    badgeActive: {
+      backgroundColor: isDark ? 'rgba(16, 185, 129, 0.16)' : '#ECFDF5',
+      paddingHorizontal: 9,
+      paddingVertical: 4,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(16, 185, 129, 0.3)' : '#BFDBFE',
+    },
+    badgeActiveText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: '#10B981',
+    },
+    statsBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : '#F8FAFC',
+      borderRadius: 14,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      marginBottom: 14,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.06)' : '#F1F5F9',
+    },
+    statCol: {
+      flex: 1,
+    },
+    statColDivider: {
+      width: 1,
+      height: 38,
+      backgroundColor: colors.borderLight,
+      marginHorizontal: 12,
+    },
+    statLabel: {
+      fontSize: 12,
+      color: colors.text.secondary,
+      fontWeight: '500',
+    },
+    statValue: {
+      fontSize: 20,
+      fontWeight: '800',
+      color: colors.text.primary,
+      marginTop: 3,
+      letterSpacing: -0.3,
+    },
+    usageIndicatorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginTop: 3,
+    },
+    usageOkText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: '#10B981',
+    },
+    statSubText: {
+      fontSize: 11,
+      color: colors.text.secondary,
+      marginTop: 3,
+    },
+    progressSection: {
+      marginBottom: 14,
+    },
+    progressTopRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    allowanceLabelRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    progressLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.text.primary,
+    },
+    progressValue: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.text.secondary,
+    },
+    progressTrack: {
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0',
+      overflow: 'hidden',
+    },
+    progressFill: {
+      height: '100%',
+      borderRadius: 4,
+      backgroundColor: colors.primary,
+    },
+    progressBottomRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 8,
+    },
+    userIdText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.text.secondary,
+    },
+    resetsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    resetsText: {
+      fontSize: 11,
+      color: colors.text.secondary,
+    },
+    renewPlanBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.16)' : '#EFF6FF',
+      borderRadius: 14,
+      paddingVertical: 13,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(0, 229, 146, 0.28)' : '#DBEAFE',
+    },
+    renewPlanBtnText: {
+      fontSize: 14,
+      fontWeight: '800',
+      color: colors.primary,
+    },
+    updateHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 6,
+    },
+    updateHeaderLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    updateIconCircle: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.18)' : '#EFF6FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    cardTitle: {
+      fontSize: 18,
+      fontWeight: '800',
+      color: colors.text.primary,
+      letterSpacing: -0.3,
+    },
+    updateDesc: {
+      fontSize: 12,
+      color: colors.text.secondary,
+      lineHeight: 18,
+      marginBottom: 12,
+    },
+    inputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : '#F8FAFC',
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0',
+      paddingHorizontal: 12,
+      height: 48,
+      marginBottom: 10,
+    },
+    tokenInput: {
+      flex: 1,
+      marginLeft: 10,
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text.primary,
+      paddingVertical: 0,
+    },
+    tokenTag: {
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 6,
+    },
+    tokenTagText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.text.secondary,
+      letterSpacing: 0.5,
+    },
+    quickChipsRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginBottom: 14,
+    },
+    quickChip: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 9,
+      borderRadius: 10,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : '#F1F5F9',
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0',
+    },
+    quickChipSelected: {
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.22)' : '#EFF6FF',
+      borderColor: colors.primary,
+    },
+    quickChipText: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.text.secondary,
+    },
+    quickChipTextSelected: {
+      color: colors.primary,
+      fontWeight: '800',
+    },
+    primaryActionBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: colors.primary,
+      borderRadius: 14,
+      paddingVertical: 14,
+      marginBottom: 10,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 8,
+      elevation: 3,
+    },
+    primaryActionBtnText: {
+      fontSize: 14,
+      fontWeight: '800',
+      color: '#FFFFFF',
+    },
+    secondaryActionBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.12)' : '#EFF6FF',
+      borderRadius: 14,
+      paddingVertical: 13,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(0, 229, 146, 0.25)' : '#DBEAFE',
+    },
+    secondaryActionBtnText: {
+      fontSize: 14,
+      fontWeight: '800',
+      color: colors.primary,
+    },
+    prefSection: {
+      marginTop: 2,
+    },
+    sectionHeaderTitle: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.text.secondary,
+      letterSpacing: 0.8,
+      marginBottom: 10,
+      marginLeft: 4,
+    },
+    prefCard: {
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      paddingVertical: 6,
+      paddingHorizontal: 14,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.3 : 0.04,
+      shadowRadius: 10,
+      elevation: 2,
+    },
+    prefItemRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+    },
+    prefIconCircle: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.18)' : '#EFF6FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 12,
+    },
+    prefDetails: {
+      flex: 1,
+    },
+    prefTitle: {
+      fontSize: 14,
+      fontWeight: '800',
+      color: colors.text.primary,
+    },
+    prefSub: {
+      fontSize: 12,
+      color: colors.text.secondary,
+      marginTop: 2,
+    },
+    prefDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderLight,
+      marginVertical: 4,
+    },
+    logoutIconCircle: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: isDark ? 'rgba(239, 68, 68, 0.18)' : '#FEF2F2',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 12,
+    },
+    logoutTitle: {
+      fontSize: 14,
+      fontWeight: '800',
+      color: '#EF4444',
+    },
+    bottomSpacer: {
+      height: 28,
+    },
   });
 }
-

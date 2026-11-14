@@ -3,33 +3,38 @@
 export const lightPalette = {
   primary: '#1E88FF',
   primaryLight: '#60A5FA',
+  primaryDark: '#1565C0',
+  primaryMuted: 'rgba(30, 136, 255, 0.10)',
 
-  background: '#FFFFFF',
-  backgroundAlt: '#F9FAFB',
+  background: '#F8FAFC',
+  backgroundAlt: '#F1F5F9',
   surface: '#FFFFFF',
+  surfaceElevated: '#FFFFFF',
+  card: '#FFFFFF',
 
   text: {
-    primary: '#111827',
-    secondary: '#6B7280',
-    light: '#9CA3AF',
+    primary: '#0F172A',
+    secondary: '#64748B',
+    light: '#94A3B8',
     white: '#FFFFFF',
     hint: '#7F8C8D',
+    accent: '#1E88FF',
   },
 
-  border: '#E5E7EB',
-  borderLight: '#EEF2F7',
+  border: '#E2E8F0',
+  borderLight: '#F1F5F9',
 
   status: {
-    granted: '#4CAF50',
-    grantedBg: '#E8F5E8',
-    denied: '#FF9800',
-    deniedBg: '#FFF3E0',
-    blocked: '#F44336',
-    blockedBg: '#FFEBEE',
-    info: '#2196F3',
-    infoBg: '#E3F2FD',
-    unavailable: '#9E9E9E',
-    unavailableBg: '#F5F5F5',
+    granted: '#16A34A',
+    grantedBg: '#EAF8EE',
+    denied: '#F59E0B',
+    deniedBg: '#FFFBEB',
+    blocked: '#EF4444',
+    blockedBg: '#FEF2F2',
+    info: '#2563EB',
+    infoBg: '#EFF6FF',
+    unavailable: '#94A3B8',
+    unavailableBg: '#F1F5F9',
   },
 
   recording: {
@@ -46,51 +51,74 @@ export const lightPalette = {
   },
 
   drawer: {
-    background: '#F9FAFB',
-    border: '#E5E7EB',
+    background: '#FFFFFF',
+    border: '#E2E8F0',
+    card: '#FFFFFF',
     itemBg: '#FFFFFF',
-    active: '#111827',
-    inactive: '#4B5563',
+    active: '#1E88FF',
+    activeBg: '#EBF4FE',
+    inactive: '#64748B',
   },
 
   tabBar: {
     background: '#FFFFFF',
-    border: '#E5E7EB',
+    border: '#E2E8F0',
+    active: '#1E88FF',
+    inactive: '#64748B',
+    activeIndicator: '#E0EEFE',
   },
 
   header: {
     background: '#FFFFFF',
-    border: '#E5E7EB',
-    title: '#111827',
-    icon: '#111827',
+    border: '#E2E8F0',
+    title: '#0F172A',
+    icon: '#0F172A',
+  },
+
+  badge: {
+    engineBg: '#EAF8EE',
+    engineText: '#16A34A',
+    latencyBg: '#EFF6FF',
+    latencyText: '#2563EB',
+    proBg: '#EFF6FF',
+    proText: '#2563EB',
+    transcribedBg: '#DCFCE7',
+    transcribedText: '#16A34A',
+    exportedBg: '#F1F5F9',
+    exportedText: '#64748B',
   },
 
   switch: {
-    trackOff: '#E5E7EB',
+    trackOff: '#E2E8F0',
     trackOn: '#1E88FF88',
-    thumbOff: '#9CA3AF',
+    thumbOff: '#94A3B8',
     thumbOn: '#1E88FF',
   },
 };
 
 export const darkPalette = {
-  primary: '#1E88FF',
-  primaryLight: '#60A5FA',
+  primary: '#00E592',
+  primaryLight: '#5CF1B8',
+  primaryDark: '#00B370',
+  primaryMuted: 'rgba(0, 229, 146, 0.22)',
 
-  background: '#0B0F14',
-  backgroundAlt: '#121820',
-  surface: '#1A222D',
+  background: '#0D1117',
+  backgroundAlt: '#131922',
+  surface: '#182230',
+  surfaceElevated: '#1F2D3D',
+  card: '#182230',
 
   text: {
-    primary: '#F1F5F9',
+    primary: '#F8FAFC',
     secondary: '#94A3B8',
     light: '#64748B',
     white: '#FFFFFF',
     hint: '#94A3B8',
+    accent: '#34EEA7',
   },
 
-  border: '#2A3441',
-  borderLight: '#1F2937',
+  border: '#263242',
+  borderLight: '#1E2938',
 
   status: {
     granted: '#4ADE80',
@@ -99,8 +127,8 @@ export const darkPalette = {
     deniedBg: '#422006',
     blocked: '#F87171',
     blockedBg: '#450A0A',
-    info: '#60A5FA',
-    infoBg: '#1E3A5F',
+    info: '#34EEA7',
+    infoBg: '#063321',
     unavailable: '#94A3B8',
     unavailableBg: '#1E293B',
   },
@@ -119,30 +147,48 @@ export const darkPalette = {
   },
 
   drawer: {
-    background: '#121820',
-    border: '#2A3441',
-    itemBg: '#1A222D',
-    active: '#1E88FF',
+    background: '#131922',
+    border: '#263242',
+    card: '#182230',
+    itemBg: '#182230',
+    active: '#00E592',
+    activeBg: 'rgba(0, 229, 146, 0.18)',
     inactive: '#94A3B8',
   },
 
   tabBar: {
-    background: '#121820',
-    border: '#2A3441',
+    background: '#131922',
+    border: '#263242',
+    active: '#00E592',
+    inactive: '#94A3B8',
+    activeIndicator: 'rgba(0, 229, 146, 0.22)',
   },
 
   header: {
-    background: '#1A222D',
-    border: '#2A3441',
-    title: '#F1F5F9',
+    background: '#182230',
+    border: '#263242',
+    title: '#F8FAFC',
     icon: '#E2E8F0',
   },
 
+  badge: {
+    engineBg: '#113824',
+    engineText: '#4ADE80',
+    latencyBg: '#0B3D2B',
+    latencyText: '#34EEA7',
+    proBg: '#0B3D2B',
+    proText: '#34EEA7',
+    transcribedBg: '#14532D',
+    transcribedText: '#4ADE80',
+    exportedBg: '#1E293B',
+    exportedText: '#94A3B8',
+  },
+
   switch: {
-    trackOff: '#2A3441',
-    trackOn: '#1E88FF88',
+    trackOff: '#263242',
+    trackOn: '#00E59288',
     thumbOff: '#64748B',
-    thumbOn: '#1E88FF',
+    thumbOn: '#00E592',
   },
 };
 

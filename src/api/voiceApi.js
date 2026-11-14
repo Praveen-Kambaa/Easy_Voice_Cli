@@ -6,6 +6,15 @@ import { apiUtils } from './apiClient';
 import { VOICE_ENDPOINTS } from './endpoints';
 import { buildEasyVoiceUrl } from '../config/api';
 import { apiFetch } from './httpClient';
+import logger from '../utils/logger';
+import { getAiEngineProvider } from '../services/aiEngineConfig';
+import {
+  transcribeWithGroq,
+  speechTranslateWithGroq,
+  executeVoiceCommandWithGroq,
+} from '../services/groqService';
+
+const groqTranscriptCache = new Map();
 
 const createResponse = (success = false, data = null, error = null) => ({ success, data, error });
 
@@ -96,6 +105,23 @@ export const transcribeAudio = async (fileUri, options = {}) => {
   if (!fileUri) {
     return createResponse(false, null, 'Audio file path is required');
   }
+
+  const aiEngine = await getAiEngineProvider();
+  if (aiEngine === 'groq') {
+    try {
+      const groqRes = await transcribeWithGroq(fileUri, options.language);
+      groqTranscriptCache.set(groqRes.voiceAssetId, groqRes.transcript);
+      return createResponse(true, {
+        rawTranscript: groqRes.rawTranscript,
+        refinedTranscript: groqRes.refinedTranscript,
+        voiceAssetId: groqRes.voiceAssetId,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      return createResponse(false, null, error.message || 'Groq transcription failed');
+    }
+  }
+
   const result = await uploadAudio(fileUri, options);
   if (!result.success) {
     return createResponse(false, null, result.error);
@@ -193,6 +219,16 @@ export const updateTranscript = async (voiceAssetId, finalTranscript) => {
       return createResponse(false, null, 'Transcript text cannot be empty');
     }
 
+    const aiEngine = await getAiEngineProvider();
+    if (aiEngine === 'groq') {
+      groqTranscriptCache.set(voiceAssetId, finalTranscript.trim());
+      return createResponse(true, {
+        voiceAssetId,
+        transcript: finalTranscript.trim(),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
     const url = buildEasyVoiceUrl(VOICE_ENDPOINTS.TRANSCRIPT);
     const data = await apiFetch(
       url,
@@ -231,6 +267,22 @@ export const executeVoiceCommand = async (voiceAssetId, options = {}) => {
   try {
     if (!voiceAssetId) {
       return createResponse(false, null, 'Voice asset ID is required');
+    }
+
+    const aiEngine = await getAiEngineProvider();
+    if (aiEngine === 'groq') {
+      const text =
+        options.transcript ||
+        options.text ||
+        groqTranscriptCache.get(voiceAssetId) ||
+        (voiceAssetId.startsWith('groq-') ? '' : voiceAssetId);
+      const res = await executeVoiceCommandWithGroq(text);
+      return createResponse(true, {
+        executionId: res.executionId,
+        status: res.status,
+        result: res.result,
+        executedAt: new Date().toISOString(),
+      });
     }
 
     const url = buildEasyVoiceUrl(VOICE_ENDPOINTS.EXECUTE);
@@ -341,9 +393,26 @@ export const testBackendConnectivity = async () => {
   }
 };
 
+export const speechTranslate = async (fileUri, options = {}) => {
+  if (!fileUri) {
+    return createResponse(false, null, 'Audio file path is required');
+  }
+  const aiEngine = await getAiEngineProvider();
+  if (aiEngine === 'groq') {
+    try {
+      const res = await speechTranslateWithGroq(fileUri, options.targetLanguage || 'en');
+      return createResponse(true, res);
+    } catch (error) {
+      return createResponse(false, null, error.message || 'Groq speech translation failed');
+    }
+  }
+  return createResponse(false, null, 'Speech translation is not available on Default Server.');
+};
+
 export const voiceApi = {
   testBackendConnectivity,
   transcribeAudio,
+  speechTranslate,
   updateTranscript,
   executeVoiceCommand,
   getVoiceHistory,

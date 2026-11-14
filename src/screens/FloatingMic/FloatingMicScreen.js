@@ -1,606 +1,846 @@
-import logger from '../../utils/logger';
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
   StyleSheet,
-  Alert,
   ScrollView,
-  NativeModules,
   DeviceEventEmitter,
   TouchableOpacity,
   Animated,
   Easing,
+  Switch,
 } from 'react-native';
-import { History, ChevronRight, ShieldCheck, Radio, SlidersHorizontal } from 'lucide-react-native';
+import {
+// ArrowLeft,
+// HelpCircle,
+// SlidersHorizontal,
+  Mic,
+  Play,
+  Power,
+  Layers,
+  ShieldCheck,
+  FileText,
+  ChevronRight,
+  ClipboardPaste,
+  Vibrate,
+  EyeOff,
+  Sparkles,
+  Volume2,
+} from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
-import { AppCard } from '../../components/common/AppCard';
-import { PrimaryButton } from '../../components/common/PrimaryButton';
-import { StatusBadge } from '../../components/common/StatusBadge';
+import { AskAiIcon } from '../../components/common/AskAiIcon';
 import { useFloatingMic } from '../../hooks/useFloatingMic';
 import { useTheme } from '../../context/ThemeContext';
-import { isGlobalAlertModalVisible } from '../../utils/alertModalState';
-
-const { FloatingMicModule } = NativeModules;
+import { useAlert } from '../../context/AlertContext';
+import { FloatingSpeechHistoryService } from '../../services/FloatingSpeechHistoryService';
 
 const FloatingMicScreen = ({ navigation }) => {
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-  const [lastTranscription, setLastTranscription] = useState('');
-  const orbAnim = React.useRef(new Animated.Value(0)).current;
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+  const showAlert = useAlert();
+
+  const [historyNotes, setHistoryNotes] = useState([]);
+  const [lastNote, setLastNote] = useState(null);
+  const [bubblePosition, setBubblePosition] = useState('Right Edge');
+
+  // Overlay behaviors state
+  const [directInsert, setDirectInsert] = useState(true);
+  const [tactileClick, setTactileClick] = useState(true);
+  const [fadeIdle, setFadeIdle] = useState(false);
+
+  const orbAnim = useRef(new Animated.Value(0)).current;
 
   const {
     isServiceActive,
     permissions,
-    recordingState,
     toggleFloatingMic,
-    checkPermissions,
     refreshFloatingMicSnapshot,
     handleMissingPermissions,
     needsPermissions,
   } = useFloatingMic();
 
+  const loadHistory = useCallback(async () => {
+    try {
+      const all = await FloatingSpeechHistoryService.getAll();
+      setHistoryNotes(all);
+      if (all && all.length > 0) {
+        setLastNote(all[all.length - 1]);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
-      let raf2;
-      const raf1 = requestAnimationFrame(() => {
-        raf2 = requestAnimationFrame(() => {
-          refreshFloatingMicSnapshot();
-          if (!isGlobalAlertModalVisible()) {
-            setLastTranscription('');
-          }
-        });
-      });
-      return () => {
-        cancelAnimationFrame(raf1);
-        if (raf2 != null) {
-          cancelAnimationFrame(raf2);
-        }
-      };
-    }, [refreshFloatingMicSnapshot]),
+      refreshFloatingMicSnapshot();
+      loadHistory();
+    }, [refreshFloatingMicSnapshot, loadHistory]),
   );
 
   useEffect(() => {
-    const listeners = [
-      DeviceEventEmitter.addListener('FloatingMic_onAudioRecorded', (audioPath) => {
-        logger.debug('Audio recorded:', audioPath);
-      }),
-      DeviceEventEmitter.addListener('FloatingMicService_onTranscriptionComplete', (text) => {
-        setLastTranscription(typeof text === 'string' ? text : String(text ?? ''));
-      }),
-    ];
-    return () => listeners.forEach(l => l.remove());
-  }, []);
+    const sub = DeviceEventEmitter.addListener(
+      'FloatingMicService_onTranscriptionComplete',
+      (text) => {
+        loadHistory();
+      },
+    );
+    return () => sub.remove();
+  }, [loadHistory]);
 
   useEffect(() => {
-    if (!isServiceActive) {
-      orbAnim.stopAnimation();
-      orbAnim.setValue(0);
-      return undefined;
-    }
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(orbAnim, { toValue: 1, duration: 1400, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-        Animated.timing(orbAnim, { toValue: 0, duration: 1400, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+        Animated.timing(orbAnim, {
+          toValue: 1,
+          duration: 1600,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(orbAnim, {
+          toValue: 0,
+          duration: 1600,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
       ]),
     );
     loop.start();
     return () => loop.stop();
-  }, [isServiceActive, orbAnim]);
+  }, [orbAnim]);
 
-  const permissionRows = [
-    { label: 'Overlay Permission', value: permissions.overlay },
-    { label: 'Record Audio', value: permissions.recordAudio },
-    { label: 'Accessibility Service', value: permissions.accessibility, labels: ['Enabled', 'Disabled'] },
-    { label: 'All Permissions', value: permissions.allGranted, labels: ['Ready', 'Setup Required'] },
-  ];
+  const handleTestBubble = () => {
+    if (needsPermissions) {
+      handleMissingPermissions();
+      return;
+    }
+    showAlert('Test Bubble', 'Floating mic test initiated. Look for the floating bubble on screen.');
+    if (!isServiceActive) {
+      toggleFloatingMic();
+    }
+  };
 
-  const headlineStatus = needsPermissions
-    ? 'Complete setup to enable the floating mic overlay.'
-    : isServiceActive
-      ? 'Running in the background. Tap the floating icon to record.'
-      : 'Start the service to show the floating mic overlay.';
+  const handleToggleDock = () => {
+    if (needsPermissions) {
+      handleMissingPermissions();
+      return;
+    }
+    toggleFloatingMic();
+  };
+
+  const handleReposition = () => {
+    setBubblePosition((prev) => (prev === 'Right Edge' ? 'Left Edge' : 'Right Edge'));
+    showAlert('Bubble Position', `Floating bubble positioned on the ${bubblePosition === 'Right Edge' ? 'Left Edge' : 'Right Edge'}.`);
+  };
+
+  const handleResetBehaviors = () => {
+    setDirectInsert(true);
+    setTactileClick(true);
+    setFadeIdle(false);
+    showAlert('Reset', 'Overlay behaviors reset to default.');
+  };
+
+  const lastNoteText = lastNote?.text ? String(lastNote.text).trim() : '';
+  const notesCount = historyNotes.length;
 
   return (
     <ScreenContainer>
-      <AppHeader title="Floating Mic" />
+      <AppHeader
+        title="Floating Mic"
+        showHomeBrand
+        forceMenu
+        rightComponent={
+          <TouchableOpacity
+            style={styles.profileAvatarBtn}
+            onPress={() => navigation.navigate('Profile')}
+            accessibilityRole="button"
+            accessibilityLabel="Profile"
+          >
+            <Mic size={18} color="#FFFFFF" strokeWidth={2.4} />
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero (signature) */}
-        <View style={styles.hero}>
-          <View style={styles.heroCard}>
-            <View style={styles.heroGlowA} pointerEvents="none" />
-            <View style={styles.heroGlowB} pointerEvents="none" />
+        {/* Subheader bar commented out to prevent duplicate Floating Mic title
+        <View style={styles.subHeaderRow}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Go back"
+          >
+            <ArrowLeft size={20} color={colors.text.primary} strokeWidth={2.4} />
+          </TouchableOpacity>
+          <View style={styles.subHeaderTitles}>
+            <Text style={styles.subHeaderTitle}>Floating Mic</Text>
+            <Text style={styles.subHeaderSubtitle}>Global System Dictation</Text>
+          </View>
+          <View style={styles.subHeaderIcons}>
+            <TouchableOpacity
+              style={styles.headerIconBtn}
+              onPress={() =>
+                showAlert(
+                  'About Floating Mic',
+                  'Floating Mic provides universal voice dictation across all installed apps. Drag the bubble to reposition it anywhere on your screen.',
+                )
+              }
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <HelpCircle size={20} color={colors.text.secondary} strokeWidth={2.2} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerIconBtn}
+              onPress={() => navigation.navigate('Settings')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <SlidersHorizontal size={19} color={colors.text.secondary} strokeWidth={2.2} />
+            </TouchableOpacity>
+          </View>
+        </View>
+        */}
 
-            <View style={styles.heroTop}>
-              <View style={styles.heroTitleCol}>
-                <Text style={styles.heroTitle}>Floating Mic</Text>
-                <Text style={styles.heroSub}>{headlineStatus}</Text>
-              </View>
-
-              <TouchableOpacity
-                style={[styles.orbWrap, needsPermissions && styles.orbWrapDisabled]}
-                activeOpacity={0.9}
-                onPress={() => {
-                  if (needsPermissions) {
-                    handleMissingPermissions();
-                    return;
-                  }
-                  toggleFloatingMic();
-                }}
-              >
-                <Animated.View
-                  style={[
-                    styles.orbPulse,
+        {/* Hero Card */}
+        <View style={styles.heroCard}>
+          {/* Animated concentric glowing ripple rings */}
+          <View style={styles.orbContainer}>
+            <Animated.View
+              style={[
+                styles.rippleOuter,
+                {
+                  transform: [
                     {
-                      opacity: orbAnim.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.55] }),
-                      transform: [{ scale: orbAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] }) }],
+                      scale: orbAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.96, 1.06],
+                      }),
                     },
-                  ]}
-                />
-                <View style={[styles.orb, isServiceActive && styles.orbActive]}>
-                  <Radio size={18} color="#FFFFFF" strokeWidth={2.4} />
-                </View>
-              </TouchableOpacity>
+                  ],
+                  opacity: orbAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.4, 0.7],
+                  }),
+                },
+              ]}
+            />
+            <View style={styles.rippleMid} />
+            <View style={styles.rippleInner} />
+            <TouchableOpacity
+              style={styles.centerOrb}
+              onPress={handleToggleDock}
+              activeOpacity={0.88}
+            >
+              <Mic size={34} color="#FFFFFF" strokeWidth={2.4} />
+            </TouchableOpacity>
+            <View style={styles.sparkleBadge}>
+              <AskAiIcon size={13} />
             </View>
+          </View>
 
-            <View style={styles.heroMetaRow}>
-              <StatusBadge
-                status={needsPermissions ? 'blocked' : isServiceActive ? 'granted' : 'denied'}
-                label={needsPermissions ? 'Setup required' : isServiceActive ? 'Active' : 'Inactive'}
-              />
-              <Text style={styles.heroMetaText}>
-                {lastTranscription ? `Last heard: ${lastTranscription}` : 'Last heard: —'}
-              </Text>
+          {/* Status Badge */}
+          <View
+            style={[
+              styles.statusPill,
+              !isServiceActive && styles.statusPillInactive,
+            ]}
+          >
+            <View
+              style={[
+                styles.statusDot,
+                !isServiceActive && styles.statusDotInactive,
+              ]}
+            />
+            <Text
+              style={[
+                styles.statusPillText,
+                !isServiceActive && styles.statusPillTextInactive,
+              ]}
+            >
+              {isServiceActive ? 'Overlay Active' : 'Overlay Inactive'}
+            </Text>
+          </View>
+
+          {/* Main Title & Subtitle */}
+          <Text style={styles.heroTitle}>
+            {isServiceActive ? 'Floating Overlay Active' : 'Floating Overlay Inactive'}
+          </Text>
+          <Text style={styles.heroSub}>
+            Tap the hovering bubble in any app to trigger voice dictation instantly.
+          </Text>
+
+          {/* Last Heard Voice Note Mini Card - only shown when there's an actual note */}
+          {lastNoteText ? (
+            <View style={styles.lastHeardCard}>
+              <View style={styles.lastHeardIconWrap}>
+                <Volume2 size={16} color={colors.primary} strokeWidth={2.2} />
+              </View>
+              <View style={styles.lastHeardContent}>
+                <View style={styles.lastHeardHeader}>
+                  <Text style={styles.lastHeardTitle}>Last Heard Voice Note</Text>
+                  {lastNote?.createdAt ? (
+                    <Text style={styles.lastHeardTime}>
+                      {new Date(lastNote.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  ) : null}
+                </View>
+                <Text style={styles.lastHeardQuote} numberOfLines={1}>
+                  &ldquo;{lastNoteText}&rdquo;
+                </Text>
+              </View>
             </View>
+          ) : null}
+
+          {/* Two Action Buttons Row */}
+          <View style={styles.heroActionsRow}>
+            <TouchableOpacity
+              style={styles.testBubbleBtn}
+              onPress={handleTestBubble}
+              activeOpacity={0.8}
+            >
+              <Play size={15} color={colors.primary} strokeWidth={2.4} fill={colors.primary} />
+              <Text style={styles.testBubbleBtnText}>Test Bubble</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.dockBubbleBtn}
+              onPress={handleToggleDock}
+              activeOpacity={0.88}
+            >
+              <Power size={15} color="#FFFFFF" strokeWidth={2.4} />
+              <Text style={styles.dockBubbleBtnText}>
+                {isServiceActive ? 'Dock Bubble' : 'Start Bubble'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Permission Status */}
-        {/* <AppCard>
-          <View style={styles.sectionTitleRow}>
-            <View style={styles.sectionTitleLeft}>
-              <ShieldCheck size={18} color={colors.primary} strokeWidth={2.2} />
-              <Text style={styles.sectionTitle}>Permissions</Text>
+        {/* 2-Column Status Cards: Position & System */}
+        <View style={styles.statusCardsRow}>
+          <TouchableOpacity
+            style={styles.statusCard}
+            onPress={handleReposition}
+            activeOpacity={0.78}
+          >
+            <View style={styles.statusCardTop}>
+              <View style={styles.statusCardIconBoxBlue}>
+                <Layers size={18} color={colors.primary} strokeWidth={2.2} />
+              </View>
+              <Text style={styles.statusCardKicker}>Position</Text>
             </View>
-            <StatusBadge
-              status={permissions.allGranted ? 'granted' : 'blocked'}
-              label={permissions.allGranted ? 'Ready' : 'Setup'}
-            />
-          </View>
+            <Text style={styles.statusCardTitle}>{bubblePosition}</Text>
+            <Text style={styles.statusCardLink}>Tap to reposition 🔗</Text>
+          </TouchableOpacity>
 
-          {permissionRows.map((row, idx) => (
-            <View
-              key={`perm-${row.label}`}
-              style={[styles.infoRow, idx < permissionRows.length - 1 && styles.rowDivider]}
-            >
-              <Text style={styles.rowLabel}>{row.label}</Text>
-              <StatusBadge
-                status={row.value ? 'granted' : 'blocked'}
-                label={row.value ? (row.labels?.[0] ?? 'Granted') : (row.labels?.[1] ?? 'Denied')}
-              />
+          <TouchableOpacity
+            style={styles.statusCard}
+            onPress={handleMissingPermissions}
+            activeOpacity={0.78}
+          >
+            <View style={styles.statusCardTop}>
+              <View style={styles.statusCardIconBoxGreen}>
+                <ShieldCheck size={18} color="#15803D" strokeWidth={2.2} />
+              </View>
+              <Text style={styles.statusCardKicker}>System</Text>
             </View>
-          ))}
-        </AppCard> */}
+            <Text style={styles.statusCardTitle}>Draw Over Apps</Text>
+            <Text style={styles.statusCardGranted}>
+              {permissions?.overlay ? '✓ Granted' : 'Setup Required'}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
-        {/* Service Status */}
-        {/* <AppCard>
-          <View style={styles.sectionTitleRow}>
-            <View style={styles.sectionTitleLeft}>
-              <Radio size={18} color={colors.primary} strokeWidth={2.2} />
-              <Text style={styles.sectionTitle}>Status</Text>
-            </View>
-          </View>
-
-          <View style={[styles.infoRow, styles.rowDivider]}>
-            <Text style={styles.rowLabel}>Floating Mic Service</Text>
-            <StatusBadge status={isServiceActive ? 'granted' : 'denied'} label={isServiceActive ? 'Active' : 'Inactive'} />
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.rowLabel}>Recording State</Text>
-            <StatusBadge
-              status={
-                recordingState.state === 'RECORDING' ? 'blocked' :
-                recordingState.state === 'PAUSED' ? 'denied' : 'granted'
-              }
-              label={
-                recordingState.state === 'RECORDING' ? 'Recording' :
-                recordingState.state === 'PAUSED' ? 'Paused' :
-                recordingState.state === 'STOPPED' ? 'Stopped' : 'Idle'
-              }
-            />
-          </View>
-
-          {recordingState.lastResult ? (
-            <View style={styles.resultBox}>
-              <Text style={styles.resultLabel}>Last Result</Text>
-              <Text style={styles.resultText}>{recordingState.lastResult}</Text>
-            </View>
-          ) : null}
-
-          {recordingState.error ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorLabel}>Error</Text>
-              <Text style={styles.errorText}>{recordingState.error}</Text>
-            </View>
-          ) : null}
-
-          {lastTranscription ? (
-            <View style={styles.transcriptionBox}>
-              <Text style={styles.transcriptionLabel}>Last Transcription</Text>
-              <Text style={styles.transcriptionText}>{lastTranscription}</Text>
-            </View>
-          ) : null}
-        </AppCard> */}
-
+        {/* Quick Link Card: Speech Transcripts */}
         <TouchableOpacity
-          style={styles.historyRow}
+          style={styles.transcriptsCard}
           onPress={() => navigation.navigate('FloatingMicHistory')}
-          activeOpacity={0.7}
+          activeOpacity={0.8}
         >
-          <History size={20} color={colors.primary} strokeWidth={1.8} />
-          <View style={styles.historyRowText}>
-            <Text style={styles.historyRowTitle}>Speech history</Text>
-            <Text style={styles.historyRowSub}>Transcripts from the floating mic</Text>
+          <View style={styles.transcriptsIconBox}>
+            <FileText size={20} color={colors.primary} strokeWidth={2.2} />
           </View>
-          <ChevronRight size={18} color={colors.text.light} strokeWidth={2} />
+          <View style={styles.transcriptsContent}>
+            <Text style={styles.transcriptsTitle}>Speech Transcripts</Text>
+            <Text style={styles.transcriptsSub}>
+              {notesCount > 0
+                ? `${notesCount} transcript${notesCount === 1 ? '' : 's'} recorded`
+                : 'No transcripts recorded yet'}
+            </Text>
+          </View>
+          <ChevronRight size={18} color={colors.text.secondary} strokeWidth={2.2} />
         </TouchableOpacity>
 
-        {/* Controls */}
-        {/* <AppCard>
-          <View style={styles.sectionTitleRow}>
-            <View style={styles.sectionTitleLeft}>
-              <SlidersHorizontal size={18} color={colors.primary} strokeWidth={2.2} />
-              <Text style={styles.sectionTitle}>Controls</Text>
-            </View>
+        {/* OVERLAY BEHAVIORS Section */}
+        <View style={styles.behaviorsSection}>
+          <View style={styles.behaviorsHeader}>
+            <Text style={styles.behaviorsKicker}>OVERLAY BEHAVIORS</Text>
+            <TouchableOpacity onPress={handleResetBehaviors} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.resetText}>Reset</Text>
+            </TouchableOpacity>
           </View>
 
-          <PrimaryButton
-            title={isServiceActive ? 'Stop Floating Mic' : 'Start Floating Mic'}
-            onPress={toggleFloatingMic}
-            disabled={needsPermissions}
-            variant={isServiceActive ? 'danger' : 'primary'}
-            style={styles.mainControlBtn}
-          />
-
-          <View style={styles.secondaryActionsRow}>
-            {needsPermissions ? (
-              <View style={styles.secondaryActionCol}>
-                <PrimaryButton
-                  title="Setup"
-                  onPress={handleMissingPermissions}
-                  variant="outline"
-                  style={styles.secondaryBtn}
-                />
-              </View>
-            ) : null}
-            <View style={[styles.secondaryActionCol, !needsPermissions && styles.secondaryActionColFull]}>
-              <PrimaryButton
-                title="Refresh"
-                onPress={checkPermissions}
-                variant="ghost"
-                style={styles.secondaryBtn}
-              />
+          {/* Row 1: Direct Insert */}
+          <View style={styles.behaviorRow}>
+            <View style={styles.behaviorIconBox}>
+              <ClipboardPaste size={18} color={colors.primary} strokeWidth={2.2} />
             </View>
+            <View style={styles.behaviorTextCol}>
+              <Text style={styles.behaviorTitle}>Direct Insert in Apps</Text>
+              <Text style={styles.behaviorSub}>Auto-paste into WhatsApp, Slack …</Text>
+            </View>
+            <Switch
+              value={directInsert}
+              onValueChange={setDirectInsert}
+              trackColor={{ false: colors.switch?.trackOff || '#D1D5DB', true: colors.primary }}
+              thumbColor="#FFFFFF"
+            />
           </View>
-        </AppCard> */}
 
-        {/* Instructions */}
-        <AppCard>
-          <Text style={styles.sectionTitle}>How to Use</Text>
-          {[
-            'Ensure all permissions are granted (green status)',
-            'Tap "Start Floating Mic" to activate the service',
-            'A floating microphone icon will appear on your screen',
-            'Drag the icon to position it anywhere on screen',
-            'Tap the microphone to start/stop voice recording',
-            'Speech results will show in the "Last Result" field',
-            'The service works even when the app is in the background',
-          ].map((text, idx) => (
-            <View key={idx} style={styles.instructionRow}>
-              <Text style={styles.instructionNumber}>{idx + 1}</Text>
-              <Text style={styles.instructionText}>{text}</Text>
+          {/* Row 2: Tactile Speech Click */}
+          <View style={styles.behaviorRow}>
+            <View style={styles.behaviorIconBox}>
+              <Vibrate size={18} color={colors.primary} strokeWidth={2.2} />
             </View>
-          ))}
-        </AppCard>
+            <View style={styles.behaviorTextCol}>
+              <Text style={styles.behaviorTitle}>Tactile Speech Click</Text>
+              <Text style={styles.behaviorSub}>Haptic pulse when speech pauses</Text>
+            </View>
+            <Switch
+              value={tactileClick}
+              onValueChange={setTactileClick}
+              trackColor={{ false: colors.switch?.trackOff || '#D1D5DB', true: colors.primary }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+
+          {/* Row 3: Fade Bubble When Idle */}
+          <View style={styles.behaviorRow}>
+            <View style={styles.behaviorIconBox}>
+              <EyeOff size={18} color={colors.text.secondary} strokeWidth={2.2} />
+            </View>
+            <View style={styles.behaviorTextCol}>
+              <Text style={styles.behaviorTitle}>Fade Bubble When Idle</Text>
+              <Text style={styles.behaviorSub}>Reduce bubble opacity to 35% aft…</Text>
+            </View>
+            <Switch
+              value={fadeIdle}
+              onValueChange={setFadeIdle}
+              trackColor={{ false: colors.switch?.trackOff || '#D1D5DB', true: colors.primary }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+        </View>
+
+        <View style={styles.bottomSpacer} />
       </ScrollView>
     </ScreenContainer>
   );
 };
 
-function createStyles(colors) {
+function createStyles(colors, isDark) {
   return StyleSheet.create({
+    bottomSpacer: {
+      height: 28,
+    },
+    profileAvatarBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     scroll: {
       flex: 1,
     },
     scrollContent: {
-      paddingHorizontal: 20,
-      paddingTop: 16,
-      paddingBottom: 40,
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      paddingBottom: 24,
       gap: 14,
     },
-
-    hero: {
-      paddingTop: 6,
-      paddingBottom: 4,
-    },
-    heroCard: {
-      backgroundColor: colors.surface,
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: 16,
-      overflow: 'hidden',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 12 },
-      shadowOpacity: 0.07,
-      shadowRadius: 20,
-      elevation: 3,
-    },
-    heroGlowA: {
-      position: 'absolute',
-      top: -140,
-      right: -120,
-      width: 260,
-      height: 260,
-      borderRadius: 130,
-      backgroundColor: 'rgba(30, 136, 255, 0.14)',
-    },
-    heroGlowB: {
-      position: 'absolute',
-      bottom: -160,
-      left: -150,
-      width: 320,
-      height: 320,
-      borderRadius: 160,
-      backgroundColor: 'rgba(96, 165, 250, 0.10)',
-    },
-    heroTop: {
+    subHeaderRow: {
       flexDirection: 'row',
-      alignItems: 'flex-start',
+      alignItems: 'center',
       justifyContent: 'space-between',
-      gap: 12,
+      paddingVertical: 4,
     },
-    heroTitleCol: {
-      flex: 1,
-    },
-    heroTitle: {
-      fontSize: 26,
-      fontWeight: '800',
-      color: colors.text.primary,
-      letterSpacing: -0.7,
-      lineHeight: 32,
-    },
-    heroSub: {
-      marginTop: 6,
-      fontSize: 13,
-      color: colors.text.secondary,
-      lineHeight: 19,
-    },
-    orbWrap: {
-      width: 54,
-      height: 54,
+    backBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9',
       alignItems: 'center',
       justifyContent: 'center',
     },
-    orbWrapDisabled: {
-      opacity: 0.6,
+    subHeaderTitles: {
+      flex: 1,
+      marginLeft: 12,
     },
-    orbPulse: {
-      position: 'absolute',
-      width: 54,
-      height: 54,
-      borderRadius: 27,
-      backgroundColor: colors.primary,
+    subHeaderTitle: {
+      fontSize: 18,
+      fontWeight: '800',
+      color: colors.text.primary,
     },
-    orb: {
-      width: 48,
-      height: 48,
+    subHeaderSubtitle: {
+      fontSize: 11,
+      color: colors.text.secondary,
+      marginTop: 1,
+    },
+    subHeaderIcons: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    headerIconBtn: {
+      padding: 4,
+    },
+    heroCard: {
+      backgroundColor: colors.surface,
       borderRadius: 24,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 20,
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: isDark ? 0.25 : 0.05,
+      shadowRadius: 10,
+      elevation: 3,
+    },
+    orbContainer: {
+      width: 170,
+      height: 170,
+      alignItems: 'center',
+      justifyContent: 'center',
+      position: 'relative',
+      marginVertical: 10,
+    },
+    rippleOuter: {
+      position: 'absolute',
+      width: 164,
+      height: 164,
+      borderRadius: 82,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.12)' : '#EFF6FF',
+    },
+    rippleMid: {
+      position: 'absolute',
+      width: 130,
+      height: 130,
+      borderRadius: 65,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.2)' : '#DBEAFE',
+    },
+    rippleInner: {
+      position: 'absolute',
+      width: 98,
+      height: 98,
+      borderRadius: 49,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.35)' : '#BFDBFE',
+    },
+    centerOrb: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
       shadowColor: colors.primary,
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.20,
-      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.4,
+      shadowRadius: 12,
       elevation: 6,
     },
-    orbActive: {
-      shadowOpacity: 0.28,
-      shadowRadius: 20,
-      elevation: 8,
+    sparkleBadge: {
+      position: 'absolute',
+      top: 14,
+      right: 20,
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      backgroundColor: colors.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.15,
+      shadowRadius: 3,
+      elevation: 2,
     },
-    heroMetaRow: {
-      marginTop: 12,
-      paddingTop: 12,
-      borderTopWidth: 1,
-      borderTopColor: colors.borderLight,
+    statusPill: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10,
+      gap: 6,
+      backgroundColor: isDark ? 'rgba(34, 197, 94, 0.16)' : '#DCFCE7',
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      borderRadius: 14,
+      marginTop: 8,
+      marginBottom: 8,
     },
-    heroMetaText: {
-      flex: 1,
-      fontSize: 12,
+    statusPillInactive: {
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9',
+    },
+    statusDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 3.5,
+      backgroundColor: '#16A34A',
+    },
+    statusDotInactive: {
+      backgroundColor: colors.text.secondary,
+    },
+    statusPillText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: isDark ? '#4ADE80' : '#15803D',
+    },
+    statusPillTextInactive: {
       color: colors.text.secondary,
     },
-
-    sectionTitleRow: {
+    heroTitle: {
+      fontSize: 20,
+      fontWeight: '800',
+      color: colors.text.primary,
+      textAlign: 'center',
+      marginBottom: 6,
+    },
+    heroSub: {
+      fontSize: 13,
+      color: colors.text.secondary,
+      textAlign: 'center',
+      lineHeight: 19,
+      maxWidth: 280,
+      marginBottom: 16,
+    },
+    lastHeardCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      width: '100%',
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.08)' : '#EFF6FF',
+      borderRadius: 16,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(0, 229, 146, 0.2)' : '#DBEAFE',
+      marginBottom: 16,
+    },
+    lastHeardIconWrap: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.18)' : '#DBEAFE',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    lastHeardContent: {
+      flex: 1,
+    },
+    lastHeardHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: 12,
+      marginBottom: 2,
     },
-    sectionTitleLeft: {
+    lastHeardTitle: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.text.secondary,
+    },
+    lastHeardTime: {
+      fontSize: 10,
+      color: colors.text.secondary,
+    },
+    lastHeardQuote: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    heroActionsRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10,
+      gap: 12,
+      width: '100%',
     },
-
-    historyRow: {
+    testBubbleBtn: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.16)' : '#EFF6FF',
+      paddingVertical: 12,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(0, 229, 146, 0.25)' : '#DBEAFE',
+    },
+    testBubbleBtnText: {
+      fontSize: 13,
+      fontWeight: '800',
+      color: colors.primary,
+    },
+    dockBubbleBtn: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      backgroundColor: '#0F56B3',
+      paddingVertical: 12,
+      borderRadius: 22,
+      shadowColor: '#0F56B3',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.3,
+      shadowRadius: 6,
+      elevation: 3,
+    },
+    dockBubbleBtnText: {
+      fontSize: 13,
+      fontWeight: '800',
+      color: '#FFFFFF',
+    },
+    statusCardsRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    statusCard: {
+      flex: 1,
+      backgroundColor: colors.surface,
+      borderRadius: 18,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    statusCardTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 10,
+    },
+    statusCardIconBoxBlue: {
+      width: 36,
+      height: 36,
+      borderRadius: 12,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.16)' : '#EFF6FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    statusCardIconBoxGreen: {
+      width: 36,
+      height: 36,
+      borderRadius: 12,
+      backgroundColor: isDark ? 'rgba(34, 197, 94, 0.16)' : '#DCFCE7',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    statusCardKicker: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: colors.text.secondary,
+    },
+    statusCardTitle: {
+      fontSize: 14,
+      fontWeight: '800',
+      color: colors.text.primary,
+      marginBottom: 4,
+    },
+    statusCardLink: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    statusCardGranted: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: isDark ? '#4ADE80' : '#15803D',
+    },
+    transcriptsCard: {
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: colors.surface,
-      borderRadius: 16,
+      borderRadius: 18,
+      padding: 14,
       borderWidth: 1,
       borderColor: colors.border,
-      padding: 16,
-      marginBottom: 16,
       gap: 12,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.06,
-      shadowRadius: 18,
-      elevation: 3,
     },
-    historyRowText: {
+    transcriptsIconBox: {
+      width: 42,
+      height: 42,
+      borderRadius: 14,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.16)' : '#EFF6FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    transcriptsContent: {
       flex: 1,
     },
-    historyRowTitle: {
-      fontSize: 15,
-      fontWeight: '700',
+    transcriptsTitle: {
+      fontSize: 14,
+      fontWeight: '800',
       color: colors.text.primary,
     },
-    historyRowSub: {
-      fontSize: 12,
+    transcriptsSub: {
+      fontSize: 11,
       color: colors.text.secondary,
       marginTop: 2,
     },
-
-    sectionTitle: {
-      fontSize: 15,
-      fontWeight: '700',
-      color: colors.text.primary,
-      paddingBottom: 10,
-    },
-
-    infoRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: 8,
-    },
-    rowDivider: {
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-    },
-    rowLabel: {
-      fontSize: 14,
-      color: colors.text.secondary,
-      flex: 1,
-      marginRight: 12,
-    },
-
-    resultBox: {
-      marginTop: 12,
-      padding: 12,
-      backgroundColor: colors.status.grantedBg,
-      borderRadius: 8,
-    },
-    resultLabel: {
-      fontSize: 11,
-      fontWeight: '700',
-      color: colors.status.granted,
-      marginBottom: 4,
-      letterSpacing: 0.5,
-    },
-    resultText: {
-      fontSize: 14,
-      color: colors.text.primary,
-      lineHeight: 20,
-    },
-
-    errorBox: {
-      marginTop: 12,
-      padding: 12,
-      backgroundColor: colors.status.blockedBg,
-      borderRadius: 8,
-    },
-    errorLabel: {
-      fontSize: 11,
-      fontWeight: '700',
-      color: colors.status.blocked,
-      marginBottom: 4,
-      letterSpacing: 0.5,
-    },
-    errorText: {
-      fontSize: 14,
-      color: colors.text.primary,
-      lineHeight: 20,
-    },
-
-    transcriptionBox: {
-      marginTop: 12,
-      padding: 12,
-      backgroundColor: colors.backgroundAlt,
-      borderRadius: 8,
+    behaviorsSection: {
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      padding: 16,
       borderWidth: 1,
       borderColor: colors.border,
+      gap: 14,
     },
-    transcriptionLabel: {
+    behaviorsHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 2,
+    },
+    behaviorsKicker: {
       fontSize: 11,
-      fontWeight: '700',
+      fontWeight: '800',
       color: colors.text.secondary,
-      marginBottom: 4,
-      letterSpacing: 0.5,
+      letterSpacing: 1.1,
     },
-    transcriptionText: {
-      fontSize: 14,
-      color: colors.text.primary,
-      lineHeight: 20,
-    },
-
-    mainControlBtn: {
-      marginBottom: 10,
-    },
-    secondaryActionsRow: {
-      flexDirection: 'row',
-      gap: 10,
-    },
-    secondaryActionCol: {
-      flex: 1,
-    },
-    secondaryActionColFull: {
-      flex: 1,
-    },
-    secondaryBtn: {
-      minHeight: 46,
-    },
-
-    instructionRow: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      marginBottom: 10,
-      gap: 10,
-    },
-    instructionNumber: {
-      width: 22,
-      height: 22,
-      borderRadius: 11,
-      backgroundColor: colors.primary,
-      color: '#FFFFFF',
+    resetText: {
       fontSize: 12,
       fontWeight: '700',
-      textAlign: 'center',
-      lineHeight: 22,
-      flexShrink: 0,
+      color: colors.primary,
     },
-    instructionText: {
-      fontSize: 13,
-      color: colors.text.secondary,
-      lineHeight: 20,
+    behaviorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    behaviorIconBox: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: isDark ? 'rgba(0, 229, 146, 0.14)' : '#EFF6FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    behaviorTextCol: {
       flex: 1,
+    },
+    behaviorTitle: {
+      fontSize: 13,
+      fontWeight: '800',
+      color: colors.text.primary,
+    },
+    behaviorSub: {
+      fontSize: 11,
+      color: colors.text.secondary,
+      marginTop: 1,
     },
   });
 }
-
-
 
 export default FloatingMicScreen;

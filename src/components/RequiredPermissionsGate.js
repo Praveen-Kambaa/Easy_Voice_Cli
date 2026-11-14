@@ -327,15 +327,15 @@ export default function RequiredPermissionsGate({ children }) {
               <Text style={styles.primaryBtnText}>Try again</Text>
             )}
           </TouchableOpacity>
-          {runtimeHasBlocked && (
-            <TouchableOpacity
-              style={styles.secondaryBtn}
-              onPress={() => openSettings().catch(() => {})}
-              disabled={actionBusy}
-            >
-              <Text style={styles.secondaryBtnText}>Open app settings</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.secondaryBtn}
+            onPress={() => openSettings().catch(() => {})}
+            disabled={actionBusy}
+          >
+            <Text style={styles.secondaryBtnText}>
+              {runtimeHasBlocked ? 'Open app settings (Permission blocked)' : 'Open app settings'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     );

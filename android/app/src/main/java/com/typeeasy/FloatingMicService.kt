@@ -592,7 +592,7 @@ class FloatingMicService : Service() {
         voiceCommandUi?.showReviewPanel("", null)
         voiceCommandUi?.setReviewLoading(true, "Transcribing your recording…")
         Thread {
-            val result = VoiceTranscribeClient.transcribeFileFull(baseUrl, file)
+            val result = VoiceTranscribeClient.transcribeFileFullContextAware(this@FloatingMicService, baseUrl, file)
             mainHandler.post {
                 isExternalUploading = false
                 recordingState = RecordingState.IDLE
@@ -1027,7 +1027,8 @@ class FloatingMicService : Service() {
         }
         Thread {
             val result = when (mode) {
-                SessionMode.TRANSLATOR -> VoiceTranscribeClient.translateSpeechFile(
+                SessionMode.TRANSLATOR -> VoiceTranscribeClient.translateSpeechFileContextAware(
+                    this@FloatingMicService,
                     baseUrl,
                     FloatingMicConfigStore.getSpeechTranslatePath(this@FloatingMicService),
                     file,
@@ -1049,12 +1050,12 @@ class FloatingMicService : Service() {
                         // Fallback: if ElevenLabs succeeds but returns empty transcript (or fails),
                         // and a base URL is configured, try the local /voice/transcribe server.
                         if (eleven.isFailure && baseUrl.isNotBlank()) {
-                            VoiceTranscribeClient.transcribeFile(baseUrl, file)
+                            VoiceTranscribeClient.transcribeFileContextAware(this@FloatingMicService, baseUrl, file)
                         } else {
                             eleven
                         }
                     } else {
-                        VoiceTranscribeClient.transcribeFile(baseUrl, file)
+                        VoiceTranscribeClient.transcribeFileContextAware(this@FloatingMicService, baseUrl, file)
                     }
                 }
             }

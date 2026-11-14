@@ -4,6 +4,8 @@ import TranslateText from '@react-native-ml-kit/translate-text';
 import { appLanguageToMlKit, isAppLanguageSupportedByMlKit } from './mlKitLanguageMap';
 import { getInternalFloatingTranslationEnabled } from './floatingMicConfig';
 import { API_SERVERS, API_ENDPOINTS } from '../config/api';
+import { getAiEngineProvider } from './aiEngineConfig';
+import { translateTextWithGroq } from './groqService';
 
 /** @type {Set<string>} language pairs that already completed download this app session */
 const downloadedModelPairs = new Set();
@@ -137,6 +139,15 @@ export async function translateSmart({
   targetAppCode,
   userId,
 }) {
+  const aiEngine = await getAiEngineProvider();
+  if (aiEngine === 'groq') {
+    try {
+      const res = await translateTextWithGroq(text, sourceAppCode, targetAppCode);
+      return { success: true, translatedText: res.translatedText };
+    } catch (e) {
+      return { success: false, error: e.message || 'Groq translation failed' };
+    }
+  }
   const useInternal = await getInternalFloatingTranslationEnabled();
   if (useInternal) {
     return translateOffline({ text, sourceAppCode, targetAppCode });
