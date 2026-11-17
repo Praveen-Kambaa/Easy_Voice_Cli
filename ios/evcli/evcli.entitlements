@@ -4,7 +4,9 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
+		<string>group.com.type.easy.shared</string>
 		<string>group.com.type.easy</string>
+		<string>group.com.typevoice.shared</string>
 	</array>
 </dict>
 </plist>

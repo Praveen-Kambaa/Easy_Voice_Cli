@@ -1,6 +1,6 @@
 import logger from '../utils/logger';
 import { useState, useEffect, useCallback } from 'react';
-import { Platform, NativeModules, PermissionsAndroid } from 'react-native';
+import { Platform, NativeModules, PermissionsAndroid, Linking } from 'react-native';
 import { useAlert } from '../context/AlertContext';
 
 const { VoiceAssistantModule } = NativeModules;
@@ -90,7 +90,13 @@ export const useVoiceAssistant = () => {
             { text: 'Cancel', style: 'cancel' },
             {
               text: 'Open Settings',
-              onPress: () => VoiceAssistantModule.openOverlaySettings(),
+              onPress: () => {
+                if (Platform.OS === 'android') {
+                  VoiceAssistantModule?.openOverlaySettings?.();
+                } else {
+                  Linking.openSettings().catch(() => {});
+                }
+              },
             },
           ]
         );
@@ -125,7 +131,9 @@ export const useVoiceAssistant = () => {
     setLoading(prev => ({ ...prev, overlay: true }));
     
     try {
-      await VoiceAssistantModule.stopFloatingOverlay();
+      if (typeof VoiceAssistantModule?.stopFloatingOverlay === 'function') {
+        await VoiceAssistantModule.stopFloatingOverlay();
+      }
       setIsOverlayActive(false);
     } catch (error) {
       logger.error('Error stopping overlay:', error);
@@ -140,7 +148,9 @@ export const useVoiceAssistant = () => {
    */
   const openOverlaySettings = useCallback(() => {
     if (Platform.OS === 'android') {
-      VoiceAssistantModule.openOverlaySettings();
+      VoiceAssistantModule?.openOverlaySettings?.();
+    } else {
+      Linking.openSettings().catch(() => {});
     }
   }, []);
 
@@ -149,7 +159,9 @@ export const useVoiceAssistant = () => {
    */
   const openAccessibilitySettings = useCallback(() => {
     if (Platform.OS === 'android') {
-      VoiceAssistantModule.openAccessibilitySettings();
+      VoiceAssistantModule?.openAccessibilitySettings?.();
+    } else {
+      Linking.openSettings().catch(() => {});
     }
   }, []);
 

@@ -10,6 +10,19 @@ enum KeyboardSharedConfig {
   static let keyPendingDeepLink = "pending_deep_link"
   /// When true, the keyboard extension is recording; the host app must not take the microphone.
   static let keyExtensionOwnsMic = "extension_owns_mic"
+  static let keyKeyboardActive = "keyboard_extension_enabled"
+  static let keyKeyboardLastActiveTime = "keyboard_last_active_time"
+
+  static func markKeyboardActive() {
+    let d = defaults()
+    d.set(true, forKey: keyKeyboardActive)
+    d.set(Date().timeIntervalSince1970, forKey: keyKeyboardLastActiveTime)
+    d.synchronize()
+  }
+
+  static func isKeyboardActive() -> Bool {
+    defaults().bool(forKey: keyKeyboardActive)
+  }
 
   /// Deep link action when the keyboard could not call `extensionContext.open` (e.g. keyboard-settings).
   static let deepLinkSettings = "keyboard-settings"
@@ -17,9 +30,6 @@ enum KeyboardSharedConfig {
   static let deepLinkVoiceCommand = "keyboard-voice-command"
 
   static func defaults() -> UserDefaults {
-    if let shared = UserDefaults(suiteName: appGroupIdentifier) {
-      return shared
-    }
     return UserDefaults.standard
   }
 
@@ -89,6 +99,30 @@ enum KeyboardSharedConfig {
     d.synchronize()
     guard let action, !action.isEmpty else { return nil }
     return action
+  }
+
+  static func currentSpeechLocale() -> String {
+    let code = fromLang().lowercased()
+    switch code {
+    case "ta": return "ta-IN"
+    case "hi": return "hi-IN"
+    case "fr": return "fr-FR"
+    case "de": return "de-DE"
+    case "es": return "es-ES"
+    case "ar": return "ar-SA"
+    case "zh": return "zh-CN"
+    case "ja": return "ja-JP"
+    case "ko": return "ko-KR"
+    case "ru": return "ru-RU"
+    case "pt": return "pt-BR"
+    case "it": return "it-IT"
+    case "bn": return "bn-IN"
+    case "te": return "te-IN"
+    case "ml": return "ml-IN"
+    case "kn": return "kn-IN"
+    case "mr": return "mr-IN"
+    default: return "en-US"
+    }
   }
 
   static func snapshot() -> [String: Any] {

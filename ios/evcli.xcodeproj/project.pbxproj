@@ -7,7 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		13B07FB71A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		3DF9915745994BC68AA22D13 /* noop-file.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFDDC5CCE0954D899A36ACF6 /* noop-file.swift */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
+		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		8B0B07128DCF68960187661E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 		AR0100011A68108700A75B9A /* AudioRecorderModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = AR0100111A68108700A75B9A /* AudioRecorderModule.swift */; };
 		AR0100021A68108700A75B9A /* AudioRecorderModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = AR0100121A68108700A75B9A /* AudioRecorderModuleBridge.m */; };
@@ -44,6 +47,12 @@
 		KB0100621A68108700A75B9A /* KeyboardInlineVoiceCommandRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100631A68108700A75B9A /* KeyboardInlineVoiceCommandRecorder.swift */; };
 		KB0100641A68108700A75B9A /* KeyboardKeyAlternatives.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100651A68108700A75B9A /* KeyboardKeyAlternatives.swift */; };
 		KB0100661A68108700A75B9A /* KeyboardExtensionCloudDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100671A68108700A75B9A /* KeyboardExtensionCloudDictation.swift */; };
+		KB0100701A68108700A75B9A /* SharedIPCManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100711A68108700A75B9A /* SharedIPCManager.swift */; };
+		KB0100721A68108700A75B9A /* SharedIPCManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100711A68108700A75B9A /* SharedIPCManager.swift */; };
+		KB0100731A68108700A75B9A /* BackgroundAudioManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100741A68108700A75B9A /* BackgroundAudioManager.swift */; };
+		KB0100751A68108700A75B9A /* KeyboardMicController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100761A68108700A75B9A /* KeyboardMicController.swift */; };
+		KB0100771A68108700A75B9A /* TypeVoiceLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB0100781A68108700A75B9A /* TypeVoiceLiveActivity.swift */; };
+		KB0100791A68108700A75B9A /* ActivationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KB01007A1A68108700A75B9A /* ActivationViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -80,6 +89,7 @@
 		5DCACB8F33CDC322A6C60F78 /* libPods-evcli.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-evcli.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = evcli/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = evcli/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		AFDDC5CCE0954D899A36ACF6 /* noop-file.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = "noop-file.swift"; path = "evcli/noop-file.swift"; sourceTree = "<group>"; };
 		AR0100111A68108700A75B9A /* AudioRecorderModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AudioRecorderModule.swift; path = evcli/AudioRecorderModule.swift; sourceTree = "<group>"; };
 		AR0100121A68108700A75B9A /* AudioRecorderModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = AudioRecorderModuleBridge.m; path = evcli/AudioRecorderModuleBridge.m; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
@@ -112,6 +122,11 @@
 		KB0100631A68108700A75B9A /* KeyboardInlineVoiceCommandRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardInlineVoiceCommandRecorder.swift; path = Shared/KeyboardInlineVoiceCommandRecorder.swift; sourceTree = "<group>"; };
 		KB0100651A68108700A75B9A /* KeyboardKeyAlternatives.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardKeyAlternatives.swift; path = Shared/KeyboardKeyAlternatives.swift; sourceTree = "<group>"; };
 		KB0100671A68108700A75B9A /* KeyboardExtensionCloudDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardExtensionCloudDictation.swift; path = Shared/KeyboardExtensionCloudDictation.swift; sourceTree = "<group>"; };
+		KB0100711A68108700A75B9A /* SharedIPCManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SharedIPCManager.swift; path = Shared/SharedIPCManager.swift; sourceTree = "<group>"; };
+		KB0100741A68108700A75B9A /* BackgroundAudioManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BackgroundAudioManager.swift; path = evcli/BackgroundAudioManager.swift; sourceTree = "<group>"; };
+		KB0100761A68108700A75B9A /* KeyboardMicController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeyboardMicController.swift; path = TypeEasyKeyboard/KeyboardMicController.swift; sourceTree = "<group>"; };
+		KB0100781A68108700A75B9A /* TypeVoiceLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TypeVoiceLiveActivity.swift; path = Shared/TypeVoiceLiveActivity.swift; sourceTree = "<group>"; };
+		KB01007A1A68108700A75B9A /* ActivationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ActivationViewController.swift; path = evcli/ActivationViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -145,10 +160,13 @@
 				KB0100331A68108700A75B9A /* KeyboardDictationService.swift */,
 				KB0100581A68108700A75B9A /* KeyboardVoiceCommandService.swift */,
 				KB01005D1A68108700A75B9A /* KeyboardHostVoiceCoordinator.swift */,
+				KB0100741A68108700A75B9A /* BackgroundAudioManager.swift */,
+				KB01007A1A68108700A75B9A /* ActivationViewController.swift */,
 				KB0100341A68108700A75B9A /* evcli.entitlements */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
+				AFDDC5CCE0954D899A36ACF6 /* noop-file.swift */,
 			);
 			name = evcli;
 			sourceTree = "<group>";
@@ -225,6 +243,8 @@
 				KB0100651A68108700A75B9A /* KeyboardKeyAlternatives.swift */,
 				KB0100671A68108700A75B9A /* KeyboardExtensionCloudDictation.swift */,
 				KB01005B1A68108700A75B9A /* KeyboardSharedNotifications.swift */,
+				KB0100711A68108700A75B9A /* SharedIPCManager.swift */,
+				KB0100781A68108700A75B9A /* TypeVoiceLiveActivity.swift */,
 			);
 			name = Shared;
 			sourceTree = "<group>";
@@ -233,6 +253,7 @@
 			isa = PBXGroup;
 			children = (
 				KB0100151A68108700A75B9A /* KeyboardViewController.swift */,
+				KB0100761A68108700A75B9A /* KeyboardMicController.swift */,
 				KB0100161A68108700A75B9A /* Info.plist */,
 				KB0100351A68108700A75B9A /* TypeEasyKeyboard.entitlements */,
 			);
@@ -291,13 +312,11 @@
 				LastUpgradeCheck = 1210;
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
-						DevelopmentTeam = D828566AL3;
 						LastSwiftMigration = 1120;
 						ProvisioningStyle = Automatic;
 					};
 					KB0100241A68108700A75B9A = {
 						CreatedOnToolsVersion = 15.0;
-						DevelopmentTeam = D828566AL3;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -327,6 +346,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				8B0B07128DCF68960187661E /* PrivacyInfo.xcprivacy in Resources */,
+				13B07FB71A68108700A75B9A /* Images.xcassets in Resources */,
+				81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -364,9 +385,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-evcli/Pods-evcli-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-evcli/Pods-evcli-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -403,9 +428,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-evcli/Pods-evcli-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-evcli/Pods-evcli-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -433,6 +462,11 @@
 				KB0100561A68108700A75B9A /* KeyboardVoiceCommandStore.swift in Sources */,
 				KB01005C1A68108700A75B9A /* KeyboardSharedNotifications.swift in Sources */,
 				KB01005E1A68108700A75B9A /* KeyboardHostVoiceCoordinator.swift in Sources */,
+				KB0100701A68108700A75B9A /* SharedIPCManager.swift in Sources */,
+				KB0100731A68108700A75B9A /* BackgroundAudioManager.swift in Sources */,
+				KB0100771A68108700A75B9A /* TypeVoiceLiveActivity.swift in Sources */,
+				KB0100791A68108700A75B9A /* ActivationViewController.swift in Sources */,
+				3DF9915745994BC68AA22D13 /* noop-file.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -460,6 +494,8 @@
 				KB0100621A68108700A75B9A /* KeyboardInlineVoiceCommandRecorder.swift in Sources */,
 				KB0100641A68108700A75B9A /* KeyboardKeyAlternatives.swift in Sources */,
 				KB0100661A68108700A75B9A /* KeyboardExtensionCloudDictation.swift in Sources */,
+				KB0100721A68108700A75B9A /* SharedIPCManager.swift in Sources */,
+				KB0100751A68108700A75B9A /* KeyboardMicController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -486,8 +522,9 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = D828566AL3;
 				ENABLE_BITCODE = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = evcli/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Type Easy";
+				INFOPLIST_KEY_CFBundleDisplayName = TypeEasy;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -506,7 +543,7 @@
 				SWIFT_OBJC_BRIDGING_HEADER = "evcli/evcli-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Debug;
@@ -522,8 +559,9 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = D828566AL3;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = evcli/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Type Easy";
+				INFOPLIST_KEY_CFBundleDisplayName = TypeEasy;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -541,7 +579,7 @@
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_OBJC_BRIDGING_HEADER = "evcli/evcli-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;
@@ -579,6 +617,7 @@
 				COPY_PHASE_STRIP = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "";
 				GCC_C_LANGUAGE_STANDARD = gnu99;
 				GCC_DYNAMIC_NO_PIC = NO;
@@ -661,6 +700,7 @@
 				COPY_PHASE_STRIP = YES;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "";
 				GCC_C_LANGUAGE_STANDARD = gnu99;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -710,6 +750,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = D828566AL3;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TypeEasyKeyboard/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.5;
@@ -731,7 +772,7 @@
 				SKIP_INSTALL = YES;
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -743,6 +784,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = D828566AL3;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TypeEasyKeyboard/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.5;
@@ -764,7 +806,7 @@
 				SKIP_INSTALL = YES;
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};

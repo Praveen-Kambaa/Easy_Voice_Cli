@@ -19,4 +19,8 @@ enum KeyboardLanguages {
   static func displayName(for code: String) -> String {
     all.first(where: { $0.code == code.lowercased() })?.name ?? code.uppercased()
   }
+
+  static func currentSpeechLocale() -> String {
+    KeyboardSharedConfig.currentSpeechLocale()
+  }
 }

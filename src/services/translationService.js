@@ -139,20 +139,54 @@ export async function translateSmart({
   targetAppCode,
   userId,
 }) {
+  const trimmed = (text ?? '').trim();
+  if (!trimmed) {
+    return { success: false, error: 'Nothing to translate' };
+  }
+
+  // 1. If user explicitly selected Groq AI engine
   const aiEngine = await getAiEngineProvider();
   if (aiEngine === 'groq') {
     try {
-      const res = await translateTextWithGroq(text, sourceAppCode, targetAppCode);
-      return { success: true, translatedText: res.translatedText };
+      const res = await translateTextWithGroq(trimmed, sourceAppCode, targetAppCode);
+      if (res?.translatedText) {
+        return { success: true, translatedText: res.translatedText };
+      }
     } catch (e) {
-      return { success: false, error: e.message || 'Groq translation failed' };
+      logger.warn('[translationService] Groq translation failed, falling back to API:', e);
     }
   }
-  const useInternal = await getInternalFloatingTranslationEnabled();
-  if (useInternal) {
-    return translateOffline({ text, sourceAppCode, targetAppCode });
+
+  // 2. On Android: use ML Kit on-device translation if enabled in Settings
+  if (Platform.OS === 'android') {
+    const useInternal = await getInternalFloatingTranslationEnabled();
+    if (useInternal) {
+      const offlineRes = await translateOffline({ text: trimmed, sourceAppCode, targetAppCode });
+      if (offlineRes.success) {
+        return offlineRes;
+      }
+      logger.warn('[translationService] Offline translation failed, falling back to API:', offlineRes.error);
+    }
   }
-  return translateViaApi({ text, targetLangCode: targetAppCode, userId });
+
+  // 3. Primary cloud translation via TypeEasy REST API
+  const apiRes = await translateViaApi({ text: trimmed, targetLangCode: targetAppCode, userId });
+  if (apiRes.success) {
+    return apiRes;
+  }
+
+  // 4. Automatic fallback to Groq if the REST API returned an error or timed out
+  try {
+    logger.info('[translationService] Primary API failed; attempting Groq fallback...');
+    const groqFallback = await translateTextWithGroq(trimmed, sourceAppCode, targetAppCode);
+    if (groqFallback?.translatedText) {
+      return { success: true, translatedText: groqFallback.translatedText };
+    }
+  } catch (groqErr) {
+    logger.warn('[translationService] Groq fallback also failed:', groqErr);
+  }
+
+  return apiRes;
 }
 
 /**

@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { AppState, Linking, NativeModules, Platform } from 'react-native';
 import { useNavigationContainerRef } from '@react-navigation/native';
 
-const { KeyboardModule } = NativeModules;
+const { KeyboardModule, TypeEasyModule } = NativeModules || {};
+const ActiveKeyboardModule = KeyboardModule || TypeEasyModule;
 
 /**
  * When the keyboard cannot call extensionContext.open(typeeasy://…), it stores a pending
@@ -14,15 +15,15 @@ export function KeyboardPendingLinkHandler({ navigationRef }) {
 
     const run = async () => {
       try {
-        const pending = await KeyboardModule?.peekPendingDeepLink?.();
+        const pending = await (ActiveKeyboardModule?.peekPendingDeepLink?.() ?? Promise.resolve(null));
         if (!pending || typeof pending !== 'string') return;
 
         // Never consume voice links in JS — native layer starts recording from App Group state.
         if (pending.startsWith('keyboard-voice')) {
-          await KeyboardModule?.forwardPendingKeyboardLink?.();
+          await ActiveKeyboardModule?.forwardPendingKeyboardLink?.();
           return;
         }
-        const consumed = await KeyboardModule?.consumePendingDeepLink?.();
+        const consumed = await (ActiveKeyboardModule?.consumePendingDeepLink?.() ?? Promise.resolve(null));
         if (consumed === 'keyboard-settings') {
           navigationRef.navigate('Main', { screen: 'Settings' });
         }

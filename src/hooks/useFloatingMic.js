@@ -1,9 +1,11 @@
 import logger from '../utils/logger';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { NativeModules, DeviceEventEmitter, Platform, AppState } from 'react-native';
+import { NativeModules, DeviceEventEmitter, Platform, AppState, Linking } from 'react-native';
+import { check, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import { syncFloatingMicSettingsToNative } from '../services/floatingMicConfig';
 import { logActivity, ActivityCategory } from '../services/appActivityHistoryService';
 import { useAlert } from '../context/AlertContext';
+import NativeAudioService from '../services/NativeAudioService';
 
 const { FloatingMicModule } = NativeModules;
 
@@ -27,12 +29,26 @@ export const useFloatingMic = () => {
   const checkPermissions = useCallback(async () => {
     try {
       if (Platform.OS !== 'android') {
-        logger.warn('FloatingMic is only available on Android');
+        let micGranted = false;
+        try {
+          const status = await check(PERMISSIONS.IOS.MICROPHONE);
+          micGranted = status === RESULTS.GRANTED || status === RESULTS.LIMITED;
+        } catch {
+          micGranted = true;
+        }
+        setPermissions({
+          overlay: true,
+          accessibility: true,
+          recordAudio: micGranted,
+          allGranted: micGranted,
+        });
         return;
       }
 
-      const perms = await FloatingMicModule.checkPermissions();
-      setPermissions(perms);
+      if (typeof FloatingMicModule?.checkPermissions === 'function') {
+        const perms = await FloatingMicModule.checkPermissions();
+        setPermissions(perms);
+      }
     } catch (error) {
       logger.error('Failed to check permissions:', error);
     }
@@ -178,7 +194,24 @@ export const useFloatingMic = () => {
   const startFloatingMic = async () => {
     try {
       if (Platform.OS !== 'android') {
-        throw new Error('FloatingMic is only available on Android');
+        showAlert(
+          'TypeEasy on iOS',
+          'Floating overlay bubbles are an Android-specific feature. On iOS and Mac, use the TypeEasy Keyboard extension to dictate and translate inside any app.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Keyboard Settings',
+              onPress: () => {
+                if (typeof NativeModules.KeyboardModule?.openKeyboardSettings === 'function') {
+                  NativeModules.KeyboardModule.openKeyboardSettings();
+                } else {
+                  Linking.openSettings().catch(() => {});
+                }
+              },
+            },
+          ]
+        );
+        return;
       }
 
       // Check permissions first
@@ -190,9 +223,11 @@ export const useFloatingMic = () => {
       }
 
       await syncFloatingMicSettingsToNative();
-      const result = await FloatingMicModule.startFloatingMic();
-      setIsServiceActive(true);
-      logger.debug('Floating mic started:', result);
+      if (typeof FloatingMicModule?.startFloatingMic === 'function') {
+        const result = await FloatingMicModule.startFloatingMic();
+        setIsServiceActive(true);
+        logger.debug('Floating mic started:', result);
+      }
       await logActivity(ActivityCategory.FLOATING_MIC, 'service_started', {
         label: 'Floating mic overlay started',
       });
@@ -205,17 +240,20 @@ export const useFloatingMic = () => {
   const stopFloatingMic = async () => {
     try {
       if (Platform.OS !== 'android') {
-        throw new Error('FloatingMic is only available on Android');
+        setIsServiceActive(false);
+        return;
       }
 
-      const result = await FloatingMicModule.stopFloatingMic();
+      if (typeof FloatingMicModule?.stopFloatingMic === 'function') {
+        const result = await FloatingMicModule.stopFloatingMic();
+        logger.debug('Floating mic stopped:', result);
+      }
       setIsServiceActive(false);
       setRecordingState({
         state: 'IDLE',
         lastResult: null,
         error: null,
       });
-      logger.debug('Floating mic stopped:', result);
       await logActivity(ActivityCategory.FLOATING_MIC, 'service_stopped', {
         label: 'Floating mic overlay stopped',
       });
@@ -226,6 +264,43 @@ export const useFloatingMic = () => {
   };
 
   const handleMissingPermissions = async () => {
+    if (Platform.OS !== 'android') {
+      if (!permissions.recordAudio) {
+        showAlert(
+          'Microphone Permission Required',
+          'Please enable microphone access in settings to use voice features.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open Settings',
+              onPress: () => {
+                Linking.openSettings().catch(() => {});
+              },
+            },
+          ]
+        );
+      } else {
+        showAlert(
+          'TypeEasy on iOS',
+          'Floating overlay bubbles are an Android-specific feature. On iOS and Mac, use the TypeEasy Keyboard extension to dictate and translate in any app.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Keyboard Settings',
+              onPress: () => {
+                if (typeof NativeModules.KeyboardModule?.openKeyboardSettings === 'function') {
+                  NativeModules.KeyboardModule.openKeyboardSettings();
+                } else {
+                  Linking.openSettings().catch(() => {});
+                }
+              },
+            },
+          ]
+        );
+      }
+      return;
+    }
+
     const missingPermissions = [];
     
     if (!permissions.overlay) {
@@ -252,18 +327,29 @@ export const useFloatingMic = () => {
 
   const openRequiredSettings = async () => {
     try {
-      if (!permissions.overlay) {
+      if (Platform.OS !== 'android') {
+        if (typeof NativeModules.KeyboardModule?.openKeyboardSettings === 'function') {
+          NativeModules.KeyboardModule.openKeyboardSettings();
+        } else {
+          Linking.openSettings().catch(() => {});
+        }
+        return;
+      }
+
+      if (FloatingMicModule?.openOverlaySettings && !permissions.overlay) {
         await FloatingMicModule.openOverlaySettings();
         showAlert(
           'Overlay Permission',
           'Please enable "Display over other apps" permission for this app, then return to the app.'
         );
-      } else if (!permissions.accessibility) {
+      } else if (FloatingMicModule?.openAccessibilitySettings && !permissions.accessibility) {
         await FloatingMicModule.openAccessibilitySettings();
         showAlert(
           'Accessibility Service',
           'Please enable the accessibility service for this app, then return to the app.'
         );
+      } else {
+        Linking.openSettings().catch(() => {});
       }
     } catch (error) {
       logger.error('Failed to open settings:', error);
@@ -280,7 +366,11 @@ export const useFloatingMic = () => {
 
   const startRecording = async () => {
     try {
-      await FloatingMicModule.startRecording();
+      if (Platform.OS === 'android' && typeof FloatingMicModule?.startRecording === 'function') {
+        await FloatingMicModule.startRecording();
+      } else {
+        await NativeAudioService.startRecording('floating_mic_recording.m4a');
+      }
     } catch (error) {
       logger.error('Failed to start recording:', error);
       throw error;
@@ -289,7 +379,11 @@ export const useFloatingMic = () => {
 
   const stopRecording = async () => {
     try {
-      await FloatingMicModule.stopRecording();
+      if (Platform.OS === 'android' && typeof FloatingMicModule?.stopRecording === 'function') {
+        await FloatingMicModule.stopRecording();
+      } else {
+        await NativeAudioService.stopRecording();
+      }
     } catch (error) {
       logger.error('Failed to stop recording:', error);
       throw error;

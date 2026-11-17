@@ -214,10 +214,10 @@ class MyKeyboardService : InputMethodService() {
         }
 
     private fun enterKeyBackground(): GradientDrawable =
-        GradientDrawable(
-            GradientDrawable.Orientation.TL_BR,
-            intArrayOf(theme.enterStart, theme.enterEnd),
-        ).apply { cornerRadius = dp(10).toFloat() }
+        GradientDrawable().apply {
+            setColor(theme.primary)
+            cornerRadius = dp(8).toFloat()
+        }
 
     // ── Number hints for top row ──────────────────────────────────────────────
     private val topRowHints = mapOf(
@@ -230,7 +230,7 @@ class MyKeyboardService : InputMethodService() {
         listOf("q","w","e","r","t","y","u","i","o","p"),
         listOf("a","s","d","f","g","h","j","k","l"),
         listOf("SHIFT","z","x","c","v","b","n","m","BKSP"),
-        listOf("?123","/","EMOJI","space",".","ENTER")
+        listOf("?123",",","EMOJI","space",".","ENTER")
     )
     private val symbolRows = listOf(
         listOf("1","2","3","4","5","6","7","8","9","0"),
@@ -1027,25 +1027,21 @@ class MyKeyboardService : InputMethodService() {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Feature toolbar — Aura Lumina smart ribbon
+    // ─────────────────────────────────────────────────────────────────────────
+    // Feature toolbar — Match Modern Material Type Easy Design
     // ─────────────────────────────────────────────────────────────────────────
 
     private fun buildFeatureToolbar() {
         featureToolbar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(C_TOOLBAR_BG)
-            layoutParams = LinearLayout.LayoutParams(MATCH, dp(44))
-            setPadding(dp(8), dp(6), dp(8), dp(6))
+            layoutParams = LinearLayout.LayoutParams(MATCH, dp(48))
+            setPadding(dp(8), dp(4), dp(8), dp(4))
             gravity = Gravity.CENTER_VERTICAL
         }
-        // Top neon edge (gradient approx via indigo line)
         val ribbonStack = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(MATCH, WRAP)
-            addView(View(this@MyKeyboardService).apply {
-                layoutParams = LinearLayout.LayoutParams(MATCH, dp(1))
-                setBackgroundColor(Color.parseColor("#806366F1"))
-            })
             addView(featureToolbar)
         }
         populateFeatureToolbar()
@@ -1055,23 +1051,105 @@ class MyKeyboardService : InputMethodService() {
     private fun populateFeatureToolbar() {
         if (!::featureToolbar.isInitialized) return
         featureToolbar.removeAllViews()
-        // 1. Aura spark
-        featureToolbar.addView(auraSparkBtn { onVoiceCommandPress() })
-        featureToolbar.addView(toolSpacer())
-        // 2. Translate 文A
-        featureToolbar.addView(toolPill("文A", C_ACCENT_CYAN) { onTranslatePress() })
-        featureToolbar.addView(toolSpacer())
-        // 3. Grammar A✓
-        featureToolbar.addView(toolPill("A✓", theme.primary) { onGrammarPress() })
-        featureToolbar.addView(toolSpacer())
-        // 4. Mic
-        featureToolbar.addView(toolPillIcon(R.drawable.ic_mic) { onVoicePress() })
-        featureToolbar.addView(toolSpacer())
-        // 5. Clipboard
-        featureToolbar.addView(toolPillIcon(R.drawable.ic_clipboard) { toggleClipboardSession(true) })
+        featureToolbar.gravity = Gravity.CENTER_VERTICAL
+
+        // 1. Translate [文A Translate]
+        featureToolbar.addView(createToolbarPill("文A", "Translate") { onTranslatePress() })
+
+        // 2. Grammar [A~ Grammar]
+        featureToolbar.addView(createToolbarPill("A~", "Grammar") { onGrammarPress() })
+
+        // Flexible spacer
         featureToolbar.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) })
-        // Settings
-        featureToolbar.addView(toolPill("⚙", C_HINT_TEXT) { toggleSettings() })
+
+        // 3. Center Mic: circular blue button
+        featureToolbar.addView(createCenterMicBtn { onVoicePress() })
+
+        // Flexible spacer
+        featureToolbar.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) })
+
+        // 4. Ask AI [✨ Ask AI]
+        featureToolbar.addView(createToolbarPill("✨", "Ask AI") { onVoiceCommandPress() })
+
+        // 5. Settings [⚙]
+        featureToolbar.addView(createSettingsBtn { toggleSettings() })
+    }
+
+    private fun createToolbarPill(icon: String, label: String, action: () -> Unit): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            background = strokedRoundRect(theme.toolPillBg, dp(17), theme.toolPillBorder)
+            layoutParams = LinearLayout.LayoutParams(WRAP, dp(34)).also {
+                it.setMargins(dp(2), 0, dp(2), 0)
+            }
+            setPadding(dp(10), 0, dp(10), 0)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { action() }
+
+            addView(TextView(this@MyKeyboardService).apply {
+                text = icon
+                textSize = 12f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(theme.primary)
+                gravity = Gravity.CENTER
+            })
+
+            addView(View(this@MyKeyboardService).apply {
+                layoutParams = LinearLayout.LayoutParams(dp(5), 1)
+            })
+
+            addView(TextView(this@MyKeyboardService).apply {
+                text = label
+                textSize = 12f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(C_KEY_TEXT)
+                gravity = Gravity.CENTER
+            })
+        }
+    }
+
+    private fun createCenterMicBtn(action: () -> Unit): View {
+        return FrameLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(dp(44), dp(44)).also {
+                it.setMargins(dp(4), 0, dp(4), 0)
+            }
+            elevation = dp(3).toFloat()
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(theme.primary)
+            }
+            addView(TextView(this@MyKeyboardService).apply {
+                text = "🎤"
+                textSize = 18f
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                layoutParams = FrameLayout.LayoutParams(MATCH, MATCH)
+            })
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { action() }
+        }
+    }
+
+    private fun createSettingsBtn(action: () -> Unit): View {
+        return FrameLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(dp(34), dp(34)).also {
+                it.setMargins(dp(2), 0, 0, 0)
+            }
+            background = strokedRoundRect(theme.toolPillBg, dp(17), theme.toolPillBorder)
+            addView(TextView(this@MyKeyboardService).apply {
+                text = "⚙"
+                textSize = 16f
+                gravity = Gravity.CENTER
+                setTextColor(theme.primary)
+                layoutParams = FrameLayout.LayoutParams(MATCH, MATCH)
+            })
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { action() }
+        }
     }
 
     private fun toolSpacer() = View(this).apply {
@@ -1441,7 +1519,7 @@ class MyKeyboardService : InputMethodService() {
                     logical == "SHIFT" && layer == Layer.CAPS -> "⬆"
                     logical == "SHIFT" -> "↑"
                     logical == "BKSP"  -> "⌫"
-                    logical == "ENTER" -> "⏎"
+                    logical == "ENTER" -> "↵"
                     logical == "EMOJI" -> "😊"
                     else -> logical
                 }
@@ -1451,29 +1529,29 @@ class MyKeyboardService : InputMethodService() {
         }
     }
 
-    private fun spaceBarLabel(): String {
-        val lang = languages.firstOrNull { it.first == fromLang }?.second ?: "English"
-        return "$lang"
-    }
+    private fun spaceBarLabel(): String = "type easy"
 
     private fun makeKey(logical: String, display: String, isTopRow: Boolean): View {
         val isLetter  = logical.length == 1 && logical[0].isLetter()
         val isSpace   = logical == "space"
-        val isAction  = logical in listOf("SHIFT","BKSP","?123","ABC","ENTER","EMOJI","/",",",".")
+        val isAction  = logical in listOf("SHIFT","BKSP","?123","ABC","EMOJI")
         val isShiftOn = logical == "SHIFT" && (layer == Layer.SHIFT || layer == Layer.CAPS)
         val isEnter   = logical == "ENTER"
 
         val bgColor = when {
-            isEnter   -> theme.enterStart
+            isEnter   -> theme.primary
             isShiftOn -> theme.primary
-            isSpace   -> Color.parseColor(if (keyboardIsDark) "#182033" else "#FFFFFF")
+            isSpace   -> if (keyboardIsDark) Color.parseColor("#1E293B") else Color.WHITE
             isAction  -> C_KEY_ACTION
             else      -> C_KEY_LETTER
         }
         val weight = when {
-            isSpace  -> 4f
-            logical in listOf("SHIFT","BKSP","?123","ABC") -> 1.5f
-            logical == "ENTER" -> 1.35f
+            isSpace  -> 4.5f
+            logical in listOf("SHIFT","BKSP") -> 1.5f
+            logical in listOf("?123","ABC") -> 1.3f
+            logical == "ENTER" -> 1.4f
+            logical == "EMOJI" -> 1.0f
+            logical in listOf(",", ".") -> 1.0f
             else -> 1f
         }
 

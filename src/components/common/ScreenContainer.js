@@ -3,7 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 
-export const ScreenContainer = ({ children, style, bgColor }) => {
+export const ScreenContainer = ({ children, style, bgColor, useBottomInset = false }) => {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
 
@@ -11,7 +11,8 @@ export const ScreenContainer = ({ children, style, bgColor }) => {
     <View
       style={[
         styles.container,
-        { paddingBottom: insets.bottom, backgroundColor: colors.backgroundAlt },
+        { backgroundColor: colors.backgroundAlt },
+        useBottomInset && { paddingBottom: insets.bottom },
         bgColor != null && { backgroundColor: bgColor },
         style,
       ]}

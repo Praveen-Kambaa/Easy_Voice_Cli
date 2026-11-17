@@ -526,7 +526,7 @@ function createStyles(colors, isDark) {
     scroll: {
       paddingHorizontal: 16,
       paddingTop: 8,
-      paddingBottom: 32,
+      paddingBottom: 16,
     },
     subHeaderRow: {
       flexDirection: 'row',
@@ -1026,7 +1026,7 @@ function createStyles(colors, isDark) {
       color: '#EF4444',
     },
     bottomSpacer: {
-      height: 28,
+      height: 8,
     },
   });
 }

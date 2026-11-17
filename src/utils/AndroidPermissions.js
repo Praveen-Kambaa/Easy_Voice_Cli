@@ -71,18 +71,23 @@ export const checkAccessibilityPermission = async () => {
  */
 export const openOverlaySettings = async () => {
   if (Platform.OS !== 'android') {
-    throw new Error('Overlay settings are only available on Android');
+    if (typeof NativeModules.KeyboardModule?.openKeyboardSettings === 'function') {
+      NativeModules.KeyboardModule.openKeyboardSettings();
+    } else {
+      Linking.openSettings().catch(() => {});
+    }
+    return;
   }
 
   if (!AndroidPermissionsModule) {
-    throw new Error('AndroidPermissionsModule not available. Make sure native module is properly linked.');
+    logger.warn('AndroidPermissionsModule not available');
+    return;
   }
 
   try {
     await AndroidPermissionsModule.openOverlaySettings();
   } catch (error) {
     logger.error('Error opening overlay settings:', error);
-    throw new Error(`Failed to open overlay settings: ${error.message}`);
   }
 };
 
@@ -93,18 +98,23 @@ export const openOverlaySettings = async () => {
  */
 export const openAccessibilitySettings = async () => {
   if (Platform.OS !== 'android') {
-    throw new Error('Accessibility settings are only available on Android');
+    if (typeof NativeModules.KeyboardModule?.openKeyboardSettings === 'function') {
+      NativeModules.KeyboardModule.openKeyboardSettings();
+    } else {
+      Linking.openSettings().catch(() => {});
+    }
+    return;
   }
 
   if (!AndroidPermissionsModule) {
-    throw new Error('AndroidPermissionsModule not available. Make sure native module is properly linked.');
+    logger.warn('AndroidPermissionsModule not available');
+    return;
   }
 
   try {
     await AndroidPermissionsModule.openAccessibilitySettings();
   } catch (error) {
     logger.error('Error opening accessibility settings:', error);
-    throw new Error(`Failed to open accessibility settings: ${error.message}`);
   }
 };
 
@@ -195,6 +205,9 @@ export const shouldShowPermissionRationale = (permissionType) => {
  * Request overlay permission with proper flow
  */
 export const requestOverlayPermission = async () => {
+  if (Platform.OS !== 'android') {
+    return true;
+  }
   if (!supportsOverlayPermission()) {
     showGlobalAlert(
       'Not Supported',
@@ -226,6 +239,9 @@ export const requestOverlayPermission = async () => {
  * Request accessibility permission with proper flow
  */
 export const requestAccessibilityPermission = async () => {
+  if (Platform.OS !== 'android') {
+    return true;
+  }
   if (!supportsAccessibilityService()) {
     showGlobalAlert(
       'Not Supported',

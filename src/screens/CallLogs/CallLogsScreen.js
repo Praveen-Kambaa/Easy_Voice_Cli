@@ -633,11 +633,11 @@ function createStyles(colors, isDark) {
     scrollContent: {
       paddingHorizontal: 16,
       paddingTop: 10,
-      paddingBottom: 24,
+      paddingBottom: 16,
       gap: 14,
     },
     bottomSpacer: {
-      height: 28,
+      height: 8,
     },
     headerRightRow: {
       flexDirection: 'row',

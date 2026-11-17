@@ -9,6 +9,8 @@ import {
   Share,
   Clipboard,
   DeviceEventEmitter,
+  NativeModules,
+  Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -46,6 +48,8 @@ import {
   ACTIVITY_HISTORY_UPDATED_EVENT,
 } from '../../services/appActivityHistoryService';
 import { formatCompactDateTime } from '../../utils/dateTimeFormat';
+
+const { TypeEasyModule, KeyboardModule } = NativeModules || {};
 
 const QUICK_SHORTCUTS = [
   {
@@ -169,6 +173,13 @@ const HomeScreen = ({ navigation }) => {
   );
 
   useEffect(() => {
+    if (Platform?.OS === 'ios') {
+      if (typeof KeyboardModule?.warmUpVoiceEngine === 'function') {
+        KeyboardModule.warmUpVoiceEngine().catch(() => {});
+      } else if (typeof TypeEasyModule?.warmUpVoiceEngine === 'function') {
+        TypeEasyModule.warmUpVoiceEngine().catch(() => {});
+      }
+    }
     const s1 = DeviceEventEmitter.addListener(VOICE_RECORDINGS_UPDATED_EVENT, loadRecentData);
     const s2 = DeviceEventEmitter.addListener(ACTIVITY_HISTORY_UPDATED_EVENT, loadRecentData);
     return () => {
@@ -555,7 +566,7 @@ function createHomeStyles(colors, isDark) {
     scroll: {
       paddingHorizontal: 16,
       paddingTop: 16,
-      paddingBottom: 100,
+      paddingBottom: 20,
       alignItems: 'stretch',
       gap: 16,
     },

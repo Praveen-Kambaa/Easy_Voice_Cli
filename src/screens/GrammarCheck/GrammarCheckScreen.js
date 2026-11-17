@@ -31,6 +31,7 @@ import {
   Lightbulb,
   ChevronRight,
   ArrowRight,
+  AlertCircle,
 } from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
@@ -49,6 +50,7 @@ import {
   GRAMMAR_HISTORY_UPDATED_EVENT,
 } from '../../services/grammarCheckStorage';
 import { speakTranslatedText, stopTranslationSpeech } from '../../services/translationTtsService';
+import { startTranslatorRecording, stopTranslatorRecordingAndTranscribe } from '../../services/speechService';
 
 const { FloatingMicModule } = NativeModules;
 
@@ -148,6 +150,7 @@ const GrammarCheckScreen = ({ navigation }) => {
   const [selectedTone, setSelectedTone] = useState('formal');
   const [inputText, setInputText] = useState('');
   const [correctedText, setCorrectedText] = useState('');
+  const [checkError, setCheckError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isDictating, setIsDictating] = useState(false);
   const [starred, setStarred] = useState(false);
@@ -206,6 +209,7 @@ const GrammarCheckScreen = ({ navigation }) => {
 
     setLoading(true);
     setCorrectedText('');
+    setCheckError('');
     setStarred(false);
     const startMs = Date.now();
 
@@ -224,16 +228,30 @@ const GrammarCheckScreen = ({ navigation }) => {
         userId: user?.userId,
         tone: selectedTone,
       });
+      // Fallback to Groq if the REST API returned an error or timed out
+      if (!result.success) {
+        try {
+          const groqRes = await checkGrammarWithGroq(trimmed);
+          if (groqRes?.correctedText) {
+            result = { success: true, corrected: groqRes.correctedText };
+          }
+        } catch {
+          // ignore fallback error
+        }
+      }
     }
     const elapsedSec = ((Date.now() - startMs) / 1000).toFixed(2);
     setProcessDurationSec(elapsedSec);
     setLoading(false);
 
     if (!result.success) {
-      showAlert('Grammar Check', result.error);
+      const err = result.error || 'Grammar check failed. Please check your network and try again.';
+      setCheckError(err);
+      showAlert('Grammar Check Failed', err);
       return;
     }
     setCorrectedText(result.corrected);
+    setCheckError('');
     await addGrammarHistory({ inputText: trimmed, correctedText: result.corrected });
     const saved = await isGrammarSaved(trimmed, result.corrected);
     setStarred(Boolean(saved));
@@ -243,6 +261,7 @@ const GrammarCheckScreen = ({ navigation }) => {
   const handleClear = () => {
     setInputText('');
     setCorrectedText('');
+    setCheckError('');
     setStarred(false);
   };
 
@@ -287,7 +306,35 @@ const GrammarCheckScreen = ({ navigation }) => {
         setIsDictating(false);
       }
     } else {
-      showAlert('Dictate', 'Speech dictation is ready on Android devices.');
+      // iOS / Native Audio dictation
+      if (isDictating) {
+        setIsDictating(false);
+        try {
+          const res = await stopTranslatorRecordingAndTranscribe({ language: 'en-US' });
+          if (res.success && res.transcript) {
+            const spoken = String(res.transcript).trim();
+            if (spoken) {
+              setInputText((prev) => (prev ? `${prev} ${spoken}` : spoken));
+            }
+          } else if (res.error) {
+            showAlert('Dictation', res.error);
+          }
+        } catch (e) {
+          showAlert('Dictation', e?.message || 'Failed to finish recording');
+        }
+        return;
+      }
+
+      try {
+        const res = await startTranslatorRecording();
+        if (res.success) {
+          setIsDictating(true);
+        } else {
+          showAlert('Dictation', res.error || 'Could not start recording');
+        }
+      } catch (e) {
+        showAlert('Dictation', e?.message || 'Microphone access failed');
+      }
     }
   };
 
@@ -451,7 +498,10 @@ const GrammarCheckScreen = ({ navigation }) => {
                 placeholder="Type or paste your sentence here…"
                 placeholderTextColor={colors.text.light}
                 value={inputText}
-                onChangeText={setInputText}
+                onChangeText={(t) => {
+                  setInputText(t);
+                  if (checkError) setCheckError('');
+                }}
                 multiline
                 textAlignVertical="top"
                 maxLength={2000}
@@ -503,6 +553,36 @@ const GrammarCheckScreen = ({ navigation }) => {
               </View>
             </View>
           </View>
+
+          {/* Error Banner Card */}
+          {!!checkError && !loading && (
+            <View style={styles.errorCard}>
+              <View style={styles.errorCardTopRow}>
+                <View style={styles.errorIconWrap}>
+                  <AlertCircle size={20} color="#DC2626" strokeWidth={2.4} />
+                </View>
+                <View style={styles.errorContent}>
+                  <Text style={styles.errorTitle}>Grammar Check Failed</Text>
+                  <Text style={styles.errorMessage}>{checkError}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.errorDismissBtn}
+                  onPress={() => setCheckError('')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <X size={16} color={colors.text.secondary} strokeWidth={2.2} />
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={styles.errorRetryBtn}
+                onPress={handleSend}
+                activeOpacity={0.8}
+              >
+                <RotateCcw size={13} color="#DC2626" strokeWidth={2.4} />
+                <Text style={styles.errorRetryText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Corrected Output Card */}
           {(loading || hasResult) && (
@@ -674,8 +754,6 @@ const GrammarCheckScreen = ({ navigation }) => {
               </Text>
             </View>
           </View>
-
-          <View style={{ height: 20 + insets.bottom }} />
         </ScrollView>
       </KeyboardAvoidingView>
     </ScreenContainer>
@@ -704,7 +782,7 @@ function createStyles(colors, isDark) {
     scrollContent: {
       paddingHorizontal: 16,
       paddingTop: 10,
-      paddingBottom: 30,
+      paddingBottom: 16,
       gap: 14,
     },
     subHeaderRow: {
@@ -913,6 +991,57 @@ function createStyles(colors, isDark) {
       fontSize: 13,
       fontWeight: '800',
       color: '#FFFFFF',
+    },
+    errorCard: {
+      backgroundColor: isDark ? 'rgba(220, 38, 38, 0.12)' : '#FEF2F2',
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(220, 38, 38, 0.35)' : '#FECACA',
+      padding: 14,
+      marginBottom: 14,
+    },
+    errorCardTopRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+    },
+    errorIconWrap: {
+      marginRight: 10,
+      marginTop: 2,
+    },
+    errorContent: {
+      flex: 1,
+    },
+    errorTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#DC2626',
+      marginBottom: 3,
+    },
+    errorMessage: {
+      fontSize: 13,
+      color: isDark ? '#FCA5A5' : '#991B1B',
+      lineHeight: 18,
+    },
+    errorDismissBtn: {
+      padding: 4,
+      marginLeft: 8,
+    },
+    errorRetryBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      backgroundColor: isDark ? 'rgba(220, 38, 38, 0.22)' : '#FEE2E2',
+      borderRadius: 8,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      marginTop: 10,
+      marginLeft: 30,
+      gap: 6,
+    },
+    errorRetryText: {
+      fontSize: 12.5,
+      fontWeight: '600',
+      color: '#DC2626',
     },
     outputHeader: {
       flexDirection: 'row',

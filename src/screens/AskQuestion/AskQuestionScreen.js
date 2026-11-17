@@ -672,8 +672,6 @@ const AskQuestionScreen = ({ navigation }) => {
               <ChevronRight size={16} color={colors.text.secondary} strokeWidth={2.2} />
             </TouchableOpacity>
           </View>
-
-          <View style={{ height: 20 + insets.bottom }} />
         </ScrollView>
       </KeyboardAvoidingView>
     </ScreenContainer>
@@ -704,7 +702,7 @@ function createStyles(colors, isDark) {
     scrollContent: {
       paddingHorizontal: 16,
       paddingTop: 10,
-      paddingBottom: 30,
+      paddingBottom: 16,
       gap: 14,
     },
     subHeaderRow: {

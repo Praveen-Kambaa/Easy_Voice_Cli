@@ -23,6 +23,15 @@
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>typeeasy</string>
+		<string>typevoice</string>
+		<string>whatsapp</string>
+		<string>sms</string>
+		<string>mobilenotes</string>
+		<string>googlegmail</string>
+		<string>twitter</string>
+		<string>instagram</string>
+		<string>tg</string>
+		<string>youtube</string>
 	</array>
 	<key>NSExtension</key>
 	<dict>

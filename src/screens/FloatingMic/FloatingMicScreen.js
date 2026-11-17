@@ -10,6 +10,9 @@ import {
   Animated,
   Easing,
   Switch,
+  Platform,
+  Linking,
+  NativeModules,
 } from 'react-native';
 import {
 // ArrowLeft,
@@ -27,6 +30,7 @@ import {
   EyeOff,
   Sparkles,
   Volume2,
+  Keyboard,
 } from 'lucide-react-native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
@@ -111,7 +115,26 @@ const FloatingMicScreen = ({ navigation }) => {
     return () => loop.stop();
   }, [orbAnim]);
 
+  const handleOpenKeyboardSettings = () => {
+    if (typeof NativeModules.KeyboardModule?.openKeyboardSettings === 'function') {
+      NativeModules.KeyboardModule.openKeyboardSettings();
+    } else {
+      Linking.openSettings().catch(() => {});
+    }
+  };
+
   const handleTestBubble = () => {
+    if (Platform.OS === 'ios') {
+      showAlert(
+        'TypeEasy on iOS',
+        'Floating overlay bubbles are an Android-specific feature. On iOS and Mac, use the TypeEasy Keyboard extension to dictate and translate in any app!',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Keyboard Settings', onPress: handleOpenKeyboardSettings },
+        ]
+      );
+      return;
+    }
     if (needsPermissions) {
       handleMissingPermissions();
       return;
@@ -123,6 +146,17 @@ const FloatingMicScreen = ({ navigation }) => {
   };
 
   const handleToggleDock = () => {
+    if (Platform.OS === 'ios') {
+      showAlert(
+        'TypeEasy on iOS',
+        'Floating overlay bubbles are an Android-specific feature. On iOS and Mac, use the TypeEasy Keyboard extension to dictate and translate in any app!',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Keyboard Settings', onPress: handleOpenKeyboardSettings },
+        ]
+      );
+      return;
+    }
     if (needsPermissions) {
       handleMissingPermissions();
       return;
@@ -268,10 +302,14 @@ const FloatingMicScreen = ({ navigation }) => {
 
           {/* Main Title & Subtitle */}
           <Text style={styles.heroTitle}>
-            {isServiceActive ? 'Floating Overlay Active' : 'Floating Overlay Inactive'}
+            {Platform.OS === 'ios'
+              ? 'iOS System Dictation'
+              : (isServiceActive ? 'Floating Overlay Active' : 'Floating Overlay Inactive')}
           </Text>
           <Text style={styles.heroSub}>
-            Tap the hovering bubble in any app to trigger voice dictation instantly.
+            {Platform.OS === 'ios'
+              ? 'Use TypeEasy Keyboard in any app to trigger voice dictation & translation instantly.'
+              : 'Tap the hovering bubble in any app to trigger voice dictation instantly.'}
           </Text>
 
           {/* Last Heard Voice Note Mini Card - only shown when there's an actual note */}
@@ -314,7 +352,9 @@ const FloatingMicScreen = ({ navigation }) => {
             >
               <Power size={15} color="#FFFFFF" strokeWidth={2.4} />
               <Text style={styles.dockBubbleBtnText}>
-                {isServiceActive ? 'Dock Bubble' : 'Start Bubble'}
+                {Platform.OS === 'ios'
+                  ? 'Keyboard Setup'
+                  : (isServiceActive ? 'Dock Bubble' : 'Start Bubble')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -339,18 +379,24 @@ const FloatingMicScreen = ({ navigation }) => {
 
           <TouchableOpacity
             style={styles.statusCard}
-            onPress={handleMissingPermissions}
+            onPress={Platform.OS === 'ios' ? handleOpenKeyboardSettings : handleMissingPermissions}
             activeOpacity={0.78}
           >
             <View style={styles.statusCardTop}>
               <View style={styles.statusCardIconBoxGreen}>
-                <ShieldCheck size={18} color="#15803D" strokeWidth={2.2} />
+                {Platform.OS === 'ios' ? (
+                  <Keyboard size={18} color="#15803D" strokeWidth={2.2} />
+                ) : (
+                  <ShieldCheck size={18} color="#15803D" strokeWidth={2.2} />
+                )}
               </View>
               <Text style={styles.statusCardKicker}>System</Text>
             </View>
-            <Text style={styles.statusCardTitle}>Draw Over Apps</Text>
+            <Text style={styles.statusCardTitle}>
+              {Platform.OS === 'ios' ? 'TypeEasy Keyboard' : 'Draw Over Apps'}
+            </Text>
             <Text style={styles.statusCardGranted}>
-              {permissions?.overlay ? '✓ Granted' : 'Setup Required'}
+              {Platform.OS === 'ios' ? '✓ Configured' : (permissions?.overlay ? '✓ Granted' : 'Setup Required')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -445,7 +491,7 @@ const FloatingMicScreen = ({ navigation }) => {
 function createStyles(colors, isDark) {
   return StyleSheet.create({
     bottomSpacer: {
-      height: 28,
+      height: 8,
     },
     profileAvatarBtn: {
       width: 36,
@@ -461,7 +507,7 @@ function createStyles(colors, isDark) {
     scrollContent: {
       paddingHorizontal: 16,
       paddingTop: 10,
-      paddingBottom: 24,
+      paddingBottom: 16,
       gap: 14,
     },
     subHeaderRow: {

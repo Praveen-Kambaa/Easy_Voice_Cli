@@ -1,6 +1,6 @@
 import logger from '../utils/logger';
 import { useState, useEffect, useCallback } from 'react';
-import { AppState, Platform } from 'react-native';
+import { AppState, Platform, Linking, NativeModules } from 'react-native';
 import {
   checkOverlayPermission,
   checkAccessibilityPermission,
@@ -123,6 +123,15 @@ export const useAndroidPermissions = () => {
     try {
       setLoading(prev => ({ ...prev, [permissionType]: true }));
       setModalVisible(prev => ({ ...prev, [permissionType]: false }));
+
+      if (Platform.OS !== 'android') {
+        if (typeof NativeModules.KeyboardModule?.openKeyboardSettings === 'function') {
+          NativeModules.KeyboardModule.openKeyboardSettings();
+        } else {
+          Linking.openSettings().catch(() => {});
+        }
+        return;
+      }
 
       switch (permissionType) {
         case PERMISSION_NAMES.OVERLAY:

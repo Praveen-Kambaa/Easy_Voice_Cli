@@ -11,10 +11,10 @@ import {
   ActivityIndicator,
   NativeModules,
   Clipboard,
+  AppState,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import {
-  ArrowLeft,
   Palette,
   Languages,
   Mic,
@@ -169,7 +169,6 @@ const SettingsScreen = ({ navigation, route }) => {
   const [keyboardSelected, setKeyboardSelected] = useState(false);
 
   const checkKeyboardStatus = useCallback(async () => {
-    if (Platform.OS !== 'android') return;
     try {
       const enabled = await NativeModules.KeyboardModule?.isKeyboardEnabled?.();
       const selected = await NativeModules.KeyboardModule?.isKeyboardSelected?.();
@@ -179,6 +178,24 @@ const SettingsScreen = ({ navigation, route }) => {
       // module may not expose these methods yet
     }
   }, []);
+
+  useEffect(() => {
+    checkKeyboardStatus();
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        checkKeyboardStatus();
+      }
+    });
+    return () => {
+      subscription?.remove?.();
+    };
+  }, [checkKeyboardStatus]);
+
+  useEffect(() => {
+    if (activeTab === 'keyboard') {
+      checkKeyboardStatus();
+    }
+  }, [activeTab, checkKeyboardStatus]);
 
   // Upload & transcribe audio
   const [pickedAudioUri, setPickedAudioUri] = useState('');
@@ -481,6 +498,14 @@ const SettingsScreen = ({ navigation, route }) => {
 
   const handleSysRequest = async (permissionType) => {
     try {
+      if (Platform.OS !== 'android') {
+        if (typeof NativeModules.KeyboardModule?.openKeyboardSettings === 'function') {
+          NativeModules.KeyboardModule.openKeyboardSettings();
+        } else {
+          openAppSettings();
+        }
+        return;
+      }
       if (!isPermissionSupported(permissionType)) {
         showAlert('Not Supported', `${permissionType} is not supported on this device.`);
         return;
@@ -493,13 +518,16 @@ const SettingsScreen = ({ navigation, route }) => {
 
   const handleCheckSys = async (permissionType) => {
     try {
+      if (Platform.OS !== 'android') return;
       await checkSysPermission(permissionType);
     } catch { }
   };
 
   const refreshAll = () => {
     checkStdPermissions();
-    checkSysPermissions();
+    if (Platform.OS === 'android') {
+      checkSysPermissions();
+    }
     checkKeyboardStatus();
     showAlert('Permissions Refreshed', 'System access statuses have been updated.');
   };
@@ -623,18 +651,6 @@ const SettingsScreen = ({ navigation, route }) => {
     return count > 0 ? count : 6;
   }, [isPermissionGranted, isSysPermissionGranted, SYS_NAMES]);
 
-  const onBackPress = () => {
-    if (activeTab !== 'general') {
-      setActiveTab('general');
-    } else {
-      if (navigation?.goBack) {
-        navigation.goBack();
-      } else {
-        navigation?.navigate?.('Home');
-      }
-    }
-  };
-
   const fromLangName = getLanguageName(fromLanguage);
   const toLangName = getLanguageName(toLanguage);
   const fromTag = SCRIPT_TAGS[fromLanguage] || fromLanguage.toUpperCase();
@@ -706,14 +722,6 @@ const SettingsScreen = ({ navigation, route }) => {
           <View>
             {/* Subheader bar */}
             <View style={styles.subHeaderRow}>
-              <TouchableOpacity
-                style={styles.backBtn}
-                onPress={onBackPress}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityLabel="Go back"
-              >
-                <ArrowLeft size={20} color={colors.text.primary} strokeWidth={2.4} />
-              </TouchableOpacity>
               <View style={styles.subHeaderCol}>
                 <Text style={styles.subHeaderTitle} numberOfLines={1}>General & Audio</Text>
                 <Text style={styles.subHeaderSub}>Preferences & live engines</Text>
@@ -1009,14 +1017,6 @@ const SettingsScreen = ({ navigation, route }) => {
           <View>
             {/* Subheader bar */}
             <View style={styles.subHeaderRow}>
-              <TouchableOpacity
-                style={styles.backBtn}
-                onPress={onBackPress}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityLabel="Go back"
-              >
-                <ArrowLeft size={20} color={colors.text.primary} strokeWidth={2.4} />
-              </TouchableOpacity>
               <View style={styles.subHeaderCol}>
                 <View style={styles.engineTagRow}>
                   <Text style={styles.engineTagText}>Voice & Input Engine •</Text>
@@ -1234,12 +1234,20 @@ const SettingsScreen = ({ navigation, route }) => {
                 <View style={styles.toggleDetailsNoIcon}>
                   <Text style={styles.toggleTitle}>Enable Keyboard</Text>
                   <Text style={styles.toggleSub}>
-                    Opens Android keyboard settings to enable Type Easy
+                    {Platform.OS === 'ios'
+                      ? 'Opens iOS Settings to enable TypeEasy Keyboard'
+                      : 'Opens Android keyboard settings to enable Type Easy'}
                   </Text>
                 </View>
                 <Switch
                   value={keyboardEnabled}
-                  onValueChange={() => {
+                  onValueChange={async (newVal) => {
+                    setKeyboardEnabled(newVal);
+                    if (Platform.OS === 'ios') {
+                      try {
+                        await NativeModules.KeyboardModule?.setKeyboardEnabled?.(newVal);
+                      } catch {}
+                    }
                     NativeModules.KeyboardModule?.openKeyboardSettings?.();
                     setTimeout(() => checkKeyboardStatus(), 1500);
                   }}
@@ -1252,13 +1260,23 @@ const SettingsScreen = ({ navigation, route }) => {
                 <View style={styles.toggleDetailsNoIcon}>
                   <Text style={styles.toggleTitle}>Select Keyboard</Text>
                   <Text style={styles.toggleSub}>
-                    Opens the keyboard picker to switch to Type Easy
+                    {Platform.OS === 'ios'
+                      ? 'Switch to TypeEasy with the globe (🌐) key while typing'
+                      : 'Opens the keyboard picker to switch to Type Easy'}
                   </Text>
                 </View>
                 <Switch
                   value={keyboardSelected}
-                  onValueChange={() => {
-                    NativeModules.KeyboardModule?.showKeyboardPicker?.();
+                  onValueChange={async (newVal) => {
+                    setKeyboardSelected(newVal);
+                    if (Platform.OS === 'ios') {
+                      try {
+                        await NativeModules.KeyboardModule?.setKeyboardEnabled?.(newVal);
+                      } catch {}
+                      NativeModules.KeyboardModule?.openKeyboardSettings?.();
+                    } else {
+                      NativeModules.KeyboardModule?.showKeyboardPicker?.();
+                    }
                     setTimeout(() => checkKeyboardStatus(), 1500);
                   }}
                   trackColor={{ false: colors.borderLight, true: colors.primary }}
@@ -1288,14 +1306,6 @@ const SettingsScreen = ({ navigation, route }) => {
           <View>
             {/* Subheader bar */}
             <View style={styles.subHeaderRow}>
-              <TouchableOpacity
-                style={styles.backBtn}
-                onPress={onBackPress}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityLabel="Go back"
-              >
-                <ArrowLeft size={20} color={colors.text.primary} strokeWidth={2.4} />
-              </TouchableOpacity>
               <View style={styles.subHeaderCol}>
                 <Text style={styles.subHeaderTitle} numberOfLines={1}>Permissions</Text>
                 <Text style={styles.systemHubText}>SYSTEM ACCESS HUB</Text>
@@ -1338,28 +1348,32 @@ const SettingsScreen = ({ navigation, route }) => {
               </TouchableOpacity>
             </View>
 
-            {/* 4 Standard Permissions */}
+            {/* Standard Permissions */}
             {[
               {
                 key: 'MICROPHONE',
                 name: 'Microphone',
                 Icon: Mic,
               },
-              {
-                key: 'CALL_LOG',
-                name: 'Call Logs',
-                Icon: PhoneCall,
-              },
-              {
-                key: 'PHONE',
-                name: 'Phone State',
-                Icon: Smartphone,
-              },
-              {
-                key: 'CONTACTS',
-                name: 'Contacts',
-                Icon: Users,
-              },
+              ...(Platform.OS === 'android'
+                ? [
+                    {
+                      key: 'CALL_LOG',
+                      name: 'Call Logs',
+                      Icon: PhoneCall,
+                    },
+                    {
+                      key: 'PHONE',
+                      name: 'Phone State',
+                      Icon: Smartphone,
+                    },
+                    {
+                      key: 'CONTACTS',
+                      name: 'Contacts',
+                      Icon: Users,
+                    },
+                  ]
+                : []),
             ].map((item) => {
               const isGranted = isPermissionGranted(item.key);
               const isBlocked = isPermissionBlocked(item.key);
@@ -1399,120 +1413,165 @@ const SettingsScreen = ({ navigation, route }) => {
               );
             })}
 
-            {/* System & Overlay Section */}
-            <Text style={styles.systemSectionTitle}>System & Overlay</Text>
-
-            {/* Display Over Other Apps */}
-            <View style={styles.permCard}>
-              <View style={styles.permTopRow}>
-                <View style={styles.permIconCircle}>
-                  <Layers size={18} color={colors.primary} strokeWidth={2.2} />
-                </View>
-                <View style={styles.permDetails}>
-                  <View style={styles.permTitleRow}>
-                    <Text style={styles.permTitleText}>Display Over Other Apps</Text>
-                    <View style={isSysPermissionGranted(SYS_NAMES.OVERLAY) ? styles.badgeGranted : styles.badgeDenied}>
-                      <Check
-                        size={11}
-                        color={isSysPermissionGranted(SYS_NAMES.OVERLAY) ? '#10B981' : '#F59E0B'}
-                        strokeWidth={3}
-                      />
-                      <Text style={isSysPermissionGranted(SYS_NAMES.OVERLAY) ? styles.badgeGrantedText : styles.badgeDeniedText}>
-                        {isSysPermissionGranted(SYS_NAMES.OVERLAY) ? 'Granted' : 'Denied'}
+            {/* iOS: Keyboard & System Integration */}
+            {Platform.OS === 'ios' && (
+              <>
+                <Text style={styles.systemSectionTitle}>Keyboard & System Integration</Text>
+                <View style={styles.permCard}>
+                  <View style={styles.permTopRow}>
+                    <View style={styles.permIconCircle}>
+                      <Keyboard size={18} color={colors.primary} strokeWidth={2.2} />
+                    </View>
+                    <View style={styles.permDetails}>
+                      <View style={styles.permTitleRow}>
+                        <Text style={styles.permTitleText}>TypeEasy Keyboard Extension</Text>
+                        <View style={styles.badgeGranted}>
+                          <Check size={11} color="#10B981" strokeWidth={3} />
+                          <Text style={styles.badgeGrantedText}>Installed</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.permDescText}>
+                        Enables universal voice typing, instant translation, and AI assistance directly inside any iOS app.
                       </Text>
                     </View>
                   </View>
-                  <Text style={styles.permDescText}>
-                    Display floating dictation heads and responsive voice controls directly on top of your...
-                  </Text>
-                </View>
-              </View>
 
-              <View style={styles.sysActionButtonsRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.sysPrimaryBtn,
-                    isSysPermissionGranted(SYS_NAMES.OVERLAY) ? styles.permActionGranted : styles.permActionAllow,
-                  ]}
-                  onPress={() => handleSysRequest(SYS_NAMES.OVERLAY)}
-                  disabled={isPermissionLoading(SYS_NAMES.OVERLAY)}
-                  activeOpacity={0.8}
-                >
-                  <Check
-                    size={14}
-                    color={isSysPermissionGranted(SYS_NAMES.OVERLAY) ? '#10B981' : '#FFFFFF'}
-                    strokeWidth={2.6}
-                  />
-                  <Text style={isSysPermissionGranted(SYS_NAMES.OVERLAY) ? styles.permActionGrantedText : styles.permActionAllowText}>
-                    {isSysPermissionGranted(SYS_NAMES.OVERLAY) ? 'Enabled' : 'Enable'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.sysCheckBtn}
-                  onPress={() => handleCheckSys(SYS_NAMES.OVERLAY)}
-                  activeOpacity={0.8}
-                >
-                  <RotateCw size={13} color={colors.text.primary} strokeWidth={2.2} />
-                  <Text style={styles.sysCheckBtnText}>Check</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Accessibility Service */}
-            <View style={styles.permCard}>
-              <View style={styles.permTopRow}>
-                <View style={styles.permIconCircle}>
-                  <Accessibility size={18} color={colors.primary} strokeWidth={2.2} />
+                  <TouchableOpacity
+                    style={[styles.permActionButton, styles.permActionAllow]}
+                    onPress={() => {
+                      if (typeof NativeModules.KeyboardModule?.openKeyboardSettings === 'function') {
+                        NativeModules.KeyboardModule.openKeyboardSettings();
+                      } else {
+                        openAppSettings();
+                      }
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <ExternalLink size={14} color="#FFFFFF" strokeWidth={2.4} />
+                    <Text style={styles.permActionAllowText}>Open Keyboard Settings</Text>
+                  </TouchableOpacity>
                 </View>
-                <View style={styles.permDetails}>
-                  <View style={styles.permTitleRow}>
-                    <Text style={styles.permTitleText}>Accessibility Service</Text>
-                    <View style={isSysPermissionGranted(SYS_NAMES.ACCESSIBILITY) ? styles.badgeGranted : styles.badgeDenied}>
-                      <Check
-                        size={11}
-                        color={isSysPermissionGranted(SYS_NAMES.ACCESSIBILITY) ? '#10B981' : '#F59E0B'}
-                        strokeWidth={3}
-                      />
-                      <Text style={isSysPermissionGranted(SYS_NAMES.ACCESSIBILITY) ? styles.badgeGrantedText : styles.badgeDeniedText}>
-                        {isSysPermissionGranted(SYS_NAMES.ACCESSIBILITY) ? 'Granted' : 'Denied'}
+              </>
+            )}
+
+            {/* Android: System & Overlay Section */}
+            {Platform.OS === 'android' && (
+              <>
+                <Text style={styles.systemSectionTitle}>System & Overlay</Text>
+
+                {/* Display Over Other Apps */}
+                <View style={styles.permCard}>
+                  <View style={styles.permTopRow}>
+                    <View style={styles.permIconCircle}>
+                      <Layers size={18} color={colors.primary} strokeWidth={2.2} />
+                    </View>
+                    <View style={styles.permDetails}>
+                      <View style={styles.permTitleRow}>
+                        <Text style={styles.permTitleText}>Display Over Other Apps</Text>
+                        <View style={isSysPermissionGranted(SYS_NAMES.OVERLAY) ? styles.badgeGranted : styles.badgeDenied}>
+                          <Check
+                            size={11}
+                            color={isSysPermissionGranted(SYS_NAMES.OVERLAY) ? '#10B981' : '#F59E0B'}
+                            strokeWidth={3}
+                          />
+                          <Text style={isSysPermissionGranted(SYS_NAMES.OVERLAY) ? styles.badgeGrantedText : styles.badgeDeniedText}>
+                            {isSysPermissionGranted(SYS_NAMES.OVERLAY) ? 'Granted' : 'Denied'}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.permDescText}>
+                        Display floating dictation heads and responsive voice controls directly on top of your...
                       </Text>
                     </View>
                   </View>
-                  <Text style={styles.permDescText}>
-                    Accessibility service for enhanced functionality, smart cursor placement, and global vocal...
-                  </Text>
-                </View>
-              </View>
 
-              <View style={styles.sysActionButtonsRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.sysPrimaryBtn,
-                    isSysPermissionGranted(SYS_NAMES.ACCESSIBILITY) ? styles.permActionGranted : styles.permActionAllow,
-                  ]}
-                  onPress={() => handleSysRequest(SYS_NAMES.ACCESSIBILITY)}
-                  disabled={isPermissionLoading(SYS_NAMES.ACCESSIBILITY)}
-                  activeOpacity={0.8}
-                >
-                  <Check
-                    size={14}
-                    color={isSysPermissionGranted(SYS_NAMES.ACCESSIBILITY) ? '#10B981' : '#FFFFFF'}
-                    strokeWidth={2.6}
-                  />
-                  <Text style={isSysPermissionGranted(SYS_NAMES.ACCESSIBILITY) ? styles.permActionGrantedText : styles.permActionAllowText}>
-                    {isSysPermissionGranted(SYS_NAMES.ACCESSIBILITY) ? 'Enabled' : 'Enable'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.sysCheckBtn}
-                  onPress={() => handleCheckSys(SYS_NAMES.ACCESSIBILITY)}
-                  activeOpacity={0.8}
-                >
-                  <RotateCw size={13} color={colors.text.primary} strokeWidth={2.2} />
-                  <Text style={styles.sysCheckBtnText}>Check</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+                  <View style={styles.sysActionButtonsRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.sysPrimaryBtn,
+                        isSysPermissionGranted(SYS_NAMES.OVERLAY) ? styles.permActionGranted : styles.permActionAllow,
+                      ]}
+                      onPress={() => handleSysRequest(SYS_NAMES.OVERLAY)}
+                      disabled={isPermissionLoading(SYS_NAMES.OVERLAY)}
+                      activeOpacity={0.8}
+                    >
+                      <Check
+                        size={14}
+                        color={isSysPermissionGranted(SYS_NAMES.OVERLAY) ? '#10B981' : '#FFFFFF'}
+                        strokeWidth={2.6}
+                      />
+                      <Text style={isSysPermissionGranted(SYS_NAMES.OVERLAY) ? styles.permActionGrantedText : styles.permActionAllowText}>
+                        {isSysPermissionGranted(SYS_NAMES.OVERLAY) ? 'Enabled' : 'Enable'}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.sysCheckBtn}
+                      onPress={() => handleCheckSys(SYS_NAMES.OVERLAY)}
+                      activeOpacity={0.8}
+                    >
+                      <RotateCw size={13} color={colors.text.primary} strokeWidth={2.2} />
+                      <Text style={styles.sysCheckBtnText}>Check</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Accessibility Service */}
+                <View style={styles.permCard}>
+                  <View style={styles.permTopRow}>
+                    <View style={styles.permIconCircle}>
+                      <Accessibility size={18} color={colors.primary} strokeWidth={2.2} />
+                    </View>
+                    <View style={styles.permDetails}>
+                      <View style={styles.permTitleRow}>
+                        <Text style={styles.permTitleText}>Accessibility Service</Text>
+                        <View style={isSysPermissionGranted(SYS_NAMES.ACCESSIBILITY) ? styles.badgeGranted : styles.badgeDenied}>
+                          <Check
+                            size={11}
+                            color={isSysPermissionGranted(SYS_NAMES.ACCESSIBILITY) ? '#10B981' : '#F59E0B'}
+                            strokeWidth={3}
+                          />
+                          <Text style={isSysPermissionGranted(SYS_NAMES.ACCESSIBILITY) ? styles.badgeGrantedText : styles.badgeDeniedText}>
+                            {isSysPermissionGranted(SYS_NAMES.ACCESSIBILITY) ? 'Granted' : 'Denied'}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.permDescText}>
+                        Accessibility service for enhanced functionality, smart cursor placement, and global vocal...
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.sysActionButtonsRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.sysPrimaryBtn,
+                        isSysPermissionGranted(SYS_NAMES.ACCESSIBILITY) ? styles.permActionGranted : styles.permActionAllow,
+                      ]}
+                      onPress={() => handleSysRequest(SYS_NAMES.ACCESSIBILITY)}
+                      disabled={isPermissionLoading(SYS_NAMES.ACCESSIBILITY)}
+                      activeOpacity={0.8}
+                    >
+                      <Check
+                        size={14}
+                        color={isSysPermissionGranted(SYS_NAMES.ACCESSIBILITY) ? '#10B981' : '#FFFFFF'}
+                        strokeWidth={2.6}
+                      />
+                      <Text style={isSysPermissionGranted(SYS_NAMES.ACCESSIBILITY) ? styles.permActionGrantedText : styles.permActionAllowText}>
+                        {isSysPermissionGranted(SYS_NAMES.ACCESSIBILITY) ? 'Enabled' : 'Enable'}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.sysCheckBtn}
+                      onPress={() => handleCheckSys(SYS_NAMES.ACCESSIBILITY)}
+                      activeOpacity={0.8}
+                    >
+                      <RotateCw size={13} color={colors.text.primary} strokeWidth={2.2} />
+                      <Text style={styles.sysCheckBtnText}>Check</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </>
+            )}
 
             {/* App Permissions in System Settings */}
             <View style={styles.card}>
@@ -1592,7 +1651,7 @@ function createSettingsStyles(colors, isDark) {
     scroll: {
       paddingHorizontal: 16,
       paddingTop: 8,
-      paddingBottom: 32,
+      paddingBottom: 16,
     },
     segmentBarWrapper: {
       paddingVertical: 8,
@@ -1632,17 +1691,8 @@ function createSettingsStyles(colors, isDark) {
       marginBottom: 16,
       paddingTop: 4,
     },
-    backBtn: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
     subHeaderCol: {
       flex: 1,
-      marginLeft: 12,
     },
     engineTagRow: {
       flexDirection: 'row',
@@ -2508,7 +2558,7 @@ function createSettingsStyles(colors, isDark) {
       lineHeight: 15,
     },
     bottomSpacer: {
-      height: 28,
+      height: 8,
     },
   });
 }

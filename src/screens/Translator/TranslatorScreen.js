@@ -32,6 +32,8 @@ import {
   Languages,
   ArrowRight,
   ClipboardPaste,
+  AlertCircle,
+  RotateCcw,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppHeader } from '../../components/Header/AppHeader';
@@ -195,22 +197,6 @@ const TranslatorScreen = ({ navigation }) => {
     }
   }, [isFocused, debouncedRunTranslation]);
 
-  useEffect(() => {
-    if (!isFocused) return;
-    let raf2;
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        if (!translating && !transcribingVoice && !recordingVoice) {
-          setTranslateError('');
-        }
-      });
-    });
-    return () => {
-      cancelAnimationFrame(raf1);
-      if (raf2 != null) cancelAnimationFrame(raf2);
-    };
-  }, [isFocused, translating, transcribingVoice, recordingVoice]);
-
   const runTranslation = useCallback(
     async (trimmed, id) => {
       if (!trimmed) {
@@ -233,6 +219,7 @@ const TranslatorScreen = ({ navigation }) => {
         if (id !== requestIdRef.current) return;
         if (result.success) {
           setTranslatedText(result.translatedText);
+          setTranslateError('');
           await addTranslationHistory({
             sourceText: trimmed,
             translatedText: result.translatedText,
@@ -241,13 +228,21 @@ const TranslatorScreen = ({ navigation }) => {
           });
         } else {
           setTranslatedText('');
-          setTranslateError(result.error);
+          const err = result.error || 'Translation failed. Please check your network and try again.';
+          setTranslateError(err);
+          showAlert('Translation Failed', err);
         }
+      } catch (err) {
+        if (id !== requestIdRef.current) return;
+        setTranslatedText('');
+        const errStr = err?.message || 'Translation failed. Please try again.';
+        setTranslateError(errStr);
+        showAlert('Translation Failed', errStr);
       } finally {
         if (id === requestIdRef.current) setTranslating(false);
       }
     },
-    [fromCode, toCode, user],
+    [fromCode, toCode, user, showAlert],
   );
 
   const debouncedRunTranslation = useDebounce((trimmed) => {
@@ -308,6 +303,7 @@ const TranslatorScreen = ({ navigation }) => {
   const onSourceChange = (t) => {
     sttSourceLangRef.current = null;
     setSourceText(t);
+    if (translateError) setTranslateError('');
   };
 
   const onPaste = async () => {
@@ -347,7 +343,9 @@ const TranslatorScreen = ({ navigation }) => {
         const tx = await stopTranslatorRecordingAndTranscribe({ language: 'en-US' });
         if (id !== requestIdRef.current) return;
         if (!tx.success) {
-          setTranslateError(tx.error || 'Transcription failed');
+          const err = tx.error || 'Voice transcription failed';
+          setTranslateError(err);
+          showAlert('Transcription Error', err);
           return;
         }
         sttSourceLangRef.current = 'en';
@@ -364,6 +362,7 @@ const TranslatorScreen = ({ navigation }) => {
         if (id !== requestIdRef.current) return;
         if (tr.success) {
           setTranslatedText(tr.translatedText);
+          setTranslateError('');
           await addTranslationHistory({
             sourceText: tx.transcript,
             translatedText: tr.translatedText,
@@ -372,8 +371,16 @@ const TranslatorScreen = ({ navigation }) => {
           });
         } else {
           setTranslatedText('');
-          setTranslateError(tr.error);
+          const err = tr.error || 'Translation failed. Please try again.';
+          setTranslateError(err);
+          showAlert('Translation Failed', err);
         }
+      } catch (err) {
+        if (id !== requestIdRef.current) return;
+        setTranslatedText('');
+        const errStr = err?.message || 'Voice translation failed. Please try again.';
+        setTranslateError(errStr);
+        showAlert('Translation Failed', errStr);
       } finally {
         setTranscribingVoice(false);
         if (id === requestIdRef.current) setTranslating(false);
@@ -386,7 +393,9 @@ const TranslatorScreen = ({ navigation }) => {
     setTranslatedText('');
     const started = await startTranslatorRecording();
     if (!started.success) {
-      setTranslateError(started.error || 'Could not access microphone');
+      const err = started.error || 'Could not access microphone. Please check your permissions in Settings.';
+      setTranslateError(err);
+      showAlert('Microphone Error', err);
       return;
     }
     setRecordingVoice(true);
@@ -624,8 +633,38 @@ const TranslatorScreen = ({ navigation }) => {
             )}
           </TouchableOpacity>
 
+          {/* Translation Error Card */}
+          {translateError && !translating ? (
+            <View style={styles.errorCard}>
+              <View style={styles.errorCardTopRow}>
+                <View style={styles.errorIconWrap}>
+                  <AlertCircle size={20} color="#DC2626" strokeWidth={2.4} />
+                </View>
+                <View style={styles.errorContent}>
+                  <Text style={styles.errorTitle}>Translation Failed</Text>
+                  <Text style={styles.errorMessage}>{translateError}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.errorDismissBtn}
+                  onPress={() => setTranslateError('')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <X size={16} color={colors.text.secondary} strokeWidth={2.2} />
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={styles.errorRetryBtn}
+                onPress={onTranslateNow}
+                activeOpacity={0.8}
+              >
+                <RotateCcw size={13} color="#DC2626" strokeWidth={2.4} />
+                <Text style={styles.errorRetryText}>Retry Translation</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           {/* Translation Result Card */}
-          {translatedText || translating || translateError ? (
+          {translatedText || (translating && !translateError) ? (
             <View style={styles.resultCard}>
               <View style={styles.resultTopRow}>
                 <View style={styles.resultKickerGroup}>
@@ -637,41 +676,43 @@ const TranslatorScreen = ({ navigation }) => {
                   </View>
                 </View>
 
-                <View style={styles.resultActionsRow}>
-                  <TouchableOpacity
-                    onPress={onToggleStar}
-                    style={styles.iconActionBtn}
-                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                  >
-                    <Bookmark
-                      size={18}
-                      color={starred ? colors.primary : colors.text.secondary}
-                      strokeWidth={2}
-                      fill={starred ? colors.primary : 'transparent'}
-                    />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={onCopyTranslation}
-                    style={styles.iconActionBtn}
-                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                  >
-                    <Copy size={18} color={colors.text.secondary} strokeWidth={2} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={onSpeakTranslation}
-                    style={styles.audioPlayOrb}
-                    activeOpacity={0.85}
-                  >
-                    <Volume2 size={16} color="#FFFFFF" strokeWidth={2.4} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={onShareTranslation}
-                    style={styles.iconActionBtn}
-                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                  >
-                    <Share2 size={18} color={colors.text.secondary} strokeWidth={2} />
-                  </TouchableOpacity>
-                </View>
+                {translatedText ? (
+                  <View style={styles.resultActionsRow}>
+                    <TouchableOpacity
+                      onPress={onToggleStar}
+                      style={styles.iconActionBtn}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Bookmark
+                        size={18}
+                        color={starred ? colors.primary : colors.text.secondary}
+                        strokeWidth={2}
+                        fill={starred ? colors.primary : 'transparent'}
+                      />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={onCopyTranslation}
+                      style={styles.iconActionBtn}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Copy size={18} color={colors.text.secondary} strokeWidth={2} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={onSpeakTranslation}
+                      style={styles.audioPlayOrb}
+                      activeOpacity={0.85}
+                    >
+                      <Volume2 size={16} color="#FFFFFF" strokeWidth={2.4} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={onShareTranslation}
+                      style={styles.iconActionBtn}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Share2 size={18} color={colors.text.secondary} strokeWidth={2} />
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
               </View>
 
               {translating && !translatedText ? (
@@ -679,8 +720,6 @@ const TranslatorScreen = ({ navigation }) => {
                   <ActivityIndicator color={colors.primary} size="small" />
                   <Text style={styles.translatingText}>Translating with Neural Engine…</Text>
                 </View>
-              ) : translateError ? (
-                <Text style={styles.errorText}>{translateError}</Text>
               ) : (
                 <>
                   <Text style={styles.translatedMainText}>{translatedText}</Text>
@@ -801,7 +840,7 @@ function createStyles(colors, isDark) {
     scrollContent: {
       paddingHorizontal: 16,
       paddingTop: 14,
-      paddingBottom: 40,
+      paddingBottom: 16,
       gap: 14,
     },
     languageBarCard: {
@@ -1064,6 +1103,57 @@ function createStyles(colors, isDark) {
       fontSize: 14,
       fontWeight: '600',
       color: colors.primary,
+    },
+    errorCard: {
+      backgroundColor: isDark ? 'rgba(220, 38, 38, 0.12)' : '#FEF2F2',
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(220, 38, 38, 0.35)' : '#FECACA',
+      padding: 14,
+      marginBottom: 14,
+    },
+    errorCardTopRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+    },
+    errorIconWrap: {
+      marginRight: 10,
+      marginTop: 2,
+    },
+    errorContent: {
+      flex: 1,
+    },
+    errorTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#DC2626',
+      marginBottom: 3,
+    },
+    errorMessage: {
+      fontSize: 13,
+      color: isDark ? '#FCA5A5' : '#991B1B',
+      lineHeight: 18,
+    },
+    errorDismissBtn: {
+      padding: 4,
+      marginLeft: 8,
+    },
+    errorRetryBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      backgroundColor: isDark ? 'rgba(220, 38, 38, 0.22)' : '#FEE2E2',
+      borderRadius: 8,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      marginTop: 10,
+      marginLeft: 30,
+      gap: 6,
+    },
+    errorRetryText: {
+      fontSize: 12.5,
+      fontWeight: '600',
+      color: '#DC2626',
     },
     errorText: {
       fontSize: 13,

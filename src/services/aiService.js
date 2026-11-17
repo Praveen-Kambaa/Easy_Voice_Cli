@@ -92,6 +92,16 @@ ${liveContext}`
     }
 
     if (!res.ok) {
+      // Fallback to Groq if primary provider failed
+      try {
+        const groqFallback = await askAiWithGroq(q);
+        if (groqFallback?.answer) {
+          return { success: true, answer: groqFallback.answer };
+        }
+      } catch {
+        // ignore fallback failure
+      }
+
       const msg =
         data?.error?.message ||
         (typeof data?.error === 'string' ? data.error : null) ||
@@ -115,6 +125,14 @@ ${liveContext}`
     }
     return { success: true, answer };
   } catch (e) {
+    try {
+      const groqFallback = await askAiWithGroq(q);
+      if (groqFallback?.answer) {
+        return { success: true, answer: groqFallback.answer };
+      }
+    } catch {
+      // ignore
+    }
     const msg =
       e?.name === 'AbortError'
         ? 'Request timed out'

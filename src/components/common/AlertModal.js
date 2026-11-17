@@ -69,7 +69,15 @@ const AlertModal = ({ visible, title, message, buttons = [], onDismiss }) => {
         <View style={styles.container}>
           <View style={styles.body}>
             <Text style={styles.title}>{title}</Text>
-            {!!message && <Text style={styles.message}>{message}</Text>}
+            {!!message && (
+              <ScrollView
+                style={styles.messageScrollView}
+                contentContainerStyle={styles.messageScrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                <Text style={styles.message}>{message}</Text>
+              </ScrollView>
+            )}
           </View>
 
           <View style={styles.divider} />
@@ -130,6 +138,13 @@ function createAlertStyles(colors) {
       textAlign: 'center',
       marginBottom: 8,
       lineHeight: 24,
+    },
+    messageScrollView: {
+      maxHeight: 220,
+      width: '100%',
+    },
+    messageScrollContent: {
+      alignItems: 'center',
     },
     message: {
       fontSize: 14,

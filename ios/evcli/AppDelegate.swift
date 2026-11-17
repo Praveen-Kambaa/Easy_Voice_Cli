@@ -2,6 +2,7 @@ import UIKit
 import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
+import Speech
 
 #if DEBUG
 /// Picks a Metro host the phone can actually reach (USB iproxy → localhost, else Mac LAN IP from ip.txt).
@@ -84,9 +85,23 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     KeyboardHostVoiceCoordinator.registerDarwinObservers()
 
+    // Ensure speech recognition permission prompt appears if undetermined
+    if SFSpeechRecognizer.authorizationStatus() == .notDetermined {
+      SFSpeechRecognizer.requestAuthorization { status in
+        NSLog("[TypeEasyApp] 🗣️ Initial Speech authorization: %ld", status.rawValue)
+      }
+    }
+
+    // Cold-start URL launch from keyboard (e.g. typeeasy://activate)
+    if let url = launchOptions?[.url] as? URL {
+      NSLog("[TypeEasyApp] 🚀 Cold launch with URL in launchOptions: %@", url.absoluteString)
+      _ = self.application(application, open: url, options: [:])
+    }
+
     DispatchQueue.main.async {
       KeyboardHostLinkForwarder.forwardPendingDeepLinkIfNeeded()
       KeyboardHostVoiceCoordinator.resumePendingSessions()
+      BackgroundAudioManager.shared.warmUpIfPermitted()
     }
 
     return true
@@ -95,11 +110,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
   func applicationDidBecomeActive(_ application: UIApplication) {
     KeyboardHostLinkForwarder.forwardPendingDeepLinkIfNeeded()
     KeyboardHostVoiceCoordinator.resumePendingSessions()
+    BackgroundAudioManager.shared.ensureActiveBeforeBackground()
+    BackgroundAudioManager.shared.warmUpIfPermitted()
   }
 
   func applicationWillEnterForeground(_ application: UIApplication) {
     KeyboardHostLinkForwarder.forwardPendingDeepLinkIfNeeded()
     KeyboardHostVoiceCoordinator.resumePendingSessions()
+    BackgroundAudioManager.shared.ensureActiveBeforeBackground()
+    BackgroundAudioManager.shared.warmUpIfPermitted()
+  }
+
+  func applicationWillResignActive(_ application: UIApplication) {
+    NSLog("[TypeEasyApp] 📱 applicationWillResignActive (preserving dictation session)")
+    BackgroundAudioManager.shared.ensureActiveBeforeBackground()
+  }
+
+  func applicationDidEnterBackground(_ application: UIApplication) {
+    NSLog("[TypeEasyApp] 📱 applicationDidEnterBackground (guaranteeing active background audio keep-alive)")
+    BackgroundAudioManager.shared.ensureActiveBeforeBackground()
   }
 
   func application(
@@ -107,16 +136,41 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey: Any] = [:]
   ) -> Bool {
-    guard url.scheme == "typeeasy" else { return false }
+    NSLog("[TypeEasyApp] 📥 application:openURL: %@", url.absoluteString)
+    guard url.scheme == "typeeasy" || url.scheme == "typevoice" else { return false }
     let host = url.host ?? ""
+
+    if url.scheme == "typevoice" || url.scheme == "typeeasy" {
+      if host == "activate" || url.path == "/activate" || url.absoluteString.contains("activate") {
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let returnScheme = components?.queryItems?.first(where: { $0.name == "returnScheme" })?.value
+          ?? SharedIPCManager.shared.lastReturnScheme
+        let autoStartVal = components?.queryItems?.first(where: { $0.name == "autoStart" })?.value
+        let autoStart = (autoStartVal == "1" || autoStartVal == "true")
+
+        NSLog("[TypeEasy] 🚀 Received activation request. returnScheme=%@ autoStart=%d", returnScheme ?? "none", autoStart)
+        if let returnScheme = returnScheme, !returnScheme.isEmpty {
+          SharedIPCManager.shared.lastReturnScheme = returnScheme
+        }
+
+        // Guarantee audio session & silent player are active synchronously before returning or moving to background
+        BackgroundAudioManager.shared.ensureActiveBeforeBackground()
+
+        DispatchQueue.main.async {
+          BackgroundAudioManager.shared.activateAndReturn(returnScheme: returnScheme, autoStart: autoStart)
+        }
+        return true
+      }
+    }
     if host == "keyboard-voice" {
       let requestId = URLComponents(url: url, resolvingAgainstBaseURL: false)?
         .queryItems?
         .first(where: { $0.name == "requestId" })?
         .value ?? UUID().uuidString
+      NSLog("[TypeEasyDictation] [%@] Dictation request received in main app via deep link", requestId)
+      KeyboardDictationStore.shared.markAppOpened(requestId: requestId)
       KeyboardDictationService.shared.start(requestId: requestId)
-      _ = KeyboardSharedConfig.consumePendingDeepLink()
-      KeyboardHostVoiceCoordinator.resumePendingSessions()
+      _ = RCTLinkingManager.application(app, open: url, options: options)
       return true
     }
     if host == "keyboard-voice-command" {
@@ -124,9 +178,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         .queryItems?
         .first(where: { $0.name == "requestId" })?
         .value ?? UUID().uuidString
+      NSLog("[TypeEasyApp] ✨ Processing keyboard-voice-command for requestId: %@", requestId)
       KeyboardVoiceCommandService.shared.start(requestId: requestId)
-      _ = KeyboardSharedConfig.consumePendingDeepLink()
-      KeyboardHostVoiceCoordinator.resumePendingSessions()
+      _ = RCTLinkingManager.application(app, open: url, options: options)
       return true
     }
     KeyboardHostLinkForwarder.forwardPendingDeepLinkIfNeeded()
@@ -142,14 +196,14 @@ enum KeyboardHostLinkForwarder {
       let requestId = voiceRequestId(from: action) ?? UUID().uuidString
       _ = KeyboardSharedConfig.consumePendingDeepLink()
       KeyboardVoiceCommandService.shared.start(requestId: requestId)
-      KeyboardHostVoiceCoordinator.resumePendingSessions()
       return
     }
     if action.hasPrefix(KeyboardSharedConfig.deepLinkVoice) {
       let requestId = voiceRequestId(from: action) ?? UUID().uuidString
       _ = KeyboardSharedConfig.consumePendingDeepLink()
-      KeyboardDictationService.shared.start(requestId: requestId)
-      KeyboardHostVoiceCoordinator.resumePendingSessions()
+      if !KeyboardDictationService.shared.isActive(requestId: requestId) {
+        KeyboardDictationService.shared.start(requestId: requestId)
+      }
       return
     }
     guard let consumed = KeyboardSharedConfig.consumePendingDeepLink() else { return }
@@ -177,6 +231,17 @@ class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
 
   override func bundleURL() -> URL? {
 #if DEBUG
+    // 1. If Metro packager is active, load live bundle
+    if RCTBundleURLProvider.isPackagerRunning(MetroPackagerHost.current) {
+      if let url = RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index") {
+        return url
+      }
+    }
+    // 2. If an offline/pre-bundled jsbundle is present in the app, fall back to it
+    if let embedded = Bundle.main.url(forResource: "main", withExtension: "jsbundle") {
+      return embedded
+    }
+    // 3. Otherwise try standard Metro debug bundle URL
     if let url = RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index") {
       return url
     }

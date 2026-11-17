@@ -100,7 +100,7 @@ const TranslatorHistoryScreen = () => {
           renderItem={renderItem}
           contentContainerStyle={[
             styles.list,
-            { paddingBottom: 24 + (insets?.bottom || 0) + 96 },
+            { paddingBottom: 20 },
           ]}
           showsVerticalScrollIndicator={false}
         />

@@ -14,6 +14,7 @@ import {
   KeyboardPendingLinkHandler,
   useAppNavigationRef,
 } from './src/components/KeyboardPendingLinkHandler';
+import { KeyboardVoiceDictationModal } from './src/components/KeyboardVoiceDictationModal';
 import { AlertProvider } from './src/context/AlertContext';
 import { AuthProvider } from './src/context/AuthContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
@@ -48,6 +49,7 @@ function AppNavigation() {
       <FloatingSpeechHistorySync />
       <AiQaHistorySync />
       <AuthNavigator />
+      <KeyboardVoiceDictationModal />
     </NavigationContainer>
   );
 }
